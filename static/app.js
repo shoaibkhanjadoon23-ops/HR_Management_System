@@ -1,8 +1,7 @@
-// frontend/static/app.js
 // ============================================================
-// CONFIGURATION – CHANGE THIS TO YOUR HUGGING FACE URL
+// CHANGE THIS TO YOUR HUGGING FACE SPACE API URL
 // ============================================================
-const API_BASE = 'https://HRhiringpro-HRPRO.hf.space';   // <-- REPLACE WITH YOUR ACTUAL URL
+const API_BASE = 'https://HRhiringpro-HRPRO.hf.space';
 
 // ============================================================
 // GLOBAL API CLIENT
@@ -223,7 +222,6 @@ function closeModal(id) {
   }
 }
 
-// Close modal when clicking on overlay
 document.addEventListener('click', e => {
   if (e.target.classList && e.target.classList.contains('modal-overlay')) {
     e.target.style.display = 'none';
@@ -269,7 +267,7 @@ function debounce(fn, ms = 300) {
 }
 
 // ============================================================
-// TAGS INPUT (skills, etc.)
+// TAGS INPUT
 // ============================================================
 function initTagsInput(inputId, tagsId, hiddenId) {
   const input = document.getElementById(inputId);
@@ -306,7 +304,7 @@ function initTagsInput(inputId, tagsId, hiddenId) {
 }
 
 // ============================================================
-// SIMPLE CHARTS (Canvas)
+// CHARTS
 // ============================================================
 function drawBarChart(canvasId, labels, data, color = '#6366f1') {
   const canvas = document.getElementById(canvasId);
@@ -320,7 +318,6 @@ function drawBarChart(canvasId, labels, data, color = '#6366f1') {
   const padL = 40, padB = 40;
   const chartH = H - padB - 10;
 
-  // Y axis grid
   ctx.strokeStyle = '#e5e7eb';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
@@ -394,7 +391,6 @@ function drawDonutChart(canvasId, segments) {
   ctx.fillText('Total', cx, cy + 22);
 }
 
-// Helper for rounded rectangle
 if (!CanvasRenderingContext2D.prototype.roundRect) {
   CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
     if (w < 2 * r) r = w / 2;
@@ -412,9 +408,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
   };
 }
 
-// ============================================================
-// INITIALIZATION (call on every page that uses sidebar)
-// ============================================================
+// Initialize sidebar on every page that uses it
 document.addEventListener('DOMContentLoaded', () => {
   renderSidebarUser();
   setActiveNav();
