@@ -123,24 +123,25 @@
 
       <div class="auth-links">
         <span>Already have an account?</span>
-        <a href="/login">Sign In</a>
+        <a href="/login.html">Sign In</a>
       </div>
     </form>
   </div>
 </div>
 
+<script src="/static/app.js"></script>
 <script>
 document.getElementById('signupForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const pass = document.getElementById('password').value;
   const confirm = document.getElementById('confirm_password').value;
   if (pass !== confirm) { showError('Passwords do not match'); return; }
-  
+
   const btn = document.getElementById('signupBtn');
   btn.querySelector('.btn-text').style.display = 'none';
   btn.querySelector('.btn-loader').style.display = 'inline';
   btn.disabled = true;
-  
+
   const payload = {
     full_name: document.getElementById('full_name').value,
     username: document.getElementById('username').value,
@@ -156,25 +157,16 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     industry: document.getElementById('industry').value,
     company_size: document.getElementById('company_size').value
   };
-  
+
   try {
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if (res.ok) {
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      document.getElementById('signupSuccess').textContent = 'Account created! Redirecting...';
-      document.getElementById('signupSuccess').style.display = 'block';
-      setTimeout(() => window.location.href = '/dashboard', 1500);
-    } else {
-      showError(data.detail || 'Signup failed');
-    }
-  } catch(e) {
-    showError('Connection error. Please try again.');
+    const data = await API.post('/api/auth/signup', payload);
+    localStorage.setItem('token', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    document.getElementById('signupSuccess').textContent = 'Account created! Redirecting...';
+    document.getElementById('signupSuccess').style.display = 'block';
+    setTimeout(() => window.location.href = '/dashboard.html', 1500);
+  } catch (err) {
+    showError(err.message);
   } finally {
     btn.querySelector('.btn-text').style.display = 'inline';
     btn.querySelector('.btn-loader').style.display = 'none';
