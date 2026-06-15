@@ -2,7 +2,7 @@
 // ============================================================
 // CONFIGURATION – CHANGE THIS TO YOUR HUGGING FACE URL
 // ============================================================
-const API_BASE = 'https://huggingface.co/spaces/HRhiringpro/HRPRO';   // <-- REPLACE WITH YOUR ACTUAL URL
+const API_BASE = 'https://HRhiringpro-HRPRO.hf.space';   // <-- REPLACE WITH YOUR ACTUAL URL
 
 // ============================================================
 // GLOBAL API CLIENT
