@@ -41,7 +41,7 @@
       
       <div class="auth-links">
         <span>Don't have an account?</span>
-        <a href="/signup">Create Account</a>
+        <a href="/signup.html">Create Account</a>
       </div>
     </form>
   </div>
@@ -60,6 +60,7 @@
   </div>
 </div>
 
+<script src="/static/app.js"></script>
 <script>
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -67,38 +68,24 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   btn.querySelector('.btn-text').style.display = 'none';
   btn.querySelector('.btn-loader').style.display = 'inline';
   btn.disabled = true;
-  
+
   try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        email: document.getElementById('email').value,
-        password: document.getElementById('password').value
-      })
+    const data = await API.post('/api/auth/login', {
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value
     });
-    const data = await res.json();
-    if (res.ok) {
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      window.location.href = '/dashboard';
-    } else {
-      showError(data.detail || 'Login failed');
-    }
-  } catch(e) {
-    showError('Connection error. Please try again.');
+    localStorage.setItem('token', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+    window.location.href = '/dashboard.html';
+  } catch (err) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginError').textContent = err.message;
   } finally {
     btn.querySelector('.btn-text').style.display = 'inline';
     btn.querySelector('.btn-loader').style.display = 'none';
     btn.disabled = false;
   }
 });
-
-function showError(msg) {
-  const el = document.getElementById('loginError');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
 
 function togglePwd(id) {
   const input = document.getElementById(id);
