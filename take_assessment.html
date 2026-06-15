@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assessment - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body style="background:#f8fafc">
+<div style="max-width:800px;margin:0 auto;padding:20px">
+  <div id="startScreen">
+    <div style="text-align:center;padding:60px 20px">
+      <div style="width:80px;height:80px;background:var(--gradient);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:36px;color:white">
+        <i class="fas fa-clipboard-check"></i>
+      </div>
+      <h1 id="assessTitle" style="font-size:26px;font-weight:800;margin-bottom:8px">Loading...</h1>
+      <p id="assessDesc" class="text-light" style="font-size:15px;margin-bottom:30px"></p>
+      <div id="assessInfo" style="display:inline-flex;gap:24px;background:white;padding:20px 40px;border-radius:12px;box-shadow:var(--shadow);margin-bottom:30px"></div>
+      <div class="alert alert-warning" style="text-align:left;max-width:500px;margin:0 auto 24px">
+        <b><i class="fas fa-exclamation-triangle"></i> Important Rules:</b>
+        <ul style="margin-top:8px;padding-left:20px;font-size:13px;line-height:1.8">
+          <li>Do NOT switch tabs or open other windows</li>
+          <li>Do NOT go back in browser during the exam</li>
+          <li>Switching tabs/windows will AUTO-SUBMIT your assessment</li>
+          <li>Timer will count down — submit before it runs out</li>
+          <li>All questions are mandatory (MCQ and practical)</li>
+        </ul>
+      </div>
+      <div class="grid-2" style="max-width:400px;margin:0 auto 24px">
+        <div class="form-group"><label>Your Full Name *</label><input type="text" id="candName" placeholder="John Doe"></div>
+        <div class="form-group"><label>Your Email *</label><input type="email" id="candEmail" placeholder="john@email.com"></div>
+      </div>
+      <div class="form-group" style="max-width:400px;margin:0 auto 24px">
+        <label>Application ID (if provided)</label>
+        <input type="number" id="candAppId" placeholder="Leave blank if not provided">
+      </div>
+      <button class="btn btn-primary" onclick="startAssessment()" style="font-size:16px;padding:14px 40px"><i class="fas fa-play"></i> Start Assessment</button>
+    </div>
+  </div>
+
+  <div id="assessmentScreen" style="display:none">
+    <div style="position:sticky;top:0;background:white;border-radius:12px;padding:16px 20px;margin-bottom:20px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;z-index:100">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-light)">Question Progress</div>
+        <div id="progressText" style="font-size:15px;font-weight:700"></div>
+      </div>
+      <div class="timer-box" id="timer">
+        <i class="fas fa-clock"></i>
+        <span id="timerDisplay">00:00</span>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text-light)">Answered</div>
+        <div id="answeredCount" style="font-size:15px;font-weight:700">0 / 0</div>
+      </div>
+    </div>
+
+    <div id="questionsContainer"></div>
+
+    <div style="text-align:center;margin-top:24px;padding:20px;background:white;border-radius:12px;box-shadow:var(--shadow)">
+      <p class="text-light mb-4" style="font-size:13px">Make sure you've answered all questions before submitting.</p>
+      <button class="btn btn-primary" onclick="submitAssessment()" style="font-size:16px;padding:14px 40px" id="submitBtn">
+        <i class="fas fa-check-circle"></i> Submit Assessment
+      </button>
+    </div>
+  </div>
+
+  <div id="resultScreen" style="display:none">
+    <div style="text-align:center;padding:60px 20px;background:white;border-radius:16px;box-shadow:var(--shadow)">
+      <div id="resultIcon" style="font-size:64px;margin-bottom:16px"></div>
+      <h2 id="resultTitle" style="font-size:28px;font-weight:800;margin-bottom:8px"></h2>
+      <div id="resultScore" style="font-size:48px;font-weight:900;background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:8px"></div>
+      <p id="resultGrade" style="font-size:20px;font-weight:700;margin-bottom:16px"></p>
+      <p id="resultFeedback" class="text-light" style="font-size:14px;max-width:500px;margin:0 auto 24px;line-height:1.7"></p>
+      <div class="alert alert-success"><i class="fas fa-envelope"></i> Your results have been sent to your email address.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Get assessment ID from template – using a data attribute to avoid linter warnings
+const assessmentId = parseInt('{{ assessment_id }}', 10);
+let assessment = null;
+let answers = {};
+let timerInterval = null;
+let timeLeft = 0;
+let startTime = null;
+let antiCheatEnabled = false;
+let submitted = false;
+
+async function loadAssessment() {
+  try {
+    const res = await fetch(`/api/assessments/${assessmentId}`);
+    assessment = await res.json();
+    if (!assessment.is_active) {
+      document.getElementById('assessTitle').textContent = 'Assessment Not Available';
+      document.getElementById('assessDesc').textContent = 'This assessment is currently inactive.';
+      return;
+    }
+    document.getElementById('assessTitle').textContent = assessment.title;
+    document.getElementById('assessDesc').textContent = assessment.description || 'Please read all questions carefully before answering.';
+    document.getElementById('assessInfo').innerHTML = `
+      <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--primary)">${assessment.questions?.length || 0}</div><div style="font-size:12px;color:var(--text-light)">Questions</div></div>
+      <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--success)">${assessment.total_marks}</div><div style="font-size:12px;color:var(--text-light)">Total Marks</div></div>
+      <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--warning)">${assessment.duration_minutes}</div><div style="font-size:12px;color:var(--text-light)">Minutes</div></div>`;
+    antiCheatEnabled = assessment.anti_cheat;
+  } catch(e) {
+    document.getElementById('assessTitle').textContent = 'Error Loading Assessment';
+  }
+}
+
+function startAssessment() {
+  const name = document.getElementById('candName').value.trim();
+  const email = document.getElementById('candEmail').value.trim();
+  if (!name || !email) { alert('Please enter your name and email'); return; }
+  if (!assessment) { alert('Assessment not loaded'); return; }
+
+  document.getElementById('startScreen').style.display = 'none';
+  document.getElementById('assessmentScreen').style.display = 'block';
+  
+  startTime = new Date();
+  timeLeft = assessment.duration_minutes * 60;
+  
+  renderQuestions();
+  startTimer();
+  
+  if (antiCheatEnabled) {
+    setupAntiCheat();
+  }
+}
+
+function renderQuestions() {
+  const questions = assessment.questions || [];
+  const total = questions.length;
+  
+  document.getElementById('progressText').textContent = `${total} Questions`;
+  document.getElementById('answeredCount').textContent = `0 / ${total}`;
+  
+  let html = '';
+  questions.forEach((q, idx) => {
+    if (q.type === 'practical') {
+      html += `
+        <div class="question-card" id="qcard_${q.id}">
+          <div class="question-num">
+            <span>Practical Question ${idx + 1} of ${total}</span>
+            <span class="level-${q.level || 'hard'}">${q.marks} pts</span>
+          </div>
+          <div class="question-text">${q.question}</div>
+          <div class="form-group mt-4">
+            <label>Your Answer (code / explanation):</label>
+            <textarea id="practical_${q.id}" rows="6" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace" placeholder="Write your code or detailed explanation here..."></textarea>
+          </div>
+        </div>`;
+    } else {
+      html += `
+        <div class="question-card" id="qcard_${q.id}">
+          <div class="question-num">
+            <span>Question ${idx + 1} of ${total}</span>
+            <span class="level-${q.level}">${q.level?.toUpperCase()}</span>
+            <span style="margin-left:auto;color:var(--text-light)">${q.marks} pts</span>
+          </div>
+          <div class="question-text">${q.question}</div>
+          <div class="options-list">
+            ${(q.options || []).map((opt, oi) => `
+              <label class="option-item" id="opt_${q.id}_${oi}" onclick="selectAnswer(${q.id},${oi},${idx + 1},${total})">
+                <input type="radio" name="q_${q.id}" value="${oi}">
+                <span style="font-weight:600;width:22px;height:22px;background:var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${String.fromCharCode(65+oi)}</span>
+                <span>${opt}</span>
+              </label>`).join('')}
+          </div>
+        </div>`;
+    }
+  });
+  document.getElementById('questionsContainer').innerHTML = html;
+  
+  // Track practical answers on input
+  questions.forEach(q => {
+    if (q.type === 'practical') {
+      const ta = document.getElementById(`practical_${q.id}`);
+      if (ta) {
+        ta.addEventListener('input', () => {
+          answers[q.id] = ta.value;
+          updateAnsweredCount();
+        });
+      }
+    }
+  });
+}
+
+function selectAnswer(questionId, optionIndex, qNum, total) {
+  document.querySelectorAll(`[id^="opt_${questionId}_"]`).forEach(el => el.classList.remove('selected'));
+  document.getElementById(`opt_${questionId}_${optionIndex}`).classList.add('selected');
+  answers[questionId] = optionIndex;
+  document.getElementById(`qcard_${questionId}`).classList.add('answered');
+  updateAnsweredCount();
+}
+
+function updateAnsweredCount() {
+  const total = assessment.questions.length;
+  const answered = Object.keys(answers).length;
+  document.getElementById('answeredCount').textContent = `${answered} / ${total}`;
+}
+
+function startTimer() {
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      submitAssessment(true);
+    }
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(timeLeft / 60);
+  const s = timeLeft % 60;
+  const display = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  document.getElementById('timerDisplay').textContent = display;
+  const timerEl = document.getElementById('timer');
+  timerEl.className = 'timer-box';
+  if (timeLeft <= 60) timerEl.classList.add('danger');
+  else if (timeLeft <= 300) timerEl.classList.add('warning');
+}
+
+function setupAntiCheat() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && !submitted) autoSubmit('Tab switch detected');
+  });
+  window.addEventListener('blur', () => {
+    if (!submitted) {
+      setTimeout(() => {
+        if (document.hidden || document.activeElement !== document.querySelector('input[type=radio],textarea')) {
+          autoSubmit('Window switch detected');
+        }
+      }, 1000);
+    }
+  });
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('copy', e => e.preventDefault());
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && ['c','v','a','s','p'].includes(e.key.toLowerCase())) e.preventDefault();
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) e.preventDefault();
+    if (e.altKey && e.key === 'Tab') { e.preventDefault(); autoSubmit('Alt+Tab detected'); }
+  });
+}
+
+function autoSubmit(reason) {
+  if (submitted) return;
+  alert(`⚠️ Anti-cheat: ${reason}. Your assessment will be submitted automatically.`);
+  submitAssessment(true);
+}
+
+async function submitAssessment(auto = false) {
+  if (submitted) return;
+  submitted = true;
+  clearInterval(timerInterval);
+  
+  // Collect practical answers from textareas
+  const questions = assessment.questions || [];
+  for (const q of questions) {
+    if (q.type === 'practical') {
+      const ta = document.getElementById(`practical_${q.id}`);
+      if (ta) answers[q.id] = ta.value;
+    }
+  }
+  
+  const name = document.getElementById('candName')?.value || '';
+  const email = document.getElementById('candEmail')?.value || '';
+  const appId = document.getElementById('candAppId')?.value;
+  const timeTaken = startTime ? (new Date() - startTime) / 60000 : 0;
+  
+  const btn = document.getElementById('submitBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...'; }
+  
+  try {
+    const res = await fetch(`/api/assessments/${assessmentId}/submit`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        applicant_name: name,
+        applicant_email: email,
+        application_id: appId ? parseInt(appId, 10) : null,
+        answers: answers,
+        time_taken_minutes: parseFloat(timeTaken.toFixed(2))
+      })
+    });
+    const result = await res.json();
+    showResult(result);
+  } catch(e) {
+    document.getElementById('resultScreen').innerHTML = `<div class="alert alert-error">Submission failed. Please contact HR.</div>`;
+    document.getElementById('assessmentScreen').style.display = 'none';
+    document.getElementById('resultScreen').style.display = 'block';
+  }
+}
+
+function showResult(result) {
+  document.getElementById('assessmentScreen').style.display = 'none';
+  document.getElementById('resultScreen').style.display = 'block';
+  const passed = result.passed;
+  document.getElementById('resultIcon').textContent = passed ? '🎉' : '📊';
+  document.getElementById('resultTitle').textContent = passed ? 'Congratulations! You Passed!' : 'Assessment Completed';
+  document.getElementById('resultTitle').style.color = passed ? 'var(--success)' : 'var(--warning)';
+  document.getElementById('resultScore').textContent = `${result.score}/${result.total}`;
+  document.getElementById('resultGrade').textContent = `Grade: ${result.grade} | ${result.percentage}%`;
+  document.getElementById('resultFeedback').textContent = result.feedback || '';
+}
+
+loadAssessment();
+</script>
+</body>
+</html>

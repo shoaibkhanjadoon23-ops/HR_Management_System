@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Postings - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><i class="fas fa-users-cog"></i></div>
+    <h2>HR<span>Pro</span></h2>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-title">Main</div>
+      <a href="/dashboard.html" class="nav-item" data-path="/dashboard"><i class="fas fa-home"></i> Dashboard</a>
+      <a href="/jobs.html" class="nav-item" data-path="/jobs"><i class="fas fa-briefcase"></i> Job Postings</a>
+      <a href="/applications.html" class="nav-item" data-path="/applications"><i class="fas fa-file-alt"></i> Applications</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Recruitment</div>
+      <a href="/assessments.html" class="nav-item" data-path="/assessments"><i class="fas fa-clipboard-check"></i> Assessments</a>
+      <a href="/interviews.html" class="nav-item" data-path="/interviews"><i class="fas fa-video"></i> Interviews</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">HR</div>
+      <a href="/employees.html" class="nav-item" data-path="/employees"><i class="fas fa-users"></i> Employees</a>
+      <a href="/payroll.html" class="nav-item" data-path="/payroll"><i class="fas fa-dollar-sign"></i> Payroll</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-title">Account</div>
+      <a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+  </nav>
+  <div class="sidebar-user" id="sidebarUser"></div>
+</div>
+
+<div class="main-content">
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="sidebar-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+      <div class="header-title">
+        <h2 id="pageTitle">HRPro</h2>
+        <p id="pageSubtitle">Human Resource Management System</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="header-btn" title="Notifications"><i class="fas fa-bell"></i></button>
+      <button class="header-btn" title="Profile" onclick="navigate('/dashboard.html')">
+        <i class="fas fa-user-circle"></i>
+      </button>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <div class="page-header">
+      <div><h1>Job Postings</h1><p>Manage your job openings and applications</p></div>
+      <button class="btn btn-primary" onclick="openCreateJobModal()"><i class="fas fa-plus"></i> Create Job</button>
+    </div>
+
+    <div id="jobsList">
+      <div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>
+    </div>
+  </div>
+</div>
+
+<!-- Create/Edit Job Modal -->
+<div id="jobModal" class="modal-overlay" style="display:none">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3><i class="fas fa-briefcase"></i> <span id="jobModalTitle">Create Job Posting</span></h3>
+      <button class="modal-close" onclick="closeModal('jobModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div class="form-group"><label>Job Title *</label><input type="text" id="jTitle" placeholder="e.g. Senior Web Developer"></div>
+        <div class="form-group"><label>Department *</label><input type="text" id="jDept" placeholder="e.g. Engineering"></div>
+        <div class="form-group"><label>Job Type</label><select id="jType"><option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="internship">Internship</option></select></div>
+        <div class="form-group"><label>Location</label><input type="text" id="jLocation" placeholder="e.g. New York, NY"></div>
+        <div class="form-group"><label>Min Experience (years)</label><input type="number" id="jExp" placeholder="2" min="0" step="0.5"></div>
+        <div class="form-group"><label>Min CGPA</label><input type="number" id="jCgpa" placeholder="3.0" min="0" max="4" step="0.1"></div>
+        <div class="form-group"><label>Salary Min ($)</label><input type="number" id="jSalMin" placeholder="3000"></div>
+        <div class="form-group"><label>Salary Max ($)</label><input type="number" id="jSalMax" placeholder="8000"></div>
+        <div class="form-group"><label>Application Deadline</label><input type="datetime-local" id="jDeadline"></div>
+        <div class="form-group"><label>Status</label><select id="jStatus"><option value="active">Active</option><option value="draft">Draft</option><option value="closed">Closed</option></select></div>
+      </div>
+      <div class="form-group"><label><i class="fas fa-check"></i> Remote Work Allowed</label><input type="checkbox" id="jRemote" style="width:auto"></div>
+      <div class="form-group"><label>Job Description *</label><textarea id="jDesc" rows="4" placeholder="Describe the role..."></textarea></div>
+      <div class="form-group"><label>Requirements</label><textarea id="jReq" rows="3" placeholder="List requirements..."></textarea></div>
+      <div class="form-group"><label>Required Skills (press Enter or comma to add)</label><input type="text" id="skillInput" placeholder="e.g. React, Node.js, Python"><div id="skillTags" class="tags-wrap mt-2"></div><input type="hidden" id="skillsHidden"></div>
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+        <div class="flex justify-between items-center mb-4"><h4><i class="fas fa-magic"></i> Application Form <span class="ai-badge"><i class="fas fa-robot"></i> AI Generated</span></h4><button class="btn btn-secondary" id="genFormBtn" onclick="generateAIForm()"><i class="fas fa-magic"></i> Generate AI Form</button></div>
+        <div id="formPreview" style="display:none"><div class="alert alert-success"><i class="fas fa-check-circle"></i> Form generated! Applicants will see this form when applying.</div><div id="formFieldsList"></div></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('jobModal')">Cancel</button><button class="btn btn-primary" onclick="saveJob()"><i class="fas fa-save"></i> Save Job</button></div>
+  </div>
+</div>
+
+<!-- Job Details Modal -->
+<div id="jobDetailModal" class="modal-overlay" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h3 id="detailJobTitle"><i class="fas fa-briefcase"></i> Job Details</h3><button class="modal-close" onclick="closeModal('jobDetailModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body" id="jobDetailBody"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('jobDetailModal')">Close</button><button class="btn btn-info" onclick="copyJobLink()"><i class="fas fa-link"></i> Copy Apply Link</button><button class="btn btn-primary" id="editJobBtn"><i class="fas fa-edit"></i> Edit</button></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+requireAuth();
+renderSidebarUser();
+setActiveNav();
+initTagsInput('skillInput', 'skillTags', 'skillsHidden');
+
+let editingJobId = null;
+let currentJobLink = '';
+let generatedFormFields = null;
+let jobs = [];
+
+async function loadJobs() {
+  try {
+    jobs = await API.get('/api/jobs');
+    renderJobs();
+  } catch(e) { showToast('Error loading jobs: ' + e.message, 'error'); }
+}
+
+function renderJobs() {
+  if (!jobs.length) {
+    document.getElementById('jobsList').innerHTML = `<div class="empty-state"><i class="fas fa-briefcase"></i><h3>No Jobs Yet</h3><p>Create your first job posting to start recruiting</p><button class="btn btn-primary mt-4" onclick="openCreateJobModal()"><i class="fas fa-plus"></i> Create Job</button></div>`;
+    return;
+  }
+  document.getElementById('jobsList').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">${jobs.map(j => `
+    <div class="card" style="cursor:pointer">
+      <div class="card-body">
+        <div class="flex justify-between items-center mb-4"><div><h3 style="font-size:16px;font-weight:700">${j.title}</h3><p class="text-sm text-light">${j.department}</p></div>${statusBadge(j.status)}</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"><span class="text-xs text-light"><i class="fas fa-map-marker-alt"></i> ${j.location || 'Remote'}</span><span class="text-xs text-light"><i class="fas fa-clock"></i> ${j.job_type?.replace('_',' ')}</span><span class="text-xs text-light"><i class="fas fa-briefcase"></i> ${j.experience_years}+ yrs</span>${j.is_remote ? '<span class="text-xs text-light"><i class="fas fa-home"></i> Remote OK</span>' : ''}</div>
+        <div class="tags-wrap mb-4">${(j.skills_required || []).slice(0,4).map(s => `<span class="tag">${s}</span>`).join('')}${(j.skills_required || []).length > 4 ? `<span class="tag">+${j.skills_required.length - 4}</span>` : ''}</div>
+        <div class="flex justify-between items-center"><div class="text-sm"><i class="fas fa-users text-light"></i> <b>${j.application_count}</b> Applications</div><div class="flex gap-2"><button class="btn btn-sm btn-secondary" onclick="showJobDetail(${j.id})"><i class="fas fa-eye"></i></button><button class="btn btn-sm btn-primary" onclick="openEditJob(${j.id})"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="deleteJob(${j.id})"><i class="fas fa-trash"></i></button></div></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><div class="text-xs text-light"><i class="fas fa-link"></i> <a href="${j.apply_link}" target="_blank" style="color:var(--primary)">${j.apply_link}</a><button class="btn btn-sm" onclick="copyToClipboard('${j.apply_link}');event.stopPropagation()" style="padding:2px 6px;font-size:11px"><i class="fas fa-copy"></i></button></div></div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function openCreateJobModal() {
+  editingJobId = null;
+  generatedFormFields = null;
+  document.getElementById('jobModalTitle').textContent = 'Create Job Posting';
+  document.querySelectorAll('#jobModal input, #jobModal select, #jobModal textarea').forEach(el => el.value = '');
+  document.getElementById('skillTags').innerHTML = '';
+  document.getElementById('formPreview').style.display = 'none';
+  window['setTags_skillsHidden']([]);
+  openModal('jobModal');
+}
+
+function openEditJob(id) {
+  const job = jobs.find(j => j.id === id);
+  if (!job) return;
+  editingJobId = id;
+  generatedFormFields = job.form_fields;
+  document.getElementById('jobModalTitle').textContent = 'Edit Job';
+  document.getElementById('jTitle').value = job.title;
+  document.getElementById('jDept').value = job.department;
+  document.getElementById('jType').value = job.job_type;
+  document.getElementById('jLocation').value = job.location || '';
+  document.getElementById('jExp').value = job.experience_years;
+  document.getElementById('jCgpa').value = job.min_cgpa;
+  document.getElementById('jSalMin').value = job.salary_min || '';
+  document.getElementById('jSalMax').value = job.salary_max || '';
+  document.getElementById('jDesc').value = job.description;
+  document.getElementById('jReq').value = job.requirements || '';
+  document.getElementById('jStatus').value = job.status;
+  document.getElementById('jRemote').checked = job.is_remote;
+  if (job.deadline) document.getElementById('jDeadline').value = job.deadline.slice(0,16);
+  window['setTags_skillsHidden'](job.skills_required || []);
+  if (job.form_fields) { document.getElementById('formPreview').style.display = 'block'; renderFormPreview(job.form_fields); }
+  openModal('jobModal');
+}
+
+async function generateAIForm() {
+  const title = document.getElementById('jTitle').value;
+  const desc = document.getElementById('jDesc').value;
+  const skills = window['getTags_skillsHidden']();
+  if (!title) { showToast('Please enter job title first', 'warning'); return; }
+  const btn = document.getElementById('genFormBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+  try {
+    const data = await API.post('/api/jobs/generate-form', { title, description: desc, skills });
+    generatedFormFields = data;
+    document.getElementById('formPreview').style.display = 'block';
+    renderFormPreview(data);
+    showToast('AI form generated!', 'success');
+  } catch(e) { showToast('Error generating form: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Regenerate Form'; }
+}
+
+function renderFormPreview(formData) {
+  const sections = formData?.sections || [];
+  let html = sections.map(s => `<div style="margin-bottom:16px"><h4 style="font-size:13px;font-weight:700;color:var(--primary-dark);margin-bottom:8px">${s.title}</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${(s.fields || []).map(f => `<div style="padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:12px"><b>${f.label}</b> ${f.required ? '<span style="color:red">*</span>' : ''}<br><span style="color:var(--text-light)">Type: ${f.type}</span>${f.options?.length ? `<br><span style="color:var(--text-light)">${f.options.slice(0,3).join(', ')}${f.options.length > 3 ? '...' : ''}</span>` : ''}</div>`).join('')}</div></div>`).join('');
+  document.getElementById('formFieldsList').innerHTML = html;
+}
+
+async function saveJob() {
+  const title = document.getElementById('jTitle').value;
+  const dept = document.getElementById('jDept').value;
+  if (!title || !dept) { showToast('Title and department are required', 'warning'); return; }
+  const payload = {
+    title, department: dept,
+    job_type: document.getElementById('jType').value,
+    location: document.getElementById('jLocation').value,
+    experience_years: parseFloat(document.getElementById('jExp').value) || 0,
+    min_cgpa: parseFloat(document.getElementById('jCgpa').value) || 0,
+    salary_min: parseFloat(document.getElementById('jSalMin').value) || null,
+    salary_max: parseFloat(document.getElementById('jSalMax').value) || null,
+    description: document.getElementById('jDesc').value,
+    requirements: document.getElementById('jReq').value,
+    skills_required: window['getTags_skillsHidden'](),
+    status: document.getElementById('jStatus').value,
+    is_remote: document.getElementById('jRemote').checked,
+    form_fields: generatedFormFields,
+    deadline: document.getElementById('jDeadline').value || null
+  };
+  try {
+    if (editingJobId) { await API.put(`/api/jobs/${editingJobId}`, payload); showToast('Job updated!', 'success'); }
+    else { const res = await API.post('/api/jobs', payload); showToast(`Job created! Apply link: ${res.apply_link}`, 'success', 5000); }
+    closeModal('jobModal');
+    loadJobs();
+  } catch(e) { showToast('Error saving job: ' + e.message, 'error'); }
+}
+
+function showJobDetail(id) {
+  const job = jobs.find(j => j.id === id);
+  if (!job) return;
+  currentJobLink = job.apply_link;
+  document.getElementById('detailJobTitle').innerHTML = `<i class="fas fa-briefcase"></i> ${job.title}`;
+  document.getElementById('editJobBtn').onclick = () => { closeModal('jobDetailModal'); openEditJob(id); };
+  document.getElementById('jobDetailBody').innerHTML = `<div class="grid-2 mb-4"><div><b>Department:</b> ${job.department}</div><div><b>Type:</b> ${job.job_type?.replace('_',' ')}</div><div><b>Location:</b> ${job.location || 'N/A'}</div><div><b>Experience:</b> ${job.experience_years}+ years</div><div><b>Min CGPA:</b> ${job.min_cgpa}</div><div><b>Remote:</b> ${job.is_remote ? 'Yes' : 'No'}</div>${job.salary_min ? `<div><b>Salary Range:</b> $${job.salary_min} - $${job.salary_max}</div>` : ''}<div><b>Applications:</b> ${job.application_count}</div><div><b>Deadline:</b> ${fmtDate(job.deadline)}</div><div><b>Status:</b> ${statusBadge(job.status)}</div></div><div class="mb-4"><b>Description:</b><p class="mt-2 text-sm" style="line-height:1.7">${job.description}</p></div>${job.requirements ? `<div class="mb-4"><b>Requirements:</b><p class="mt-2 text-sm" style="line-height:1.7">${job.requirements}</p></div>` : ''}<div class="mb-4"><b>Required Skills:</b><div class="tags-wrap mt-2">${(job.skills_required || []).map(s => `<span class="tag">${s}</span>`).join('')}</div></div><div class="alert alert-info"><i class="fas fa-link"></i> Apply Link: <a href="${job.apply_link}" target="_blank" style="color:var(--info)">${job.apply_link}</a></div>`;
+  openModal('jobDetailModal');
+}
+
+function copyJobLink() { copyToClipboard(currentJobLink); }
+async function deleteJob(id) { if (!confirm('Delete this job posting?')) return; try { await API.delete(`/api/jobs/${id}`); showToast('Job deleted', 'success'); loadJobs(); } catch(e) { showToast('Error deleting job', 'error'); } }
+
+loadJobs();
+</script>
+</body>
+</html>

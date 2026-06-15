@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payroll - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+{% include "sidebar.html" %}
+<div class="main-content">
+{% include "header.html" %}
+<div class="page-content">
+  <div class="page-header">
+    <div><h1>Payroll Management</h1><p>Manage employee salaries and generate payslips</p></div>
+    <div class="flex gap-2">
+      <button class="btn btn-secondary" onclick="openBulkModal()"><i class="fas fa-bolt"></i> Bulk Generate</button>
+    </div>
+  </div>
+
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Department</label>
+      <select id="fDept" onchange="loadPayroll()">
+        <option value="">All Departments</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Month</label>
+      <input type="month" id="fMonth" onchange="loadPayroll()">
+    </div>
+  </div>
+
+  <div id="payrollList">
+    <div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>
+  </div>
+</div>
+</div>
+
+<!-- Add Payroll Record Modal -->
+<div id="payrollModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-dollar-sign"></i> Add Payroll Record</h3>
+      <button class="modal-close" onclick="closeModal('payrollModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Month *</label><input type="month" id="pMonth"></div>
+      <div class="form-group"><label>Basic Salary ($) *</label><input type="number" id="pBasic" step="0.01"></div>
+      <div class="form-group"><label>Bonuses ($)</label><input type="number" id="pBonus" value="0" step="0.01"></div>
+      <div class="form-group"><label>Performance Bonus ($)</label><input type="number" id="pPerfBonus" value="0" step="0.01"></div>
+      <div class="form-group"><label>Deductions ($)</label><input type="number" id="pDeduct" value="0" step="0.01"></div>
+      <div class="alert alert-info mt-2"><i class="fas fa-info-circle"></i> Net = Basic + Bonuses + Performance Bonus - Deductions</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('payrollModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createPayroll()"><i class="fas fa-save"></i> Create Record</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Generate Modal -->
+<div id="bulkModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-bolt"></i> Bulk Generate Payroll</h3>
+      <button class="modal-close" onclick="closeModal('bulkModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Month *</label><input type="month" id="bMonth"></div>
+      <div class="form-group"><label>Department (optional)</label><input type="text" id="bDept" placeholder="Leave blank for all departments"></div>
+      <div class="alert alert-info">This will create payroll records using each employee's base salary for the selected month.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('bulkModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="bulkGenerate()"><i class="fas fa-bolt"></i> Generate</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+requireAuth();
+renderSidebarUser();
+setActiveNav();
+
+let payrollData = [];
+let selectedEmpId = null;
+
+// Set default month to current
+const now = new Date();
+document.getElementById('fMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+document.getElementById('bMonth') && (document.getElementById('bMonth').value = document.getElementById('fMonth').value);
+
+async function loadPayroll() {
+  const dept = document.getElementById('fDept').value;
+  const month = document.getElementById('fMonth').value;
+  const params = new URLSearchParams();
+  if (dept) params.append('department', dept);
+  if (month) params.append('month', month);
+  
+  try {
+    payrollData = await API.get('/api/payroll?' + params);
+    
+    // Populate dept filter
+    const depts = [...new Set(payrollData.map(d => d.employee.department))];
+    const deptSel = document.getElementById('fDept');
+    const currentVal = deptSel.value;
+    deptSel.innerHTML = '<option value="">All Departments</option>' + depts.map(d => `<option value="${d}" ${d===currentVal?'selected':''}>${d}</option>`).join('');
+    
+    renderPayroll();
+  } catch(e) { showToast('Error loading payroll', 'error'); }
+}
+
+function renderPayroll() {
+  if (!payrollData.length) {
+    document.getElementById('payrollList').innerHTML = '<div class="empty-state"><i class="fas fa-dollar-sign"></i><h3>No employees found</h3><p>Add employees first in the Employees section</p></div>';
+    return;
+  }
+  
+  // Group by department
+  const byDept = {};
+  payrollData.forEach(d => {
+    const dept = d.employee.department;
+    if (!byDept[dept]) byDept[dept] = [];
+    byDept[dept].push(d);
+  });
+  
+  const selectedMonth = document.getElementById('fMonth').value;
+  
+  document.getElementById('payrollList').innerHTML = Object.entries(byDept).map(([dept, records]) => `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <h3><i class="fas fa-building"></i> ${dept} 
+          <span class="nav-badge">${records.length} employees</span>
+        </h3>
+        <div class="text-sm text-light">
+          Total Payroll: <b>${fmtCurrency(records.reduce((sum, r) => {
+            const rec = r.payroll_records.find(pr => pr.month === selectedMonth);
+            return sum + (rec?.net_salary || 0);
+          }, 0))}/month</b>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Employee</th><th>Position</th><th>Bank</th><th>Salary</th><th>Month Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${records.map(r => {
+              const emp = r.employee;
+              const rec = r.payroll_records.find(pr => pr.month === selectedMonth);
+              return `<tr>
+                <td>
+                  <div class="font-bold">${emp.full_name}</div>
+                  <div class="text-xs text-light">${emp.email}</div>
+                  <div class="text-xs" style="color:var(--primary)">${emp.employee_id}</div>
+                </td>
+                <td class="text-sm">${emp.position}</td>
+                <td class="text-xs text-light">${emp.bank_name || '-'}<br>${emp.bank_account || '-'}</td>
+                <td class="font-bold">${fmtCurrency(emp.salary)}</td>
+                <td>
+                  ${rec ? `
+                    <div class="font-bold" style="color:${rec.status==='paid'?'var(--success)':'var(--warning)'}">${fmtCurrency(rec.net_salary)}</div>
+                    <div>${statusBadge(rec.status)}</div>
+                    ${rec.payment_date ? `<div class="text-xs text-light">${fmtDate(rec.payment_date)}</div>` : ''}
+                    ${rec.slip_sent ? '<div class="text-xs" style="color:var(--success)"><i class="fas fa-check"></i> Slip sent</div>' : ''}
+                  ` : `<span class="badge badge-draft">No Record</span>`}
+                </td>
+                <td>
+                  <div class="table-actions">
+                    ${!rec ? `<button class="btn btn-sm btn-primary" onclick="openAddPayroll(${emp.id},${emp.salary})"><i class="fas fa-plus"></i> Add</button>` : ''}
+                    ${rec && rec.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="markPaid(${rec.id})"><i class="fas fa-dollar-sign"></i> Pay & Send Slip</button>` : ''}
+                    ${rec && rec.status === 'paid' ? `<button class="btn btn-sm btn-secondary" onclick="resendSlip(${rec.id})"><i class="fas fa-paper-plane"></i> Resend Slip</button>` : ''}
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('');
+}
+
+function openAddPayroll(empId, salary) {
+  selectedEmpId = empId;
+  document.getElementById('pBasic').value = salary;
+  document.getElementById('pBonus').value = 0;
+  document.getElementById('pPerfBonus').value = 0;
+  document.getElementById('pDeduct').value = 0;
+  document.getElementById('pMonth').value = document.getElementById('fMonth').value;
+  openModal('payrollModal');
+}
+
+async function createPayroll() {
+  const basic = parseFloat(document.getElementById('pBasic').value) || 0;
+  const bonus = parseFloat(document.getElementById('pBonus').value) || 0;
+  const perf = parseFloat(document.getElementById('pPerfBonus').value) || 0;
+  const deduct = parseFloat(document.getElementById('pDeduct').value) || 0;
+  
+  try {
+    await API.post('/api/payroll', {
+      employee_id: selectedEmpId,
+      month: document.getElementById('pMonth').value,
+      basic_salary: basic,
+      bonuses: bonus,
+      performance_bonus: perf,
+      deductions: deduct
+    });
+    showToast('Payroll record created!', 'success');
+    closeModal('payrollModal');
+    loadPayroll();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function markPaid(recordId) {
+  if (!confirm('Mark salary as paid and send payslip to employee?')) return;
+  try {
+    await API.post(`/api/payroll/${recordId}/pay`, {});
+    showToast('Salary paid and payslip sent!', 'success');
+    loadPayroll();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function resendSlip(recordId) {
+  try {
+    await API.post(`/api/payroll/${recordId}/pay`, {});
+    showToast('Payslip resent!', 'success');
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+function openBulkModal() {
+  document.getElementById('bMonth').value = document.getElementById('fMonth').value;
+  openModal('bulkModal');
+}
+
+async function bulkGenerate() {
+  try {
+    const res = await API.post('/api/payroll/bulk-generate', {
+      month: document.getElementById('bMonth').value,
+      department: document.getElementById('bDept').value
+    });
+    showToast(res.message, 'success');
+    closeModal('bulkModal');
+    loadPayroll();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+loadPayroll();
+</script>
+</body>
+</html>

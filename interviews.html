@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interviews - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+{% include "sidebar.html" %}
+<div class="main-content">
+{% include "header.html" %}
+<div class="page-content">
+  <div class="page-header">
+    <div><h1>Interviews</h1><p>Manage scheduled interviews and track progress</p></div>
+  </div>
+
+  <div id="interviewsList">
+    <div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>
+  </div>
+</div>
+</div>
+
+<!-- Update Interview Modal -->
+<div id="updateModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-edit"></i> Update Interview</h3>
+      <button class="modal-close" onclick="closeModal('updateModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Status</label>
+        <select id="iStatus">
+          <option value="scheduled">Scheduled</option>
+          <option value="completed">Completed</option>
+          <option value="passed">Passed</option>
+          <option value="failed">Failed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Interviewer Notes</label>
+        <textarea id="iNotes" rows="4" placeholder="Notes from the interview..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('updateModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUpdate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+requireAuth();
+renderSidebarUser();
+setActiveNav();
+let interviews = [];
+let updatingId = null;
+
+async function loadInterviews() {
+  try {
+    interviews = await API.get('/api/interviews');
+    renderInterviews();
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+function renderInterviews() {
+  const upcoming = interviews.filter(i => new Date(i.scheduled_date) >= new Date() && i.status === 'scheduled');
+  const past = interviews.filter(i => new Date(i.scheduled_date) < new Date() || i.status !== 'scheduled');
+  
+  document.getElementById('interviewsList').innerHTML = `
+    <div class="tabs" id="interviewTabs">
+      <button class="tab active" data-tab="upcomingTab">Upcoming (${upcoming.length})</button>
+      <button class="tab" data-tab="pastTab">Past/Completed (${past.length})</button>
+      <button class="tab" data-tab="allTab">All (${interviews.length})</button>
+    </div>
+    <div id="upcomingTab" class="tab-content active">${renderList(upcoming)}</div>
+    <div id="pastTab" class="tab-content">${renderList(past)}</div>
+    <div id="allTab" class="tab-content">${renderList(interviews)}</div>`;
+  
+  initTabs('interviewTabs');
+}
+
+function renderList(list) {
+  if (!list.length) return '<div class="empty-state"><i class="fas fa-calendar"></i><h3>No interviews</h3></div>';
+  return list.map(i => {
+    const d = new Date(i.scheduled_date);
+    const isOnline = i.interview_type === 'online';
+    const isActive = new Date() >= d && new Date() <= new Date(d.getTime() + (i.duration_minutes || 60) * 60000);
+    return `
+    <div class="interview-card">
+      <div class="interview-date">
+        <div class="day">${d.getDate()}</div>
+        <div class="month">${d.toLocaleString('en-US', {month:'short',year:'2-digit'})}</div>
+      </div>
+      <div style="flex:1">
+        <div class="font-bold" style="font-size:16px">${i.applicant_name}</div>
+        <div class="text-sm text-light">${i.applicant_email}</div>
+        <div class="text-sm" style="margin-top:4px"><i class="fas fa-briefcase"></i> ${i.job_title}</div>
+        <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap">
+          <span class="text-xs"><i class="fas fa-clock"></i> ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</span>
+          <span class="text-xs"><i class="fas fa-hourglass"></i> ${i.duration_minutes} min</span>
+          <span class="badge ${isOnline ? 'badge-online' : 'badge-office'}">${isOnline ? '🎥 Online' : '🏢 Office'}</span>
+          ${statusBadge(i.status)}
+        </div>
+        ${i.meeting_link ? `
+          <div class="mt-2">
+            <a href="${i.meeting_link}" target="_blank" class="btn btn-sm ${isActive ? 'btn-success' : 'btn-secondary'}">
+              <i class="fas fa-video"></i> ${isActive ? '🟢 Join Now' : 'Meeting Link'}
+            </a>
+            <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${i.meeting_link}')"><i class="fas fa-copy"></i></button>
+          </div>` : ''}
+      </div>
+      <div>
+        <button class="btn btn-sm btn-primary" onclick="openUpdate(${i.id},'${i.status}','${(i.interviewer_notes||'').replace(/'/g,"\\'")}')"><i class="fas fa-edit"></i> Update</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openUpdate(id, status, notes) {
+  updatingId = id;
+  document.getElementById('iStatus').value = status;
+  document.getElementById('iNotes').value = notes;
+  openModal('updateModal');
+}
+
+async function saveUpdate() {
+  try {
+    await API.put(`/api/interviews/${updatingId}`, {
+      status: document.getElementById('iStatus').value,
+      interviewer_notes: document.getElementById('iNotes').value
+    });
+    showToast('Interview updated!', 'success');
+    closeModal('updateModal');
+    loadInterviews();
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+loadInterviews();
+</script>
+</body>
+</html>

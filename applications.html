@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Applications - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+{% include "sidebar.html" %}
+<div class="main-content">
+{% include "header.html" %}
+<div class="page-content">
+  <div class="page-header">
+    <div><h1>Applications</h1><p>Review and manage candidate applications</p></div>
+    <div class="flex gap-2">
+      <button class="btn btn-secondary" onclick="bulkActionModal()"><i class="fas fa-tasks"></i> Bulk Action</button>
+      <button class="btn btn-secondary" onclick="exportEmails()"><i class="fas fa-download"></i> Export</button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <div class="filter-group">
+      <label>Search</label>
+      <div class="search-box"><i class="fas fa-search"></i><input type="text" id="fSearch" placeholder="Name or email" oninput="debounce(loadApps,400)()"></div>
+    </div>
+    <div class="filter-group">
+      <label>Status</label>
+      <select id="fStatus" onchange="loadApps()">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="under_review">Under Review</option>
+        <option value="shortlisted">Shortlisted</option>
+        <option value="interview_scheduled">Interview Scheduled</option>
+        <option value="interview_passed">Interview Passed</option>
+        <option value="offer_sent">Offer Sent</option>
+        <option value="hired">Hired</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Min Experience (yrs)</label>
+      <input type="number" id="fMinExp" min="0" step="0.5" oninput="loadApps()">
+    </div>
+    <div class="filter-group">
+      <label>Min CGPA</label>
+      <input type="number" id="fMinCgpa" min="0" max="4" step="0.1" oninput="loadApps()">
+    </div>
+    <div class="filter-group">
+      <label>Max Experience (yrs)</label>
+      <input type="number" id="fMaxExp" min="0" step="0.5" oninput="loadApps()">
+    </div>
+    <div class="filter-group">
+      <label>Max CGPA</label>
+      <input type="number" id="fMaxCgpa" min="0" max="4" step="0.1" oninput="loadApps()">
+    </div>
+    <div style="display:flex;align-items:flex-end">
+      <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><i class="fas fa-times"></i> Clear</button>
+    </div>
+  </div>
+
+  <div id="selectionBar" class="alert alert-info" style="display:none">
+    <span id="selCount">0</span> selected —
+    <button class="btn btn-sm btn-warning" onclick="bulkStatus('pending')">Mark Pending</button>
+    <button class="btn btn-sm btn-danger" onclick="bulkStatus('rejected')">Reject Selected</button>
+    <button class="btn btn-sm btn-secondary" onclick="clearSelection()">Clear</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fas fa-list"></i> Applications <span id="appCount" class="nav-badge">0</span></h3>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr><th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th><th>Applicant</th><th>Job</th><th>Experience</th><th>CGPA</th><th>Skills Match</th><th>Applied</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="appsBody">
+          <tr><td colspan="9" style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- Application Detail Modal -->
+<div id="appDetailModal" class="modal-overlay" style="display:none">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3 id="appDetailTitle"><i class="fas fa-user"></i> Application Details</h3>
+      <button class="modal-close" onclick="closeModal('appDetailModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="appDetailBody"></div>
+    <div class="modal-footer" id="appDetailFooter"></div>
+  </div>
+</div>
+
+<!-- Rejection Modal -->
+<div id="rejectModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-times-circle"></i> Reject Application</h3>
+      <button class="modal-close" onclick="closeModal('rejectModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Rejection Reason</label>
+        <textarea id="rejectReason" rows="4" placeholder="Enter reason for rejection..."></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary" onclick="generateAIRejectionReason()"><i class="fas fa-magic"></i> AI Generate Reason</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('rejectModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmReject()"><i class="fas fa-times-circle"></i> Reject & Send Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- Interview Schedule Modal -->
+<div id="interviewModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-calendar"></i> Schedule Interview</h3>
+      <button class="modal-close" onclick="closeModal('interviewModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Interview Type</label>
+        <select id="iType"><option value="online">Online (Video Call)</option><option value="office">Office (In-Person)</option></select>
+      </div>
+      <div class="form-group">
+        <label>Date & Time *</label>
+        <input type="datetime-local" id="iDate">
+      </div>
+      <div class="form-group">
+        <label>Duration (minutes)</label>
+        <input type="number" id="iDuration" value="60" min="15" step="15">
+      </div>
+      <div class="form-group" id="officeLocationGroup" style="display:none">
+        <label>Office Location</label>
+        <input type="text" id="iLocation" placeholder="Room 301, HQ Building">
+      </div>
+      <div class="alert alert-info mt-2" id="meetingInfo">Online interview will automatically generate a Jitsi meeting link.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('interviewModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="scheduleInterview()"><i class="fas fa-calendar-check"></i> Schedule & Send Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- Offer Letter Modal (with manual toggle) -->
+<div id="offerModal" class="modal-overlay" style="display:none">
+  <div class="modal modal-xl">
+    <div class="modal-header">
+      <h3><i class="fas fa-file-contract"></i> Generate/Write Offer Letter</h3>
+      <button class="modal-close" onclick="closeModal('offerModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2 mb-4">
+        <div class="form-group">
+          <label>Letter Type</label>
+          <select id="offerType"><option value="offer">Offer Letter</option><option value="agreement">Employment Agreement</option><option value="contract">Contract</option></select>
+        </div>
+        <div class="form-group">
+          <label>Position</label>
+          <input type="text" id="offerPosition">
+        </div>
+        <div class="form-group">
+          <label>Department</label>
+          <input type="text" id="offerDept">
+        </div>
+        <div class="form-group">
+          <label>Monthly Salary ($) *</label>
+          <input type="number" id="offerSalary" placeholder="5000">
+        </div>
+        <div class="form-group">
+          <label>Joining Date *</label>
+          <input type="date" id="offerJoinDate">
+        </div>
+        <div class="form-group">
+          <label>Reporting To</label>
+          <input type="text" id="offerReporting" placeholder="Department Manager">
+        </div>
+        <div class="form-group">
+          <label>Benefits</label>
+          <input type="text" id="offerBenefits" placeholder="Health insurance, 15 days PTO...">
+        </div>
+        <div class="form-group">
+          <label>Job Type</label>
+          <select id="offerJobType"><option value="Full Time">Full Time</option><option value="Part Time">Part Time</option><option value="Contract">Contract</option></select>
+        </div>
+      </div>
+      <div class="flex gap-2 mb-4">
+        <button class="btn btn-primary" onclick="generateOffer()"><i class="fas fa-magic"></i> Generate with AI</button>
+        <button class="btn btn-secondary" onclick="clearOfferPreview()"><i class="fas fa-edit"></i> Write Manually</button>
+      </div>
+      <div id="offerPreview" style="display:none">
+        <label class="font-bold mb-4">Preview (Editable)</label>
+        <textarea id="offerContent" class="letter-preview" rows="15" style="width:100%;font-family:Georgia,serif;border:1px solid var(--border);border-radius:8px;padding:16px"></textarea>
+        <div class="mt-2 text-sm text-light"><i class="fas fa-info-circle"></i> You can edit the content above before sending.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('offerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendOffer()" id="sendOfferBtn" style="display:none"><i class="fas fa-paper-plane"></i> Send to Applicant</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Action Modal -->
+<div id="bulkModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-tasks"></i> Bulk Action on Non-Matching Applications</h3>
+      <button class="modal-close" onclick="closeModal('bulkModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-light mb-4">Apply filters first, then reject or pend all non-matching applications below the threshold.</p>
+      <div class="form-group"><label>Rejection Reason (for reject action)</label><textarea id="bulkReason" rows="3" placeholder="We have reviewed your application and unfortunately..."></textarea></div>
+      <div class="flex gap-2 mt-4">
+        <button class="btn btn-danger" onclick="applyBulkAction('reject')"><i class="fas fa-times-circle"></i> Reject Non-Matching</button>
+        <button class="btn btn-warning" onclick="applyBulkAction('pending')"><i class="fas fa-clock"></i> Move to Pending</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Email Modal -->
+<div id="customEmailModal" class="modal-overlay" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3><i class="fas fa-paper-plane"></i> Send Custom Email</h3>
+      <button class="modal-close" onclick="closeModal('customEmailModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>To</label>
+        <input type="email" id="customEmailTo" readonly style="background:#f3f4f6">
+      </div>
+      <div class="form-group">
+        <label>Subject *</label>
+        <input type="text" id="customEmailSubject" placeholder="Enter subject">
+      </div>
+      <div class="form-group">
+        <label>Message *</label>
+        <textarea id="customEmailBody" rows="8" placeholder="Write your message here..."></textarea>
+      </div>
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Use {name} to insert the recipient's name. The email will be sent immediately.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('customEmailModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendCustomEmail()"><i class="fas fa-paper-plane"></i> Send Email</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+<script>
+requireAuth();
+renderSidebarUser();
+setActiveNav();
+
+let apps = [];
+let selectedIds = new Set();
+let rejectingAppId = null;
+let interviewingAppId = null;
+let offerAppId = null;
+let currentOfferId = null;
+let currentOfferAppTitle = '';
+
+document.getElementById('iType').onchange = function() {
+  document.getElementById('officeLocationGroup').style.display = this.value === 'office' ? 'block' : 'none';
+  document.getElementById('meetingInfo').style.display = this.value === 'online' ? 'block' : 'none';
+};
+
+async function loadApps() {
+  const params = new URLSearchParams();
+  const s = document.getElementById('fStatus').value;
+  const minExp = document.getElementById('fMinExp').value;
+  const maxExp = document.getElementById('fMaxExp').value;
+  const minCgpa = document.getElementById('fMinCgpa').value;
+  const maxCgpa = document.getElementById('fMaxCgpa').value;
+  const search = document.getElementById('fSearch').value;
+  if (s) params.append('status', s);
+  if (minExp) params.append('min_experience', minExp);
+  if (maxExp) params.append('max_experience', maxExp);
+  if (minCgpa) params.append('min_cgpa', minCgpa);
+  if (maxCgpa) params.append('max_cgpa', maxCgpa);
+  if (search) params.append('search', search);
+
+  try {
+    apps = await API.get('/api/applications?' + params);
+    document.getElementById('appCount').textContent = apps.length;
+    renderApps();
+  } catch(e) { showToast('Error loading applications', 'error'); }
+}
+
+function renderApps() {
+  if (!apps.length) {
+    document.getElementById('appsBody').innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><h3>No Applications Found</h3><p>Try adjusting your filters</p></div></td></tr>';
+    return;
+  }
+  document.getElementById('appsBody').innerHTML = apps.map(a => {
+    const match = a.skill_gap_analysis?.match_percentage || 0;
+    const matchColor = match >= 70 ? 'var(--success)' : match >= 40 ? 'var(--warning)' : 'var(--danger)';
+    return `<tr>
+      <td><input type="checkbox" class="app-check" value="${a.id}" onchange="toggleSelect(${a.id})"></td>
+      <td>
+        <div class="font-bold">${a.applicant_name}</div>
+        <div class="text-xs text-light">${a.applicant_email}</div>
+        <div class="text-xs text-light">${a.applicant_phone || ''}</div>
+      </td>
+      <td class="text-sm">${a.job_title}</td>
+      <td class="text-sm">${a.experience_years} yrs</td>
+      <td class="text-sm">${a.cgpa || '-'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${match}%;background:${matchColor}"></div></div>
+          <span style="font-size:12px;color:${matchColor};font-weight:600">${match}%</span>
+        </div>
+      </td>
+      <td class="text-xs text-light">${fmtDate(a.applied_at)}</td>
+      <td>${statusBadge(a.status)}</td>
+      <td>
+        <div class="table-actions">
+          <button class="btn btn-sm btn-secondary" onclick="viewApp(${a.id})" title="View"><i class="fas fa-eye"></i></button>
+          <button class="btn btn-sm btn-success" onclick="quickStatus(${a.id},'shortlisted')" title="Shortlist"><i class="fas fa-check"></i></button>
+          <button class="btn btn-sm btn-danger" onclick="openReject(${a.id})" title="Reject"><i class="fas fa-times"></i></button>
+          <button class="btn btn-sm btn-info" onclick="openCustomEmailModal('${a.applicant_email}', '${a.applicant_name}')" title="Send Custom Email"><i class="fas fa-envelope"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleSelect(id) {
+  selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
+  updateSelectionBar();
+}
+
+function toggleAll(cb) {
+  apps.forEach(a => cb.checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
+  document.querySelectorAll('.app-check').forEach(c => c.checked = cb.checked);
+  updateSelectionBar();
+}
+
+function updateSelectionBar() {
+  const bar = document.getElementById('selectionBar');
+  if (selectedIds.size > 0) {
+    bar.style.display = 'block';
+    document.getElementById('selCount').textContent = selectedIds.size;
+  } else { bar.style.display = 'none'; }
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  document.querySelectorAll('.app-check').forEach(c => c.checked = false);
+  document.getElementById('selectAll').checked = false;
+  updateSelectionBar();
+}
+
+async function bulkStatus(action) {
+  if (!selectedIds.size) return;
+  try {
+    const reason = action === 'rejected' ? prompt('Rejection reason:') || 'Application not selected' : '';
+    await API.post('/api/applications/bulk-action', {
+      application_ids: [...selectedIds], action, rejection_reason: reason
+    });
+    showToast(`Bulk action applied`, 'success');
+    clearSelection();
+    loadApps();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function quickStatus(id, status) {
+  try {
+    await API.put(`/api/applications/${id}/status`, { status });
+    showToast(`Status updated to ${status}`, 'success');
+    loadApps();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function openReject(id) {
+  rejectingAppId = id;
+  const app = apps.find(a => a.id === id);
+  document.getElementById('rejectReason').value = '';
+  window._rejectAppName = app?.applicant_name;
+  window._rejectJobTitle = app?.job_title;
+  openModal('rejectModal');
+}
+
+async function generateAIRejectionReason() {
+  try {
+    const data = await API.post('/api/ai/generate-rejection-reason', {
+      job_title: window._rejectJobTitle || '',
+      applicant_name: window._rejectAppName || '',
+      filters_failed: ['did not meet requirements']
+    });
+    document.getElementById('rejectReason').value = data.reason;
+    showToast('Reason generated by AI', 'success');
+  } catch(e) { showToast('AI error', 'error'); }
+}
+
+async function confirmReject() {
+  const reason = document.getElementById('rejectReason').value;
+  if (!reason) { showToast('Please enter a rejection reason', 'warning'); return; }
+  try {
+    await API.put(`/api/applications/${rejectingAppId}/status`, {
+      status: 'rejected', rejection_reason: reason
+    });
+    showToast('Application rejected and email sent', 'success');
+    closeModal('rejectModal');
+    loadApps();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function viewApp(id) {
+  try {
+    const a = await API.get(`/api/applications/${id}`);
+    document.getElementById('appDetailTitle').innerHTML = `<i class="fas fa-user"></i> ${a.applicant_name} — ${a.job_title}`;
+    
+    const skillGap = a.skill_gap_analysis || {};
+    const skills = a.skills || [];
+    
+    document.getElementById('appDetailBody').innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">
+        <div style="flex:1;min-width:280px">
+          <div class="card" style="margin-bottom:12px">
+            <div class="card-header"><h3><i class="fas fa-user"></i> Applicant Info</h3></div>
+            <div class="card-body">
+              <div class="grid-2 text-sm" style="gap:8px">
+                <div><b>Name:</b> ${a.applicant_name}</div>
+                <div><b>Email:</b> ${a.applicant_email}</div>
+                <div><b>Phone:</b> ${a.applicant_phone || '-'}</div>
+                <div><b>Experience:</b> ${a.experience_years} years</div>
+                <div><b>CGPA:</b> ${a.cgpa || '-'}</div>
+                <div><b>Applied:</b> ${fmtDate(a.applied_at)}</div>
+              </div>
+              <div class="mt-4"><b>Skills:</b><div class="tags-wrap mt-2">${skills.map(s => `<span class="tag">${s}</span>`).join('') || '<span class="text-light">None listed</span>'}</div></div>
+              ${a.cover_letter ? `<div class="mt-4"><b>Cover Letter:</b><p class="text-sm mt-2" style="line-height:1.7;background:#f8fafc;padding:12px;border-radius:8px">${a.cover_letter}</p></div>` : ''}
+              ${a.cv_filename ? `
+                <div class="mt-4">
+                  <b>CV/Resume:</b><br>
+                  <button class="btn btn-sm btn-primary mt-2" onclick="downloadCV(${a.id})"><i class="fas fa-download"></i> Download CV</button>
+                </div>` : '<div class="mt-4 text-light">No CV uploaded</div>'}
+            </div>
+          </div>
+
+          ${a.assessment_results?.length ? `
+          <div class="card mb-4">
+            <div class="card-header"><h3><i class="fas fa-clipboard-check"></i> Assessment Results</h3></div>
+            <div class="card-body">
+              ${a.assessment_results.map(r => `
+                <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:8px">
+                  <div class="flex justify-between items-center">
+                    <div><b>${r.score}/${r.total_marks}</b> (${r.percentage}%)</div>
+                    <div class="flex gap-2">
+                      ${statusBadge(r.passed ? 'passed' : 'failed')}
+                      <span class="badge badge-shortlisted">Grade: ${r.grade}</span>
+                    </div>
+                  </div>
+                  <div class="progress-bar mt-2"><div class="progress-fill" style="width:${r.percentage}%"></div></div>
+                  ${r.ai_feedback ? `<p class="text-sm text-light mt-2">${r.ai_feedback}</p>` : ''}
+                  ${!r.mark_sheet_sent ? `<button class="btn btn-sm btn-info mt-2" onclick="sendMarksheet(${r.id})"><i class="fas fa-paper-plane"></i> Send Marksheet</button>` : '<span class="text-xs text-light mt-2">✓ Marksheet sent</span>'}
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+        </div>
+
+        <div style="flex:1;min-width:280px">
+          <div class="card mb-4">
+            <div class="card-header"><h3><i class="fas fa-map-signs"></i> Skill Gap Analysis</h3></div>
+            <div class="card-body">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                <div style="font-size:32px;font-weight:800;color:${skillGap.match_percentage >= 70 ? 'var(--success)' : skillGap.match_percentage >= 40 ? 'var(--warning)' : 'var(--danger)'}">${skillGap.match_percentage || 0}%</div>
+                <div class="text-sm text-light">Skill Match</div>
+              </div>
+              <div class="progress-bar mb-4"><div class="progress-fill" style="width:${skillGap.match_percentage || 0}%"></div></div>
+              <div style="font-size:13px"><b>Matching:</b><div class="tags-wrap mt-1 mb-2">${(skillGap.matching_skills || []).map(s => `<span class="tag" style="background:#d1fae5;color:#059669">${s}</span>`).join('') || '<span class="text-light">-</span>'}</div></div>
+              <div style="font-size:13px"><b>Missing:</b><div class="tags-wrap mt-1">${(skillGap.missing_skills || []).map(s => `<span class="tag" style="background:#fee2e2;color:#dc2626">${s}</span>`).join('') || '<span class="text-light">None</span>'}</div></div>
+              ${skillGap.recommendation ? `<div class="alert alert-info mt-4 text-sm">${skillGap.recommendation}</div>` : ''}
+            </div>
+          </div>
+
+          ${a.interview ? `
+          <div class="card mb-4">
+            <div class="card-header"><h3><i class="fas fa-video"></i> Interview</h3></div>
+            <div class="card-body text-sm">
+              <div><b>Type:</b> ${a.interview.type}</div>
+              <div><b>Date:</b> ${fmtDateTime(a.interview.date)}</div>
+              ${a.interview.meeting_link ? `<div><b>Link:</b> <a href="${a.interview.meeting_link}" target="_blank" style="color:var(--primary)">${a.interview.meeting_link}</a></div>` : ''}
+              <div class="mt-2">${statusBadge(a.interview.status)}</div>
+              ${a.interview.status === 'scheduled' ? `<button class="btn btn-sm btn-success mt-2" onclick="markInterviewPassed(${a.interview.id})"><i class="fas fa-check"></i> Mark Passed</button>` : ''}
+            </div>
+          </div>` : ''}
+
+          ${a.offers?.length ? `
+          <div class="card">
+            <div class="card-header"><h3><i class="fas fa-file-contract"></i> Offers</h3></div>
+            <div class="card-body text-sm">
+              ${a.offers.map(o => `<div style="padding:8px;background:#f8fafc;border-radius:8px;margin-bottom:6px"><b>${o.type}</b> — ${statusBadge(o.status)} — Salary: ${fmtCurrency(o.salary)}</div>`).join('')}
+            </div>
+          </div>` : ''}
+
+          ${a.company_rating ? `
+          <div class="card mt-4">
+            <div class="card-header"><h3><i class="fas fa-star"></i> Company Rating by Candidate</h3></div>
+            <div class="card-body text-sm">
+              <div class="star-rating">${[1,2,3,4,5].map(i => `<span class="star ${i <= a.company_rating ? 'active' : ''}">★</span>`).join('')}</div>
+              ${a.company_rating_feedback ? `<p class="mt-2 text-light">"${a.company_rating_feedback}"</p>` : ''}
+            </div>
+          </div>` : ''}
+        </div>
+      </div>`;
+    
+    document.getElementById('appDetailFooter').innerHTML = `
+      <button class="btn btn-secondary" onclick="closeModal('appDetailModal')">Close</button>
+      <button class="btn btn-info" onclick="openCustomEmailModal('${a.applicant_email}', '${a.applicant_name}')"><i class="fas fa-envelope"></i> Send Custom Email</button>
+      <button class="btn btn-warning" onclick="quickStatus(${a.id},'shortlisted');closeModal('appDetailModal')" ${['interview_scheduled','hired','rejected'].includes(a.status) ? 'disabled' : ''}>Shortlist</button>
+      <button class="btn btn-info" onclick="openInterviewModal(${a.id},'${a.job_title}')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-calendar"></i> Schedule Interview</button>
+      <button class="btn btn-success" onclick="openOfferModal(${a.id},'${a.job_title}')" ${!['interview_passed','shortlisted'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
+      <button class="btn btn-danger" onclick="openReject(${a.id});closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
+    
+    openModal('appDetailModal');
+  } catch(e) { showToast('Error loading details: ' + e.message, 'error'); }
+}
+
+function openInterviewModal(appId, jobTitle) {
+  interviewingAppId = appId;
+  openModal('interviewModal');
+}
+
+async function scheduleInterview() {
+  const date = document.getElementById('iDate').value;
+  if (!date) { showToast('Please select a date', 'warning'); return; }
+  try {
+    const res = await API.post('/api/interviews', {
+      application_id: interviewingAppId,
+      interview_type: document.getElementById('iType').value,
+      scheduled_date: date,
+      duration_minutes: parseInt(document.getElementById('iDuration').value) || 60,
+      location: document.getElementById('iLocation').value
+    });
+    showToast(`Interview scheduled! ${res.meeting_link ? 'Meeting link: ' + res.meeting_link : ''}`, 'success', 5000);
+    closeModal('interviewModal');
+    closeModal('appDetailModal');
+    loadApps();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function markInterviewPassed(interviewId) {
+  try {
+    await API.put(`/api/interviews/${interviewId}`, { status: 'passed' });
+    showToast('Interview marked as passed', 'success');
+    closeModal('appDetailModal');
+    loadApps();
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+function openOfferModal(appId, jobTitle) {
+  offerAppId = appId;
+  currentOfferAppTitle = jobTitle;
+  document.getElementById('offerPreview').style.display = 'none';
+  document.getElementById('sendOfferBtn').style.display = 'none';
+  document.getElementById('offerPosition').value = jobTitle;
+  openModal('offerModal');
+}
+
+function clearOfferPreview() {
+  document.getElementById('offerPreview').style.display = 'block';
+  document.getElementById('offerContent').value = '';
+  currentOfferId = null;
+  showToast('You can now write your own letter content', 'info');
+}
+
+async function generateOffer() {
+  try {
+    const data = await API.post('/api/offers/generate', {
+      application_id: offerAppId,
+      letter_type: document.getElementById('offerType').value,
+      position: document.getElementById('offerPosition').value,
+      department: document.getElementById('offerDept').value,
+      salary: parseFloat(document.getElementById('offerSalary').value) || 0,
+      joining_date: document.getElementById('offerJoinDate').value,
+      reporting_to: document.getElementById('offerReporting').value,
+      benefits: document.getElementById('offerBenefits').value,
+      job_type: document.getElementById('offerJobType').value
+    });
+    currentOfferId = data.id;
+    document.getElementById('offerContent').value = data.content;
+    document.getElementById('offerPreview').style.display = 'block';
+    document.getElementById('sendOfferBtn').style.display = 'inline-flex';
+    showToast('Offer letter generated!', 'success');
+  } catch(e) { showToast('Error generating offer: ' + e.message, 'error'); }
+}
+
+async function sendOffer() {
+  if (!currentOfferId) {
+    try {
+      const data = await API.post('/api/offers/generate', {
+        application_id: offerAppId,
+        letter_type: document.getElementById('offerType').value,
+        position: document.getElementById('offerPosition').value,
+        department: document.getElementById('offerDept').value,
+        salary: parseFloat(document.getElementById('offerSalary').value) || 0,
+        joining_date: document.getElementById('offerJoinDate').value,
+        reporting_to: document.getElementById('offerReporting').value,
+        benefits: document.getElementById('offerBenefits').value,
+        job_type: document.getElementById('offerJobType').value
+      });
+      currentOfferId = data.id;
+      await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
+    } catch(e) { showToast('Error creating offer: ' + e.message, 'error'); return; }
+  } else {
+    try {
+      await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
+    } catch(e) { showToast('Error saving changes: ' + e.message, 'error'); return; }
+  }
+  
+  try {
+    await API.post(`/api/offers/${currentOfferId}/send`, {});
+    showToast('Offer letter sent to applicant!', 'success');
+    closeModal('offerModal');
+    closeModal('appDetailModal');
+    loadApps();
+  } catch(e) { showToast('Error sending offer: ' + e.message, 'error'); }
+}
+
+async function sendMarksheet(resultId) {
+  try {
+    await API.post(`/api/assessment-results/${resultId}/send-marksheet`, {});
+    showToast('Marksheet sent!', 'success');
+    closeModal('appDetailModal');
+  } catch(e) { showToast('Error', 'error'); }
+}
+
+function bulkActionModal() { openModal('bulkModal'); }
+
+async function applyBulkAction(action) {
+  const reason = document.getElementById('bulkReason').value;
+  const nonMatching = apps.filter(a => {
+    const minExp = parseFloat(document.getElementById('fMinExp').value) || 0;
+    const minCgpa = parseFloat(document.getElementById('fMinCgpa').value) || 0;
+    return a.experience_years < minExp || a.cgpa < minCgpa;
+  });
+  
+  if (!nonMatching.length) { showToast('No non-matching applications found with current filters', 'info'); return; }
+  
+  try {
+    await API.post('/api/applications/bulk-action', {
+      application_ids: nonMatching.map(a => a.id),
+      action, rejection_reason: reason
+    });
+    showToast(`${action} applied to ${nonMatching.length} applications`, 'success');
+    closeModal('bulkModal');
+    loadApps();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function clearFilters() {
+  ['fStatus','fMinExp','fMaxExp','fMinCgpa','fMaxCgpa','fSearch'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  loadApps();
+}
+
+async function exportEmails() {
+  try {
+    const data = await API.get('/api/employees/export-emails');
+    const csv = 'Name,Email,Department\n' + data.map(e => `${e.name},${e.email},${e.department}`).join('\n');
+    const blob = new Blob([csv], {type: 'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'employee_emails.csv';
+    a.click();
+  } catch(e) { showToast('Export failed', 'error'); }
+}
+
+let currentCustomEmail = { to: '', name: '' };
+
+function openCustomEmailModal(email, name) {
+  currentCustomEmail = { to: email, name: name };
+  document.getElementById('customEmailTo').value = email;
+  document.getElementById('customEmailSubject').value = '';
+  document.getElementById('customEmailBody').value = `Dear ${name},\n\n`;
+  openModal('customEmailModal');
+}
+
+async function sendCustomEmail() {
+  const subject = document.getElementById('customEmailSubject').value;
+  const body = document.getElementById('customEmailBody').value;
+  if (!subject || !body) { showToast('Subject and message required', 'warning'); return; }
+  
+  try {
+    await API.post('/api/send-custom-email', {
+      to_email: currentCustomEmail.to,
+      recipient_name: currentCustomEmail.name,
+      subject: subject,
+      body: body
+    });
+    showToast('Email sent successfully!', 'success');
+    closeModal('customEmailModal');
+  } catch(e) {
+    showToast('Error sending email: ' + e.message, 'error');
+  }
+}
+
+async function downloadCV(applicationId) {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      showToast('Please login first', 'error');
+      return;
+    }
+    const response = await fetch(`/api/applications/${applicationId}/cv`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Download failed');
+    }
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = 'cv.pdf';
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      if (match && match[1]) filename = match[1].replace(/['"]/g, '');
+    }
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch(e) {
+    showToast('Error downloading CV: ' + e.message, 'error');
+  }
+}
+
+loadApps();
+</script>
+</body>
+</html>
