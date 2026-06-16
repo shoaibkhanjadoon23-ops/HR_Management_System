@@ -164,7 +164,7 @@ async function loadDashboard() {
       { label: 'Pending', value: stats.pending, color: '#f59e0b' },
       { label: 'Shortlisted', value: stats.shortlisted, color: '#3b82f6' },
       { label: 'Hired', value: stats.hired, color: '#10b981' },
-      { label: 'Rejected', value: stats.rejected, color: '#ef4444' }
+      { label: 'Rejected', value: stats.rejected, color: '#ef4444' },
     ].filter(s => s.value > 0);
     
     setTimeout(() => {
@@ -180,10 +180,10 @@ async function loadDashboard() {
     const apps = await API.get('/api/applications');
     const recent = apps.slice(0, 5);
     document.getElementById('recentApps').innerHTML = recent.length ? `
-      <table class="table"><thead><tr><th>Applicant</th><th>Job</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Applicant</th><th>Job</th><th>Status</th></tr></thead>
       <tbody>${recent.map(a => `
         <tr style="cursor:pointer" onclick="navigate('/applications.html')">
-          <td><div class="font-bold">${a.applicant_name}</div><div class="text-xs text-light">${a.applicant_email}</div></td>
+          <td><div class="font-bold" style="font-size:13px">${a.applicant_name}</div><div class="text-xs text-light">${a.applicant_email}</div></td>
           <td class="text-sm">${a.job_title}</td>
           <td>${statusBadge(a.status)}</td>
         </tr>`).join('')}
