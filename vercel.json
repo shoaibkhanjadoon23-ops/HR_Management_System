@@ -12,7 +12,8 @@
 }
 {
   "rewrites": [
-    { "source": "/apply/(.*)", "destination": "/apply.html" },
-    { "source": "/take-assessment/(.*)", "destination": "/take-assessment.html" }
+    { "source": "/apply/:id", "destination": "/apply.html" },
+    { "source": "/take-assessment/:id", "destination": "/take_assessment.html" },
+    { "source": "/offer-response/:id/:action", "destination": "/offer_response.html" }
   ]
 }
