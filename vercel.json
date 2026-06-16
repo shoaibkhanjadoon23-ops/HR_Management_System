@@ -8,9 +8,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" }
       ]
     }
-  ]
-}
-{
+  ],
   "rewrites": [
     { "source": "/apply/:id", "destination": "/apply.html" },
     { "source": "/take-assessment/:id", "destination": "/take_assessment.html" },
