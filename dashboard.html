@@ -33,6 +33,11 @@
     <div class="nav-section">
       <div class="nav-section-title">Account</div>
       <a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+      <!-- Add this in the Account section of the sidebar nav -->
+<a href="#" class="nav-item" onclick="deleteAccount()" 
+   style="color:var(--danger)">
+  <i class="fas fa-trash"></i> Delete Account
+</a>
     </div>
   </nav>
   <div class="sidebar-user" id="sidebarUser"></div>
