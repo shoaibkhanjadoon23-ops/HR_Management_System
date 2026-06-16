@@ -10,3 +10,9 @@
     }
   ]
 }
+{
+  "rewrites": [
+    { "source": "/apply/(.*)", "destination": "/apply.html" },
+    { "source": "/take-assessment/(.*)", "destination": "/take-assessment.html" }
+  ]
+}
