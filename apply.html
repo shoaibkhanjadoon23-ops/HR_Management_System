@@ -12,8 +12,9 @@
 </div>
 
 <script>
-// Get job ID from template – using a data attribute to avoid linter warnings
-const jobId = parseInt('{{ job_id }}', 10);
+// Get job ID from the URL path (e.g., /apply/123)
+const pathSegments = window.location.pathname.split('/');
+const jobId = parseInt(pathSegments[pathSegments.length - 1], 10);
 const BACKEND_URL = ''; // served directly by FastAPI — same origin, no prefix needed
 let job = null;
 
