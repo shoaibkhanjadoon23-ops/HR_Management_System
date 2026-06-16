@@ -13,8 +13,7 @@
 
 <script>
 // Get job ID from the URL path (e.g., /apply/123)
-const pathSegments = window.location.pathname.split('/');
-const jobId = parseInt(pathSegments[pathSegments.length - 1], 10);
+const jobId = parseInt(new URLSearchParams(window.location.search).get('job'), 10);
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 let job = null;
 
