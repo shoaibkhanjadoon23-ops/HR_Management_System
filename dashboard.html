@@ -143,6 +143,32 @@ requireAuth();
 renderSidebarUser();
 setActiveNav();
 
+async function deleteAccount() {
+  const confirmed = confirm(
+    '⚠️ Are you sure you want to delete your account?\n\n' +
+    'This will permanently delete:\n' +
+    '• Your account and company\n' +
+    '• All job postings\n' +
+    '• All applications\n' +
+    '• All employees and payroll records\n\n' +
+    'This action CANNOT be undone.'
+  );
+  if (!confirmed) return;
+
+  const doubleConfirm = confirm('This is permanent. Are you absolutely sure?');
+  if (!doubleConfirm) return;
+
+  try {
+    await API.delete('/api/auth/delete-account');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    showToast('Account deleted successfully', 'success');
+    setTimeout(() => window.location.href = '/login.html', 1500);
+  } catch(e) {
+    showToast('Error deleting account: ' + e.message, 'error');
+  }
+}
+
 async function loadDashboard() {
   try {
     const stats = await API.get('/api/dashboard/stats');
