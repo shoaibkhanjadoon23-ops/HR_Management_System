@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>const API_BASE = 'https://HRhiringpro-HRPRO.hf.space';</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sign Up - HR Management System</title>
@@ -130,19 +129,21 @@
   </div>
 </div>
 
-<script src="/static/app.js"></script>
 <script>
+// Backend lives on Hugging Face — frontend on Vercel, so we need the full URL
+const BACKEND_URL = "https://HRhiringpro-HRPRO.hf.space";
+
 document.getElementById('signupForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const pass = document.getElementById('password').value;
   const confirm = document.getElementById('confirm_password').value;
   if (pass !== confirm) { showError('Passwords do not match'); return; }
-
+  
   const btn = document.getElementById('signupBtn');
   btn.querySelector('.btn-text').style.display = 'none';
   btn.querySelector('.btn-loader').style.display = 'inline';
   btn.disabled = true;
-
+  
   const payload = {
     full_name: document.getElementById('full_name').value,
     username: document.getElementById('username').value,
@@ -158,16 +159,25 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
     industry: document.getElementById('industry').value,
     company_size: document.getElementById('company_size').value
   };
-
+  
   try {
-    const data = await API.post('/api/auth/signup', payload);
-    localStorage.setItem('token', data.access_token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    document.getElementById('signupSuccess').textContent = 'Account created! Redirecting...';
-    document.getElementById('signupSuccess').style.display = 'block';
-    setTimeout(() => window.location.href = '/dashboard.html', 1500);
-  } catch (err) {
-    showError(err.message);
+    const res = await fetch(`${BACKEND_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      document.getElementById('signupSuccess').textContent = 'Account created! Redirecting...';
+      document.getElementById('signupSuccess').style.display = 'block';
+      setTimeout(() => window.location.href = '/dashboard.html', 1500);
+    } else {
+      showError(data.detail || 'Signup failed');
+    }
+  } catch(e) {
+    showError('Connection error. Please try again.');
   } finally {
     btn.querySelector('.btn-text').style.display = 'inline';
     btn.querySelector('.btn-loader').style.display = 'none';
