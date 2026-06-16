@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>const API_BASE = 'https://HRhiringpro-HRPRO.hf.space';</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login - HR Management System</title>
@@ -61,32 +60,52 @@
   </div>
 </div>
 
-<script src="/static/app.js"></script>
 <script>
+// Backend lives on Hugging Face — frontend on Vercel, so we need the full URL
+const BACKEND_URL = "https://HRhiringpro-HRPRO.hf.space";
+
+// Clear any stale session from a previous account
+localStorage.removeItem('token');
+localStorage.removeItem('user');
+
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('loginBtn');
   btn.querySelector('.btn-text').style.display = 'none';
   btn.querySelector('.btn-loader').style.display = 'inline';
   btn.disabled = true;
-
+  
   try {
-    const data = await API.post('/api/auth/login', {
-      email: document.getElementById('email').value,
-      password: document.getElementById('password').value
+    const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+      })
     });
-    localStorage.setItem('token', data.access_token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-    window.location.href = '/dashboard.html';
-  } catch (err) {
-    document.getElementById('loginError').style.display = 'block';
-    document.getElementById('loginError').textContent = err.message;
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      window.location.href = '/dashboard.html';
+    } else {
+      showError(data.detail || 'Login failed');
+    }
+  } catch(e) {
+    showError('Connection error. Please try again.');
   } finally {
     btn.querySelector('.btn-text').style.display = 'inline';
     btn.querySelector('.btn-loader').style.display = 'none';
     btn.disabled = false;
   }
 });
+
+function showError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
 
 function togglePwd(id) {
   const input = document.getElementById(id);
