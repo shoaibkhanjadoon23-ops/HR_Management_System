@@ -77,10 +77,9 @@
 </div>
 
 <script>
-// Get assessment ID from the URL path (e.g., /take-assessment/123)
-const pathSegments = window.location.pathname.split('/');
-const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
-const BACKEND_URL = ''; // served directly by FastAPI — same origin, no prefix needed
+// Get assessment ID from template – using a data attribute to avoid linter warnings
+const assessmentId = parseInt('{{ assessment_id }}', 10);
+const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 let assessment = null;
 let answers = {};
 let timerInterval = null;
@@ -91,7 +90,7 @@ let submitted = false;
 
 async function loadAssessment() {
   try {
-    const res = await fetch(`/api/assessments/${assessmentId}`);
+    const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
     assessment = await res.json();
     if (!assessment.is_active) {
       document.getElementById('assessTitle').textContent = 'Assessment Not Available';
@@ -276,7 +275,7 @@ async function submitAssessment(auto = false) {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...'; }
   
   try {
-    const res = await fetch(`/api/assessments/${assessmentId}/submit`, {
+    const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/submit`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
