@@ -15,12 +15,12 @@
 // Get job ID from the URL path (e.g., /apply/123)
 const pathSegments = window.location.pathname.split('/');
 const jobId = parseInt(pathSegments[pathSegments.length - 1], 10);
-const BACKEND_URL = ''; // served directly by FastAPI — same origin, no prefix needed
+const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 let job = null;
 
 async function loadJob() {
   try {
-    const res = await fetch(`/api/jobs/${jobId}/public`);
+    const res = await fetch(`${BACKEND_URL}/api/jobs/${jobId}/public`);
     if (!res.ok) { document.getElementById('applyPage').innerHTML = '<div class="alert alert-error">Job not found or no longer active.</div>'; return; }
     job = await res.json();
     renderForm();
@@ -195,7 +195,7 @@ async function submitApp(e) {
   submitData.append('cv_file', fileInput.files[0]);
   
   try {
-    const res = await fetch(`/api/apply/${jobId}`, {
+    const res = await fetch(`${BACKEND_URL}/api/apply/${jobId}`, {
       method: 'POST',
       body: submitData
     });
@@ -248,7 +248,7 @@ function rateCompany(appId, rating) {
 async function submitRating(appId) {
   if (!selectedRating) { alert('Please select a rating'); return; }
   try {
-    await fetch(`/api/applications/${appId}/rate-company`, {
+    await fetch(`${BACKEND_URL}/api/applications/${appId}/rate-company`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({rating: selectedRating, feedback: document.getElementById('ratingFeedback').value})
