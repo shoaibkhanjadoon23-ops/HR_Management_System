@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════════════════════════════
 
 // ⚠️ SET THIS to your live Hugging Face Space URL (no trailing slash)
-const BACKEND_URL = "https://HRhiringpro-HRPRO.hf.space";
+const BACKEND_URL = "https://hrhiringpro-hrpro.hf.space";
 
 // ── Global API Helper ────────────────────────────────────
 const API = {
