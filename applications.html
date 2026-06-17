@@ -305,6 +305,9 @@
 
 <script src="/static/app.js"></script>
 <script>
+// ⚠️ Must match the Hugging Face backend URL defined in app.js
+const APPLICATIONS_BACKEND_URL = typeof BACKEND_URL !== 'undefined' ? BACKEND_URL : 'https://hrhiringpro-hrpro.hf.space';
+
 requireAuth();
 renderSidebarUser();
 setActiveNav();
@@ -762,15 +765,21 @@ async function downloadCV(applicationId) {
       showToast('Please login first', 'error');
       return;
     }
-    const response = await fetch(`/api/applications/${applicationId}/cv`, {
+    const response = await fetch(`${APPLICATIONS_BACKEND_URL}/api/applications/${applicationId}/cv`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Download failed');
+      // Response may be HTML (error page) or JSON — handle both safely
+      const contentType = response.headers.get('Content-Type') || '';
+      if (contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Download failed');
+      } else {
+        throw new Error(`Server error ${response.status}: CV not available`);
+      }
     }
     const blob = await response.blob();
     const contentDisposition = response.headers.get('Content-Disposition');
