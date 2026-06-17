@@ -51,11 +51,7 @@
   <div id="proctorMicText" class="proctor-status-text ok"><i class="fas fa-microphone" style="font-size:9px"></i> Mic monitoring</div>
 </div>
 
-<!-- Violation warning banner -->
-<div id="proctorAlertBanner" class="proctor-alert-banner" style="display:none">
-  <i class="fas fa-exclamation-triangle"></i>
-  <span class="proctor-alert-text"></span>
-</div>
+<!-- No gaze overlay anymore – violations auto-submit instantly -->
 
 <div style="max-width:800px;margin:0 auto;padding:20px">
   <div id="startScreen">
@@ -77,6 +73,7 @@
           <li id="ruleNoDevices" style="display:none">Do NOT use a phone or any other device within view of the camera</li>
           <li id="ruleNoSpeaking" style="display:none">Do NOT speak during the assessment — talking or anyone speaking near you will <b>AUTO-SUBMIT</b> your assessment</li>
           <li id="ruleCameraAutoSubmit" style="display:none">Leaving the frame, multiple people, or a phone/device on camera will <b>AUTO-SUBMIT</b> your assessment</li>
+          <li id="ruleGaze" style="display:none">Looking away from the screen will <b>AUTO-SUBMIT</b> the assessment</li>
           <li>Timer will count down — submit before it runs out</li>
           <li>All questions are mandatory (MCQ and practical)</li>
         </ul>
@@ -157,37 +154,104 @@ let startTime = null;
 let antiCheatEnabled = false;
 let submitted = false;
 
-// ── Camera Proctoring state ──────────────────────────────────────────
-let proctorStream = null;          // MediaStream from getUserMedia (video)
-let micStream = null;              // MediaStream from getUserMedia (audio)
-let proctorModels = { object: null };
+// ── Proctoring state ──────────────────────────────────────────
+let proctorStream = null;          // MediaStream (video)
+let micStream = null;              // MediaStream (audio)
+let proctorModels = { object: null, face: null };
 let proctorInterval = null;
-let cameraConfirmed = false;       // candidate passed the pre-start camera check
-let proctorLibsLoaded = false;
-let aiDetectionAvailable = true;   // false if the object-detection model couldn't load (network/region issue)
-let proctorViolationReason = null; // set when auto-submitted due to a camera violation
-let lastAutoSubmitReason = null;   // set for any auto-submit (tab switch, alt-tab, timer, camera, mic)
-let violationCounts = { noFace: 0, multiFace: 0, device: 0 };
-let proctorCheckInFlight = false;  // prevents overlapping detect() calls from queuing up and adding latency
-
-// ── Microphone / voice detection state ─────────────────────────────────
-let audioCtx = null, audioAnalyser = null, audioSource = null, micMonitorRAF = null;
+let gazeInterval = null;
+let cameraConfirmed = false;
 let micConfirmed = false;
-let voiceAboveThresholdSince = null; // timestamp when sustained voice-level audio started
+let proctorLibsLoaded = false;
+let faceLibLoaded = false;
+let aiDetectionAvailable = true;
+let gazeDetectionAvailable = true;
+let proctorViolationReason = null;
+let lastAutoSubmitReason = null;
+let proctorCheckInFlight = false;
+let gazeCheckInFlight = false;
 
-const PROCTOR_CHECK_MS = 400;      // how often we analyze a frame for object/face-count
-const VIOLATION_LIMIT = 2;         // consecutive bad checks before auto-submit (no-face/multi-face)
-const DEVICE_VIOLATION_LIMIT = 1;  // a device only needs to be seen once — no benefit-of-the-doubt
-const DEVICE_SCORE_THRESHOLD = 0.4; // lower threshold = catches phones held at odd angles/partial view
+// Audio state
+let audioCtx = null, audioAnalyser = null, audioSource = null, micMonitorRAF = null;
+let voiceAboveThresholdSince = null;
+
+// ── Thresholds (all violation limits = 1 for immediate auto-submit) ──
+const PROCTOR_CHECK_MS = 400;
+const GAZE_CHECK_MS = 350;
+const VIOLATION_LIMIT = 1;          // any single violation triggers auto-submit
+const DEVICE_VIOLATION_LIMIT = 1;
+const DEVICE_SCORE_THRESHOLD = 0.3; // lowered to catch more devices
 const FLAGGED_OBJECTS = ['cell phone', 'remote', 'tablet', 'laptop'];
 
-// Voice detection tuning: a normalized RMS volume (0-1) sustained for VOICE_SUSTAIN_MS
-// is treated as someone speaking near the mic. Short noise spikes (a cough, a door)
-// don't trigger it because they don't sustain above the threshold for that long.
-const VOICE_RMS_THRESHOLD = 0.045;
-const VOICE_SUSTAIN_MS = 1200;
+// Voice detection: lower threshold and much shorter sustain
+const VOICE_RMS_THRESHOLD = 0.035;   // slightly lower
+const VOICE_SUSTAIN_MS = 300;        // 300ms of sustained voice triggers auto-submit
 const MIC_CHECK_MS = 150;
 
+// Gaze detection: head yaw threshold (normalized)
+const GAZE_YAW_THRESHOLD = 0.18;
+
+// ── Helper to load scripts ──────────────────────────────────────
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load script: ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+const COCO_SSD_MODEL_URL = '';
+
+async function loadProctorLibs() {
+  if (proctorLibsLoaded) return;
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');
+  proctorLibsLoaded = true;
+}
+
+async function loadFaceLib() {
+  if (faceLibLoaded) return;
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.22.0/dist/tf-core.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.22.0/dist/tf-converter.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.22.0/dist/tf-backend-webgl.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.min.js');
+  faceLibLoaded = true;
+}
+
+async function loadFaceModelWithRetry(attempts = 2) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await loadFaceLib();
+      return await faceLandmarksDetection.createDetector(
+        faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+        { runtime: 'mediapipe', solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh', maxFaces: 1 }
+      );
+    } catch (e) {
+      console.error(`[gaze] face model load attempt ${i}/${attempts} failed:`, e);
+      if (i < attempts) await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+  return null;
+}
+
+async function loadCocoModelWithRetry(attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await loadProctorLibs();
+      const config = COCO_SSD_MODEL_URL ? { modelUrl: COCO_SSD_MODEL_URL } : {};
+      return await cocoSsd.load(config);
+    } catch (e) {
+      console.error(`[proctoring] model load attempt ${i}/${attempts} failed:`, e);
+      if (i < attempts) await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  return null;
+}
+
+// ── Assessment loading ────────────────────────────────────────────
 async function loadAssessment() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
@@ -212,8 +276,7 @@ async function loadAssessment() {
 
 function initCameraGate() {
   if (antiCheatEnabled) {
-    // Show camera-specific rules and require a verified camera before Start is enabled
-    ['ruleCameraOn','ruleAlone','ruleNoDevices','ruleNoSpeaking','ruleCameraAutoSubmit'].forEach(id => {
+    ['ruleCameraOn','ruleAlone','ruleNoDevices','ruleNoSpeaking','ruleCameraAutoSubmit','ruleGaze'].forEach(id => {
       document.getElementById(id).style.display = 'list-item';
     });
     document.getElementById('cameraCheckSection').style.display = 'block';
@@ -222,6 +285,105 @@ function initCameraGate() {
   }
 }
 
+// ── Camera verification before start ─────────────────────────────
+async function setupCamera() {
+  const btn = document.getElementById('enableCameraBtn');
+  const statusEl = document.getElementById('cameraStatus');
+  const wrap = document.getElementById('proctorPreviewWrap');
+  btn.disabled = true;
+
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting camera and microphone access...';
+  try {
+    proctorStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: false
+    });
+  } catch (e) {
+    console.error('[proctoring] camera getUserMedia failed:', e);
+    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Camera access is required for this proctored assessment. Please allow camera permission in your browser and try again.</span>';
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    micConfirmed = true;
+  } catch (e) {
+    console.error('[proctoring] microphone getUserMedia failed:', e);
+    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Microphone access is required for this proctored assessment (used to detect talking). Please allow microphone permission and try again.</span>';
+    btn.disabled = false;
+    proctorStream.getTracks().forEach(t => t.stop());
+    proctorStream = null;
+    return;
+  }
+
+  const video = document.getElementById('proctorVideo');
+  video.srcObject = proctorStream;
+  wrap.style.display = 'block';
+
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading AI verification models...';
+  // Load both models in parallel
+  const [objModel, faceModel] = await Promise.all([
+    loadCocoModelWithRetry(),
+    loadFaceModelWithRetry()
+  ]);
+  proctorModels.object = objModel;
+  proctorModels.face = faceModel;
+  gazeDetectionAvailable = !!faceModel;
+
+  if (!proctorModels.object) {
+    aiDetectionAvailable = false;
+    statusEl.innerHTML = `
+      <span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Couldn't reach the AI verification service (network issue).</span>
+      <div style="margin-top:10px"><button class="btn btn-sm btn-secondary" type="button" onclick="continueWithBasicMonitoring()">Continue with basic monitoring instead</button></div>`;
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-video"></i> Retry AI Verification';
+    return;
+  }
+
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying your face is visible...';
+  await new Promise(r => setTimeout(r, 300));
+  const numPeople = await countPeopleInFrame(video);
+
+  if (numPeople === 1) {
+    wrap.className = 'face-ok';
+    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera &amp; microphone verified — you\'re ready to begin.</span>';
+    confirmCameraReady();
+  } else if (numPeople === 0) {
+    wrap.className = 'face-warn';
+    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> We couldn\'t see you clearly. Make sure your head and shoulders are in frame, then click Enable Camera again.</span>';
+    btn.disabled = false;
+  } else {
+    wrap.className = 'face-warn';
+    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> More than one person detected. Make sure you\'re alone, then try again.</span>';
+    btn.disabled = false;
+  }
+}
+
+function continueWithBasicMonitoring() {
+  const statusEl = document.getElementById('cameraStatus');
+  statusEl.innerHTML = '<span style="color:var(--text-light)"><i class="fas fa-info-circle"></i> Continuing with basic monitoring (camera visible, AI checks disabled).</span>';
+  confirmCameraReady();
+}
+
+function confirmCameraReady() {
+  cameraConfirmed = true;
+  const startBtn = document.getElementById('startAssessBtn');
+  startBtn.disabled = false;
+  startBtn.style.opacity = '1';
+}
+
+async function countPeopleInFrame(video) {
+  try {
+    const objects = await proctorModels.object.detect(video);
+    return objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
+  } catch (e) {
+    console.error('[proctoring] detection failed:', e);
+    return -1;
+  }
+}
+
+// ── Start assessment ───────────────────────────────────────────────
 function startAssessment() {
   const name = document.getElementById('candName').value.trim();
   const email = document.getElementById('candEmail').value.trim();
@@ -288,7 +450,6 @@ function renderQuestions() {
   });
   document.getElementById('questionsContainer').innerHTML = html;
   
-  // Track practical answers on input
   questions.forEach(q => {
     if (q.type === 'practical') {
       const ta = document.getElementById(`practical_${q.id}`);
@@ -316,6 +477,7 @@ function updateAnsweredCount() {
   document.getElementById('answeredCount').textContent = `${answered} / ${total}`;
 }
 
+// ── Timer ── runs continuously without pauses ────────────────────
 function startTimer() {
   updateTimerDisplay();
   timerInterval = setInterval(() => {
@@ -339,6 +501,7 @@ function updateTimerDisplay() {
   else if (timeLeft <= 300) timerEl.classList.add('warning');
 }
 
+// ── Anti-cheat (tab switch, etc.) ────────────────────────────────
 function setupAntiCheat() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && !submitted) autoSubmit('Tab switch detected');
@@ -370,162 +533,26 @@ function autoSubmit(reason, isCameraViolation = false) {
   submitAssessment(true);
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  Camera-based Proctoring (face count + gadget detection)
-// ════════════════════════════════════════════════════════════════════
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Failed to load script: ' + src));
-    document.head.appendChild(s);
-  });
-}
-
-// If your network/region can't reach Google's model hosting (storage.googleapis.com —
-// this is a known issue in some countries), download the coco-ssd "lite_mobilenet_v2"
-// model files yourself and host them on your own domain (e.g. Vercel /public/models/coco-ssd/),
-// then set this to the path of your model.json, e.g. '/models/coco-ssd/model.json'.
-// Leave blank to use the default Google-hosted model.
-const COCO_SSD_MODEL_URL = '';
-
-// Loads TensorFlow.js + COCO-SSD (used both to spot phones AND to count people in frame).
-async function loadProctorLibs() {
-  if (proctorLibsLoaded) return;
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');
-  proctorLibsLoaded = true;
-}
-
-async function loadCocoModelWithRetry(attempts = 3) {
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      await loadProctorLibs();
-      const config = COCO_SSD_MODEL_URL ? { modelUrl: COCO_SSD_MODEL_URL } : {};
-      return await cocoSsd.load(config);
-    } catch (e) {
-      console.error(`[proctoring] model load attempt ${i}/${attempts} failed:`, e);
-      if (i < attempts) await new Promise(r => setTimeout(r, 1500));
-    }
-  }
-  return null; // every attempt failed
-}
-
-// Step run from the "Enable Camera & Mic" button on the start screen.
-async function setupCamera() {
-  const btn = document.getElementById('enableCameraBtn');
-  const statusEl = document.getElementById('cameraStatus');
-  const wrap = document.getElementById('proctorPreviewWrap');
-  btn.disabled = true;
-
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting camera and microphone access...';
-  try {
-    proctorStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-      audio: false
-    });
-  } catch (e) {
-    console.error('[proctoring] camera getUserMedia failed:', e);
-    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Camera access is required for this proctored assessment. Please allow camera permission in your browser and try again.</span>';
-    btn.disabled = false;
-    return;
-  }
-
-  try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    micConfirmed = true;
-  } catch (e) {
-    console.error('[proctoring] microphone getUserMedia failed:', e);
-    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Microphone access is required for this proctored assessment (used to detect talking). Please allow microphone permission and try again.</span>';
-    btn.disabled = false;
-    proctorStream.getTracks().forEach(t => t.stop());
-    proctorStream = null;
-    return;
-  }
-
-  const video = document.getElementById('proctorVideo');
-  video.srcObject = proctorStream;
-  wrap.style.display = 'block';
-
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading AI verification model (one-time, a few seconds)...';
-  // Load only the object detection model (COCO-SSD)
-  const objModel = await loadCocoModelWithRetry();
-  proctorModels.object = objModel;
-
-  if (!proctorModels.object) {
-    aiDetectionAvailable = false;
-    statusEl.innerHTML = `
-      <span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Couldn't reach the AI verification service (this is usually a network/firewall issue, not your camera).</span>
-      <div style="margin-top:10px"><button class="btn btn-sm btn-secondary" type="button" onclick="continueWithBasicMonitoring()">Continue with basic monitoring instead</button></div>`;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-video"></i> Retry AI Verification';
-    return;
-  }
-
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying your face is visible...';
-  await new Promise(r => setTimeout(r, 300)); // brief stabilize
-  const numPeople = await countPeopleInFrame(video);
-
-  if (numPeople === 1) {
-    wrap.className = 'face-ok';
-    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera &amp; microphone verified — you\'re ready to begin.</span>';
-    confirmCameraReady();
-  } else if (numPeople === 0) {
-    wrap.className = 'face-warn';
-    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> We couldn\'t see you clearly. Make sure your head and shoulders are in frame, then click Enable Camera again.</span>';
-    btn.disabled = false;
-  } else {
-    wrap.className = 'face-warn';
-    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> More than one person detected. Make sure you\'re alone, then try again.</span>';
-    btn.disabled = false;
-  }
-}
-
-// Candidate opts to proceed without AI detection because the model couldn't load.
-// Camera preview + tab-switch detection still apply; just no automated face/device checks.
-function continueWithBasicMonitoring() {
-  const statusEl = document.getElementById('cameraStatus');
-  statusEl.innerHTML = '<span style="color:var(--text-light)"><i class="fas fa-info-circle"></i> Continuing with basic monitoring (camera visible, AI checks disabled).</span>';
-  confirmCameraReady();
-}
-
-function confirmCameraReady() {
-  cameraConfirmed = true;
-  const startBtn = document.getElementById('startAssessBtn');
-  startBtn.disabled = false;
-  startBtn.style.opacity = '1';
-}
-
-// Returns how many people coco-ssd sees in the current frame.
-async function countPeopleInFrame(video) {
-  try {
-    const objects = await proctorModels.object.detect(video);
-    return objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
-  } catch (e) {
-    console.error('[proctoring] detection failed:', e);
-    return -1; // signals "couldn't analyze" rather than "0 people"
-  }
-}
-
-// Moves the live video feed into the floating widget and starts periodic checks
-// (skipped if the AI model never loaded — camera stays visible either way).
+// ── Start proctoring (camera + mic) ──────────────────────────────
 function startProctoringMonitor() {
   const widget = document.getElementById('proctorWidget');
   const video = document.getElementById('proctorVideo');
   widget.querySelector('.proctor-video-slot').appendChild(video);
   widget.style.display = 'flex';
 
-  startMicMonitor(); // independent of camera AI — runs as long as we got mic permission
+  startMicMonitor();
 
   if (!aiDetectionAvailable) {
     document.getElementById('proctorStatusText').innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Camera visible (basic monitoring)';
     return;
   }
   proctorInterval = setInterval(runProctorCheck, PROCTOR_CHECK_MS);
+  if (gazeDetectionAvailable) {
+    gazeInterval = setInterval(runGazeCheck, GAZE_CHECK_MS);
+  }
 }
 
+// ── Object detection (people + devices) ──────────────────────────
 async function runProctorCheck() {
   if (submitted || !proctorModels.object || proctorCheckInFlight) return;
   const video = document.getElementById('proctorVideo');
@@ -539,27 +566,50 @@ async function runProctorCheck() {
   const numPeople = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
   const devicesFound = objects.filter(o => FLAGGED_OBJECTS.includes(o.class) && o.score >= DEVICE_SCORE_THRESHOLD);
 
-  violationCounts.noFace = numPeople === 0 ? violationCounts.noFace + 1 : 0;
-  violationCounts.multiFace = numPeople > 1 ? violationCounts.multiFace + 1 : 0;
-  violationCounts.device = devicesFound.length > 0 ? violationCounts.device + 1 : 0;
-
-  updateProctorStatus(numPeople, devicesFound.length > 0, devicesFound[0]?.class);
-
-  if (violationCounts.device >= DEVICE_VIOLATION_LIMIT) {
+  // Immediate violation if any of these conditions met
+  if (devicesFound.length > 0) {
     const deviceLabel = devicesFound[0]?.class || 'a device';
     autoSubmit(`A ${deviceLabel} was detected in your camera view`, true);
-  } else if (violationCounts.multiFace >= VIOLATION_LIMIT) {
+  } else if (numPeople > 1) {
     autoSubmit('Multiple people were detected in front of the camera', true);
-  } else if (violationCounts.noFace >= VIOLATION_LIMIT) {
+  } else if (numPeople === 0) {
     autoSubmit('You moved out of the camera frame', true);
+  }
+  // else: everything is fine – no update needed
+}
+
+// ── Gaze detection (head yaw) ─────────────────────────────────────
+async function runGazeCheck() {
+  if (submitted || !proctorModels.face || gazeCheckInFlight) return;
+  const video = document.getElementById('proctorVideo');
+  if (!video || video.readyState < 2) return;
+
+  gazeCheckInFlight = true;
+  let faces = [];
+  try { faces = await proctorModels.face.estimateFaces(video); } catch (e) { console.error('[gaze] check failed:', e); gazeCheckInFlight = false; return; }
+  gazeCheckInFlight = false;
+
+  if (!faces.length) {
+    // No face detected – this will be caught by the object detection (numPeople === 0)
+    return;
+  }
+
+  const kp = faces[0].keypoints;
+  const nose = kp.find(p => p.name === 'noseTip') || kp[1];
+  const rightEye = kp.find(p => p.name === 'rightEyeUpper0' || p.name === 'rightEye') || kp[33];
+  const leftEye = kp.find(p => p.name === 'leftEyeUpper0' || p.name === 'leftEye') || kp[263];
+  if (!nose || !rightEye || !leftEye) return;
+
+  const eyeMidX = (rightEye.x + leftEye.x) / 2;
+  const faceWidth = Math.abs(leftEye.x - rightEye.x) || 1;
+  const yawOffset = (eyeMidX - nose.x) / faceWidth; // ~0 when facing camera
+
+  if (Math.abs(yawOffset) > GAZE_YAW_THRESHOLD) {
+    autoSubmit('You looked away from the screen', true);
   }
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  Microphone / voice detection — auto-submits if sustained talking is heard,
-//  covering the case of someone sitting nearby reading out the question and
-//  feeding the candidate an answer.
-// ════════════════════════════════════════════════════════════════════
+// ── Microphone / voice detection ──────────────────────────────────
 function startMicMonitor() {
   if (!micStream) return;
   try {
@@ -581,7 +631,6 @@ function pollMicVolume() {
   const data = new Uint8Array(audioAnalyser.fftSize);
   audioAnalyser.getByteTimeDomainData(data);
 
-  // RMS of the waveform, normalized 0-1 (128 = silence/midline for Uint8 PCM)
   let sumSquares = 0;
   for (let i = 0; i < data.length; i++) {
     const norm = (data[i] - 128) / 128;
@@ -614,31 +663,9 @@ function pollMicVolume() {
   micMonitorRAF = setTimeout(pollMicVolume, MIC_CHECK_MS);
 }
 
-function updateProctorStatus(numPeople, deviceFlag, deviceLabel) {
-  const statusEl = document.getElementById('proctorStatusText');
-  const banner = document.getElementById('proctorAlertBanner');
-
-  let warn = null;
-  if (deviceFlag) warn = { msg: `${deviceLabel || 'Device'} detected — remove any phone/device from view!`, count: violationCounts.device, limit: DEVICE_VIOLATION_LIMIT };
-  else if (numPeople > 1) warn = { msg: 'Multiple people detected — only you should be visible!', count: violationCounts.multiFace, limit: VIOLATION_LIMIT };
-  else if (numPeople === 0) warn = { msg: 'Face not detected — please stay in camera view!', count: violationCounts.noFace, limit: VIOLATION_LIMIT };
-
-  if (warn) {
-    const remaining = Math.max(warn.limit - warn.count, 0);
-    banner.style.display = 'flex';
-    banner.querySelector('.proctor-alert-text').textContent =
-      `${warn.msg} Assessment auto-submits in ${remaining} check${remaining === 1 ? '' : 's'} if unresolved.`;
-    statusEl.className = 'proctor-status-text issue';
-    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Issue detected';
-  } else {
-    banner.style.display = 'none';
-    statusEl.className = 'proctor-status-text ok';
-    statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Monitoring active';
-  }
-}
-
 function stopProctoring() {
   if (proctorInterval) { clearInterval(proctorInterval); proctorInterval = null; }
+  if (gazeInterval) { clearInterval(gazeInterval); gazeInterval = null; }
   if (micMonitorRAF) { clearTimeout(micMonitorRAF); micMonitorRAF = null; }
   if (proctorStream) { proctorStream.getTracks().forEach(t => t.stop()); proctorStream = null; }
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
@@ -647,17 +674,15 @@ function stopProctoring() {
   if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
   const widget = document.getElementById('proctorWidget');
   if (widget) widget.style.display = 'none';
-  const banner = document.getElementById('proctorAlertBanner');
-  if (banner) banner.style.display = 'none';
 }
 
+// ── Submit assessment ──────────────────────────────────────────────
 async function submitAssessment(auto = false) {
   if (submitted) return;
   submitted = true;
   clearInterval(timerInterval);
   stopProctoring();
   
-  // Collect practical answers from textareas
   const questions = assessment.questions || [];
   for (const q of questions) {
     if (q.type === 'practical') {
@@ -666,7 +691,6 @@ async function submitAssessment(auto = false) {
     }
   }
 
-  // Determine why this submission happened, for the HR admin dashboard.
   let submissionType = 'manual';
   let submissionReason = null;
   if (proctorViolationReason) {
