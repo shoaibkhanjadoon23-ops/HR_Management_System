@@ -138,6 +138,9 @@
 
 <script src="/static/app.js"></script>
 <script>
+// ⚠️ Must match the Hugging Face backend URL defined in app.js
+const ASSESS_BACKEND_URL = typeof BACKEND_URL !== 'undefined' ? BACKEND_URL : 'https://hrhiringpro-hrpro.hf.space';
+
 requireAuth();
 renderSidebarUser();
 setActiveNav();
@@ -153,6 +156,14 @@ async function loadData() {
   } catch(e) { showToast('Error loading', 'error'); }
 }
 
+// Rewrite backend URL in assessment links to point to the Vercel frontend
+function fixAssessmentLink(link) {
+  if (!link) return link;
+  // Replace HF backend origin with Vercel frontend origin
+  return link.replace(ASSESS_BACKEND_URL, window.location.origin)
+             .replace('https://hrhiringpro-hrpro.hf.space', window.location.origin);
+}
+
 function renderAssessments() {
   if (!assessments.length) {
     document.getElementById('assessmentsList').innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-check"></i><h3>No Assessments Yet</h3><p>Create your first AI-powered assessment</p></div>`;
@@ -160,7 +171,9 @@ function renderAssessments() {
   }
   document.getElementById('assessmentsList').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
-      ${assessments.map(a => `
+      ${assessments.map(a => {
+        const fixedLink = fixAssessmentLink(a.link);
+        return `
         <div class="card">
           <div class="card-body">
             <div class="flex justify-between items-center mb-4">
@@ -182,14 +195,15 @@ function renderAssessments() {
             </div>
             <div class="flex gap-2 justify-between">
               <div>
-                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${a.link}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
+                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${fixedLink}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
                 <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},'${a.title}')"><i class="fas fa-chart-bar"></i> Results</button>
               </div>
               <div><button class="btn btn-sm btn-secondary" onclick="toggleActive(${a.id},${!a.is_active})">${a.is_active ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button></div>
             </div>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px"><i class="fas fa-link"></i> <span style="color:var(--text-light)">${a.link}</span></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px"><i class="fas fa-link"></i> <span style="color:var(--text-light)">${fixedLink}</span></div>
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
 }
 
@@ -260,10 +274,17 @@ async function viewResults(id, title) {
 
 async function viewDetailedAnswers(resultId, candidateName) {
   try {
-    const response = await fetch(`/api/assessment-results/${resultId}/detailed`, {
+    const response = await fetch(`${ASSESS_BACKEND_URL}/api/assessment-results/${resultId}/detailed`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      const contentType = response.headers.get('Content-Type') || '';
+      if (contentType.includes('application/json')) {
+        const err = await response.json();
+        throw new Error(err.detail || `HTTP ${response.status}`);
+      }
+      throw new Error(`HTTP ${response.status}`);
+    }
     const data = await response.json();
     if (!data.questions || data.questions.length === 0) { showToast('No answers found', 'info'); return; }
     document.getElementById('answersTitle').innerHTML = `<i class="fas fa-tasks"></i> Answers by ${candidateName}`;
