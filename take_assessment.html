@@ -5,8 +5,57 @@
 <title>Assessment - HRPro</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+/* ── Camera Proctoring Styles ───────────────────────────────────────── */
+.camera-check-box .card-body { padding: 24px 20px; }
+#proctorPreviewWrap video {
+  width: 220px; height: 165px; border-radius: 12px; object-fit: cover;
+  background: #111; transform: scaleX(-1); border: 3px solid var(--border);
+}
+#proctorPreviewWrap.face-ok video { border-color: var(--success); }
+#proctorPreviewWrap.face-warn video { border-color: var(--danger); }
+
+.proctor-widget {
+  position: fixed; bottom: 20px; right: 20px; z-index: 500;
+  background: white; border-radius: 14px; box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border); padding: 10px; display: flex;
+  flex-direction: column; align-items: center; gap: 6px; width: 150px;
+}
+.proctor-video-slot video {
+  width: 130px; height: 98px; border-radius: 10px; object-fit: cover;
+  background: #111; transform: scaleX(-1); display: block;
+}
+.proctor-status-text { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.4; }
+.proctor-status-text.issue { color: var(--danger); animation: pulse .8s infinite; }
+.proctor-status-text.ok { color: var(--success); }
+
+.proctor-alert-banner {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 600; background: var(--danger); color: white; padding: 12px 22px;
+  border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 10px; max-width: 90%; text-align: left;
+  animation: pulse 1s infinite;
+}
+@media (max-width: 600px) {
+  .proctor-widget { width: 110px; right: 10px; bottom: 10px; }
+  .proctor-video-slot video { width: 90px; height: 68px; }
+}
+</style>
 </head>
 <body style="background:#f8fafc">
+
+<!-- Floating live camera widget shown during the assessment -->
+<div id="proctorWidget" class="proctor-widget" style="display:none">
+  <div class="proctor-video-slot"></div>
+  <div id="proctorStatusText" class="proctor-status-text ok"><i class="fas fa-circle" style="font-size:7px"></i> Monitoring active</div>
+</div>
+
+<!-- Violation warning banner -->
+<div id="proctorAlertBanner" class="proctor-alert-banner" style="display:none">
+  <i class="fas fa-exclamation-triangle"></i>
+  <span class="proctor-alert-text"></span>
+</div>
+
 <div style="max-width:800px;margin:0 auto;padding:20px">
   <div id="startScreen">
     <div style="text-align:center;padding:60px 20px">
@@ -22,9 +71,26 @@
           <li>Do NOT switch tabs or open other windows</li>
           <li>Do NOT go back in browser during the exam</li>
           <li>Switching tabs/windows will AUTO-SUBMIT your assessment</li>
+          <li id="ruleCameraOn" style="display:none">Keep your <b>camera on</b> and your face clearly visible at all times</li>
+          <li id="ruleAlone" style="display:none">Make sure you are <b>alone</b> — no other person should appear on camera</li>
+          <li id="ruleNoDevices" style="display:none">Do NOT use a phone or any other device within view of the camera</li>
+          <li id="ruleCameraAutoSubmit" style="display:none">Leaving the frame, multiple people, or a phone/device on camera will <b>AUTO-SUBMIT</b> your assessment</li>
           <li>Timer will count down — submit before it runs out</li>
           <li>All questions are mandatory (MCQ and practical)</li>
         </ul>
+      </div>
+      <div id="cameraCheckSection" style="display:none;max-width:480px;margin:0 auto 24px">
+        <div class="card camera-check-box">
+          <div class="card-header"><h3><i class="fas fa-video"></i> Camera Verification Required</h3></div>
+          <div class="card-body" style="text-align:center">
+            <p class="text-sm text-light" style="margin-bottom:16px">This assessment is monitored by an AI proctoring system. We need to confirm your camera works and that you're alone before you can begin.</p>
+            <div id="proctorPreviewWrap" style="display:none;margin-bottom:16px">
+              <video id="proctorVideo" autoplay muted playsinline></video>
+            </div>
+            <div id="cameraStatus" class="text-sm" style="min-height:20px;margin-bottom:16px"></div>
+            <button class="btn btn-secondary" id="enableCameraBtn" onclick="setupCamera()"><i class="fas fa-video"></i> Enable Camera</button>
+          </div>
+        </div>
       </div>
       <div class="grid-2" style="max-width:400px;margin:0 auto 24px">
         <div class="form-group"><label>Your Full Name *</label><input type="text" id="candName" placeholder="John Doe"></div>
@@ -34,7 +100,7 @@
         <label>Application ID (if provided)</label>
         <input type="number" id="candAppId" placeholder="Leave blank if not provided">
       </div>
-      <button class="btn btn-primary" onclick="startAssessment()" style="font-size:16px;padding:14px 40px"><i class="fas fa-play"></i> Start Assessment</button>
+      <button class="btn btn-primary" id="startAssessBtn" onclick="startAssessment()" style="font-size:16px;padding:14px 40px"><i class="fas fa-play"></i> Start Assessment</button>
     </div>
   </div>
 
@@ -89,6 +155,20 @@ let startTime = null;
 let antiCheatEnabled = false;
 let submitted = false;
 
+// ── Camera Proctoring state ──────────────────────────────────────────
+let proctorStream = null;          // MediaStream from getUserMedia
+let proctorModels = { face: null, object: null };
+let proctorInterval = null;
+let cameraConfirmed = false;       // candidate passed the pre-start camera check
+let proctorLibsLoaded = false;
+let proctorViolationReason = null; // set when auto-submitted due to a camera violation
+let violationCounts = { noFace: 0, multiFace: 0, device: 0 };
+
+const PROCTOR_CHECK_MS = 2000;     // how often we analyze a frame
+const VIOLATION_LIMIT = 3;         // consecutive bad checks (~6s) before auto-submit
+const DEVICE_SCORE_THRESHOLD = 0.55;
+const FLAGGED_OBJECTS = ['cell phone']; // COCO-SSD classes treated as a "gadget" violation
+
 async function loadAssessment() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
@@ -105,8 +185,21 @@ async function loadAssessment() {
       <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--success)">${assessment.total_marks}</div><div style="font-size:12px;color:var(--text-light)">Total Marks</div></div>
       <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--warning)">${assessment.duration_minutes}</div><div style="font-size:12px;color:var(--text-light)">Minutes</div></div>`;
     antiCheatEnabled = assessment.anti_cheat;
+    initCameraGate();
   } catch(e) {
     document.getElementById('assessTitle').textContent = 'Error Loading Assessment';
+  }
+}
+
+function initCameraGate() {
+  if (antiCheatEnabled) {
+    // Show camera-specific rules and require a verified camera before Start is enabled
+    ['ruleCameraOn','ruleAlone','ruleNoDevices','ruleCameraAutoSubmit'].forEach(id => {
+      document.getElementById(id).style.display = 'list-item';
+    });
+    document.getElementById('cameraCheckSection').style.display = 'block';
+    document.getElementById('startAssessBtn').disabled = true;
+    document.getElementById('startAssessBtn').style.opacity = '0.5';
   }
 }
 
@@ -115,6 +208,7 @@ function startAssessment() {
   const email = document.getElementById('candEmail').value.trim();
   if (!name || !email) { alert('Please enter your name and email'); return; }
   if (!assessment) { alert('Assessment not loaded'); return; }
+  if (antiCheatEnabled && !cameraConfirmed) { alert('Please complete the camera verification before starting.'); return; }
 
   document.getElementById('startScreen').style.display = 'none';
   document.getElementById('assessmentScreen').style.display = 'block';
@@ -127,6 +221,7 @@ function startAssessment() {
   
   if (antiCheatEnabled) {
     setupAntiCheat();
+    startProctoringMonitor();
   }
 }
 
@@ -247,16 +342,170 @@ function setupAntiCheat() {
   });
 }
 
-function autoSubmit(reason) {
+function autoSubmit(reason, isCameraViolation = false) {
   if (submitted) return;
+  if (isCameraViolation) proctorViolationReason = reason;
+  stopProctoring();
   alert(`⚠️ Anti-cheat: ${reason}. Your assessment will be submitted automatically.`);
   submitAssessment(true);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Camera-based Proctoring (face count + gadget detection)
+// ════════════════════════════════════════════════════════════════════
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load ' + src));
+    document.head.appendChild(s);
+  });
+}
+
+// Loads TensorFlow.js + the two small pretrained models we need:
+// BlazeFace (counts faces) and COCO-SSD (spots phones/objects in frame).
+async function loadProctorLibs() {
+  if (proctorLibsLoaded) return;
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');
+  proctorLibsLoaded = true;
+}
+
+// Step run from the "Enable Camera" button on the start screen.
+async function setupCamera() {
+  const btn = document.getElementById('enableCameraBtn');
+  const statusEl = document.getElementById('cameraStatus');
+  const wrap = document.getElementById('proctorPreviewWrap');
+  btn.disabled = true;
+
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting camera access...';
+  try {
+    proctorStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
+      audio: false
+    });
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Camera access is required for this proctored assessment. Please allow camera permission in your browser and try again.</span>';
+    btn.disabled = false;
+    return;
+  }
+
+  const video = document.getElementById('proctorVideo');
+  video.srcObject = proctorStream;
+  wrap.style.display = 'block';
+
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading AI verification models (one-time, a few seconds)...';
+  try {
+    await loadProctorLibs();
+    proctorModels.face = await blazeface.load();
+    proctorModels.object = await cocoSsd.load();
+  } catch (e) {
+    statusEl.innerHTML = '<span style="color:var(--danger)">Could not load the proctoring models. Check your internet connection and click Enable Camera again.</span>';
+    btn.disabled = false;
+    return;
+  }
+
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying your face is visible...';
+  await new Promise(r => setTimeout(r, 800)); // let the camera stream stabilize first
+  const faces = await proctorModels.face.estimateFaces(video, false);
+
+  if (faces.length === 1) {
+    wrap.className = 'face-ok';
+    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera verified — you\'re ready to begin.</span>';
+    cameraConfirmed = true;
+    const startBtn = document.getElementById('startAssessBtn');
+    startBtn.disabled = false;
+    startBtn.style.opacity = '1';
+  } else if (faces.length === 0) {
+    wrap.className = 'face-warn';
+    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> We couldn\'t see your face. Improve lighting/positioning and click Enable Camera again.</span>';
+    btn.disabled = false;
+  } else {
+    wrap.className = 'face-warn';
+    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Multiple faces detected. Make sure you\'re alone, then try again.</span>';
+    btn.disabled = false;
+  }
+}
+
+// Moves the live video feed into the floating widget and starts periodic checks.
+function startProctoringMonitor() {
+  const widget = document.getElementById('proctorWidget');
+  const video = document.getElementById('proctorVideo');
+  widget.querySelector('.proctor-video-slot').appendChild(video);
+  widget.style.display = 'flex';
+  proctorInterval = setInterval(runProctorCheck, PROCTOR_CHECK_MS);
+}
+
+async function runProctorCheck() {
+  if (submitted || !proctorModels.face || !proctorModels.object) return;
+  const video = document.getElementById('proctorVideo');
+  if (!video || video.readyState < 2) return;
+
+  let faces = [], objects = [];
+  try { faces = await proctorModels.face.estimateFaces(video, false); } catch (e) {}
+  try { objects = await proctorModels.object.detect(video); } catch (e) {}
+
+  // Cross-check face count against general "person" detections — catches
+  // a second person who's turned away from the camera and missed by BlazeFace.
+  const personCount = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
+  const numPeople = Math.max(faces.length, personCount);
+  const devicesFound = objects.filter(o => FLAGGED_OBJECTS.includes(o.class) && o.score >= DEVICE_SCORE_THRESHOLD);
+
+  violationCounts.noFace = numPeople === 0 ? violationCounts.noFace + 1 : 0;
+  violationCounts.multiFace = numPeople > 1 ? violationCounts.multiFace + 1 : 0;
+  violationCounts.device = devicesFound.length > 0 ? violationCounts.device + 1 : 0;
+
+  updateProctorStatus(numPeople, devicesFound.length > 0);
+
+  if (violationCounts.device >= VIOLATION_LIMIT) {
+    autoSubmit('A phone or device was detected in your camera view', true);
+  } else if (violationCounts.multiFace >= VIOLATION_LIMIT) {
+    autoSubmit('Multiple people were detected in front of the camera', true);
+  } else if (violationCounts.noFace >= VIOLATION_LIMIT) {
+    autoSubmit('You moved out of the camera frame', true);
+  }
+}
+
+function updateProctorStatus(numPeople, deviceFlag) {
+  const statusEl = document.getElementById('proctorStatusText');
+  const banner = document.getElementById('proctorAlertBanner');
+
+  let warn = null;
+  if (deviceFlag) warn = { msg: 'Device detected — remove any phone/device from view!', count: violationCounts.device };
+  else if (numPeople > 1) warn = { msg: 'Multiple people detected — only you should be visible!', count: violationCounts.multiFace };
+  else if (numPeople === 0) warn = { msg: 'Face not detected — please stay in camera view!', count: violationCounts.noFace };
+
+  if (warn) {
+    const remaining = Math.max(VIOLATION_LIMIT - warn.count, 0);
+    banner.style.display = 'flex';
+    banner.querySelector('.proctor-alert-text').textContent =
+      `${warn.msg} Assessment auto-submits in ${remaining} check${remaining === 1 ? '' : 's'} if unresolved.`;
+    statusEl.className = 'proctor-status-text issue';
+    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Issue detected';
+  } else {
+    banner.style.display = 'none';
+    statusEl.className = 'proctor-status-text ok';
+    statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Monitoring active';
+  }
+}
+
+function stopProctoring() {
+  if (proctorInterval) { clearInterval(proctorInterval); proctorInterval = null; }
+  if (proctorStream) { proctorStream.getTracks().forEach(t => t.stop()); proctorStream = null; }
+  const widget = document.getElementById('proctorWidget');
+  if (widget) widget.style.display = 'none';
+  const banner = document.getElementById('proctorAlertBanner');
+  if (banner) banner.style.display = 'none';
 }
 
 async function submitAssessment(auto = false) {
   if (submitted) return;
   submitted = true;
   clearInterval(timerInterval);
+  stopProctoring();
   
   // Collect practical answers from textareas
   const questions = assessment.questions || [];
@@ -265,6 +514,12 @@ async function submitAssessment(auto = false) {
       const ta = document.getElementById(`practical_${q.id}`);
       if (ta) answers[q.id] = ta.value;
     }
+  }
+
+  // Record why this was auto-submitted (tab-switch or camera violation), if applicable.
+  // Stored as an extra key inside the answers JSON so no backend changes are required.
+  if (proctorViolationReason) {
+    answers['_proctoring_violation'] = proctorViolationReason;
   }
   
   const name = document.getElementById('candName')?.value || '';
@@ -300,9 +555,22 @@ function showResult(result) {
   document.getElementById('assessmentScreen').style.display = 'none';
   document.getElementById('resultScreen').style.display = 'block';
   const passed = result.passed;
-  document.getElementById('resultIcon').textContent = passed ? '🎉' : '📊';
-  document.getElementById('resultTitle').textContent = passed ? 'Congratulations! You Passed!' : 'Assessment Completed';
-  document.getElementById('resultTitle').style.color = passed ? 'var(--success)' : 'var(--warning)';
+
+  if (proctorViolationReason) {
+    document.getElementById('resultIcon').textContent = '🚫';
+    document.getElementById('resultTitle').textContent = 'Assessment Auto-Submitted';
+    document.getElementById('resultTitle').style.color = 'var(--danger)';
+    const violationNotice = document.createElement('div');
+    violationNotice.className = 'alert alert-error';
+    violationNotice.style.textAlign = 'left';
+    violationNotice.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Your assessment was automatically submitted because: <b>${proctorViolationReason}</b>`;
+    document.getElementById('resultTitle').insertAdjacentElement('afterend', violationNotice);
+  } else {
+    document.getElementById('resultIcon').textContent = passed ? '🎉' : '📊';
+    document.getElementById('resultTitle').textContent = passed ? 'Congratulations! You Passed!' : 'Assessment Completed';
+    document.getElementById('resultTitle').style.color = passed ? 'var(--success)' : 'var(--warning)';
+  }
+
   document.getElementById('resultScore').textContent = `${result.score}/${result.total}`;
   document.getElementById('resultGrade').textContent = `Grade: ${result.grade} | ${result.percentage}%`;
   document.getElementById('resultFeedback').textContent = result.feedback || '';
