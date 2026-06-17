@@ -250,7 +250,7 @@ async function viewResults(id, title) {
     document.getElementById('resultsBody').innerHTML = `
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>Candidate</th><th>Email</th><th>Score</th><th>%</th><th>Grade</th><th>Status</th><th>Time</th><th>Submitted</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Candidate</th><th>Email</th><th>Score</th><th>%</th><th>Grade</th><th>Status</th><th>Submitted By</th><th>Time</th><th>Submitted</th><th>Actions</th></tr></thead>
           <tbody>${results.map(r => `
             <tr>
               <td class="font-bold">${r.applicant_name}</td>
@@ -259,6 +259,7 @@ async function viewResults(id, title) {
               <td><div class="flex items-center gap-2"><div class="progress-bar" style="width:60px"><div class="progress-fill" style="width:${r.percentage}%"></div></div><span>${r.percentage}%</span></div></td>
               <td><span class="badge badge-shortlisted">Grade ${r.grade}</span></td>
               <td>${statusBadge(r.passed ? 'passed' : 'failed')}</td>
+              <td>${renderSubmissionBadge(r)}</td>
               <td class="text-sm">${r.time_taken_minutes ? r.time_taken_minutes.toFixed(1) + ' min' : '-'}</td>
               <td class="text-xs text-light">${fmtDate(r.submitted_at)}</td>
               <td><div class="table-actions">
@@ -270,6 +271,16 @@ async function viewResults(id, title) {
         </table>
       </div>`;
   } catch(e) { showToast('Error loading results', 'error'); }
+}
+
+function renderSubmissionBadge(r) {
+  if (r.submission_type === 'auto') {
+    const reason = r.submission_reason || 'Auto-submitted';
+    const safeReason = reason.replace(/"/g, '&quot;');
+    return `<span class="badge badge-rejected" title="${safeReason}"><i class="fas fa-robot"></i> Auto-Submitted</span>
+            <div class="text-xs text-light mt-1" style="max-width:180px">${reason}</div>`;
+  }
+  return `<span class="badge badge-active"><i class="fas fa-check"></i> Submit Button</span>`;
 }
 
 async function viewDetailedAnswers(resultId, candidateName) {
