@@ -157,10 +157,11 @@ let submitted = false;
 
 // ── Camera Proctoring state ──────────────────────────────────────────
 let proctorStream = null;          // MediaStream from getUserMedia
-let proctorModels = { face: null, object: null };
+let proctorModels = { object: null };
 let proctorInterval = null;
 let cameraConfirmed = false;       // candidate passed the pre-start camera check
 let proctorLibsLoaded = false;
+let aiDetectionAvailable = true;   // false if the model couldn't load (network/region issue)
 let proctorViolationReason = null; // set when auto-submitted due to a camera violation
 let violationCounts = { noFace: 0, multiFace: 0, device: 0 };
 
@@ -359,19 +360,40 @@ function loadScript(src) {
     const s = document.createElement('script');
     s.src = src;
     s.onload = resolve;
-    s.onerror = () => reject(new Error('Failed to load ' + src));
+    s.onerror = () => reject(new Error('Failed to load script: ' + src));
     document.head.appendChild(s);
   });
 }
 
-// Loads TensorFlow.js + the two small pretrained models we need:
-// BlazeFace (counts faces) and COCO-SSD (spots phones/objects in frame).
+// If your network/region can't reach Google's model hosting (storage.googleapis.com —
+// this is a known issue in some countries), download the coco-ssd "lite_mobilenet_v2"
+// model files yourself and host them on your own domain (e.g. Vercel /public/models/coco-ssd/),
+// then set this to the path of your model.json, e.g. '/models/coco-ssd/model.json'.
+// Leave blank to use the default Google-hosted model.
+const COCO_SSD_MODEL_URL = '';
+
+// Loads TensorFlow.js + COCO-SSD (used both to spot phones AND to count people in frame).
+// We intentionally use a single model here — fewer external dependencies, and unlike
+// BlazeFace, coco-ssd officially supports a self-hosted modelUrl override (see above).
 async function loadProctorLibs() {
   if (proctorLibsLoaded) return;
   await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.1.0/dist/blazeface.min.js');
   await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');
   proctorLibsLoaded = true;
+}
+
+async function loadCocoModelWithRetry(attempts = 3) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await loadProctorLibs();
+      const config = COCO_SSD_MODEL_URL ? { modelUrl: COCO_SSD_MODEL_URL } : {};
+      return await cocoSsd.load(config);
+    } catch (e) {
+      console.error(`[proctoring] model load attempt ${i}/${attempts} failed:`, e);
+      if (i < attempts) await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  return null; // every attempt failed
 }
 
 // Step run from the "Enable Camera" button on the start screen.
@@ -388,6 +410,7 @@ async function setupCamera() {
       audio: false
     });
   } catch (e) {
+    console.error('[proctoring] getUserMedia failed:', e);
     statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Camera access is required for this proctored assessment. Please allow camera permission in your browser and try again.</span>';
     btn.disabled = false;
     return;
@@ -397,61 +420,89 @@ async function setupCamera() {
   video.srcObject = proctorStream;
   wrap.style.display = 'block';
 
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading AI verification models (one-time, a few seconds)...';
-  try {
-    await loadProctorLibs();
-    proctorModels.face = await blazeface.load();
-    proctorModels.object = await cocoSsd.load();
-  } catch (e) {
-    statusEl.innerHTML = '<span style="color:var(--danger)">Could not load the proctoring models. Check your internet connection and click Enable Camera again.</span>';
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading AI verification model (one-time, a few seconds)...';
+  proctorModels.object = await loadCocoModelWithRetry();
+
+  if (!proctorModels.object) {
+    aiDetectionAvailable = false;
+    statusEl.innerHTML = `
+      <span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Couldn't reach the AI verification service (this is usually a network/firewall issue, not your camera).</span>
+      <div style="margin-top:10px"><button class="btn btn-sm btn-secondary" type="button" onclick="continueWithBasicMonitoring()">Continue with basic monitoring instead</button></div>`;
     btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-video"></i> Retry AI Verification';
     return;
   }
 
   statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying your face is visible...';
   await new Promise(r => setTimeout(r, 800)); // let the camera stream stabilize first
-  const faces = await proctorModels.face.estimateFaces(video, false);
+  const numPeople = await countPeopleInFrame(video);
 
-  if (faces.length === 1) {
+  if (numPeople === 1) {
     wrap.className = 'face-ok';
     statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera verified — you\'re ready to begin.</span>';
-    cameraConfirmed = true;
-    const startBtn = document.getElementById('startAssessBtn');
-    startBtn.disabled = false;
-    startBtn.style.opacity = '1';
-  } else if (faces.length === 0) {
+    confirmCameraReady();
+  } else if (numPeople === 0) {
     wrap.className = 'face-warn';
-    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> We couldn\'t see your face. Improve lighting/positioning and click Enable Camera again.</span>';
+    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> We couldn\'t see you clearly. Make sure your head and shoulders are in frame, then click Enable Camera again.</span>';
     btn.disabled = false;
   } else {
     wrap.className = 'face-warn';
-    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Multiple faces detected. Make sure you\'re alone, then try again.</span>';
+    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> More than one person detected. Make sure you\'re alone, then try again.</span>';
     btn.disabled = false;
   }
 }
 
-// Moves the live video feed into the floating widget and starts periodic checks.
+// Candidate opts to proceed without AI detection because the model couldn't load.
+// Camera preview + tab-switch detection still apply; just no automated face/device checks.
+function continueWithBasicMonitoring() {
+  const statusEl = document.getElementById('cameraStatus');
+  statusEl.innerHTML = '<span style="color:var(--text-light)"><i class="fas fa-info-circle"></i> Continuing with basic monitoring (camera visible, AI checks disabled).</span>';
+  confirmCameraReady();
+}
+
+function confirmCameraReady() {
+  cameraConfirmed = true;
+  const startBtn = document.getElementById('startAssessBtn');
+  startBtn.disabled = false;
+  startBtn.style.opacity = '1';
+}
+
+// Returns how many people coco-ssd sees in the current frame.
+async function countPeopleInFrame(video) {
+  try {
+    const objects = await proctorModels.object.detect(video);
+    return objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
+  } catch (e) {
+    console.error('[proctoring] detection failed:', e);
+    return -1; // signals "couldn't analyze" rather than "0 people"
+  }
+}
+
+
+// Moves the live video feed into the floating widget and starts periodic checks
+// (skipped if the AI model never loaded — camera stays visible either way).
 function startProctoringMonitor() {
   const widget = document.getElementById('proctorWidget');
   const video = document.getElementById('proctorVideo');
   widget.querySelector('.proctor-video-slot').appendChild(video);
   widget.style.display = 'flex';
+
+  if (!aiDetectionAvailable) {
+    document.getElementById('proctorStatusText').innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Camera visible (basic monitoring)';
+    return;
+  }
   proctorInterval = setInterval(runProctorCheck, PROCTOR_CHECK_MS);
 }
 
 async function runProctorCheck() {
-  if (submitted || !proctorModels.face || !proctorModels.object) return;
+  if (submitted || !proctorModels.object) return;
   const video = document.getElementById('proctorVideo');
   if (!video || video.readyState < 2) return;
 
-  let faces = [], objects = [];
-  try { faces = await proctorModels.face.estimateFaces(video, false); } catch (e) {}
-  try { objects = await proctorModels.object.detect(video); } catch (e) {}
+  let objects = [];
+  try { objects = await proctorModels.object.detect(video); } catch (e) { console.error('[proctoring] check failed:', e); return; }
 
-  // Cross-check face count against general "person" detections — catches
-  // a second person who's turned away from the camera and missed by BlazeFace.
-  const personCount = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
-  const numPeople = Math.max(faces.length, personCount);
+  const numPeople = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
   const devicesFound = objects.filter(o => FLAGGED_OBJECTS.includes(o.class) && o.score >= DEVICE_SCORE_THRESHOLD);
 
   violationCounts.noFace = numPeople === 0 ? violationCounts.noFace + 1 : 0;
