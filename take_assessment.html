@@ -163,12 +163,18 @@ let cameraConfirmed = false;       // candidate passed the pre-start camera chec
 let proctorLibsLoaded = false;
 let aiDetectionAvailable = true;   // false if the model couldn't load (network/region issue)
 let proctorViolationReason = null; // set when auto-submitted due to a camera violation
+let lastAutoSubmitReason = null;   // set for any auto-submit (tab switch, alt-tab, timer, camera)
 let violationCounts = { noFace: 0, multiFace: 0, device: 0 };
+let proctorCheckInFlight = false;  // prevents overlapping detect() calls from queuing up and adding latency
 
-const PROCTOR_CHECK_MS = 2000;     // how often we analyze a frame
-const VIOLATION_LIMIT = 3;         // consecutive bad checks (~6s) before auto-submit
-const DEVICE_SCORE_THRESHOLD = 0.55;
-const FLAGGED_OBJECTS = ['cell phone']; // COCO-SSD classes treated as a "gadget" violation
+const PROCTOR_CHECK_MS = 700;      // how often we analyze a frame (was 2000ms — too slow)
+const VIOLATION_LIMIT = 2;         // consecutive bad checks before auto-submit (no-face/multi-face)
+const DEVICE_VIOLATION_LIMIT = 1;  // a device only needs to be seen once — no benefit-of-the-doubt
+const DEVICE_SCORE_THRESHOLD = 0.4; // lower threshold = catches phones held at odd angles/partial view
+// COCO-SSD classes treated as a "gadget" violation. Cell phones are most common, but a
+// second phone/tablet propped on a stand is often misclassified by COCO-SSD as one of
+// these other classes, so we flag all of them as a precaution.
+const FLAGGED_OBJECTS = ['cell phone', 'remote', 'tablet', 'laptop'];
 
 async function loadAssessment() {
   try {
@@ -346,6 +352,7 @@ function setupAntiCheat() {
 function autoSubmit(reason, isCameraViolation = false) {
   if (submitted) return;
   if (isCameraViolation) proctorViolationReason = reason;
+  lastAutoSubmitReason = reason;
   stopProctoring();
   alert(`⚠️ Anti-cheat: ${reason}. Your assessment will be submitted automatically.`);
   submitAssessment(true);
@@ -495,12 +502,14 @@ function startProctoringMonitor() {
 }
 
 async function runProctorCheck() {
-  if (submitted || !proctorModels.object) return;
+  if (submitted || !proctorModels.object || proctorCheckInFlight) return;
   const video = document.getElementById('proctorVideo');
   if (!video || video.readyState < 2) return;
 
+  proctorCheckInFlight = true;
   let objects = [];
-  try { objects = await proctorModels.object.detect(video); } catch (e) { console.error('[proctoring] check failed:', e); return; }
+  try { objects = await proctorModels.object.detect(video); } catch (e) { console.error('[proctoring] check failed:', e); proctorCheckInFlight = false; return; }
+  proctorCheckInFlight = false;
 
   const numPeople = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
   const devicesFound = objects.filter(o => FLAGGED_OBJECTS.includes(o.class) && o.score >= DEVICE_SCORE_THRESHOLD);
@@ -509,10 +518,11 @@ async function runProctorCheck() {
   violationCounts.multiFace = numPeople > 1 ? violationCounts.multiFace + 1 : 0;
   violationCounts.device = devicesFound.length > 0 ? violationCounts.device + 1 : 0;
 
-  updateProctorStatus(numPeople, devicesFound.length > 0);
+  updateProctorStatus(numPeople, devicesFound.length > 0, devicesFound[0]?.class);
 
-  if (violationCounts.device >= VIOLATION_LIMIT) {
-    autoSubmit('A phone or device was detected in your camera view', true);
+  if (violationCounts.device >= DEVICE_VIOLATION_LIMIT) {
+    const deviceLabel = devicesFound[0]?.class || 'a device';
+    autoSubmit(`A ${deviceLabel} was detected in your camera view`, true);
   } else if (violationCounts.multiFace >= VIOLATION_LIMIT) {
     autoSubmit('Multiple people were detected in front of the camera', true);
   } else if (violationCounts.noFace >= VIOLATION_LIMIT) {
@@ -520,17 +530,17 @@ async function runProctorCheck() {
   }
 }
 
-function updateProctorStatus(numPeople, deviceFlag) {
+function updateProctorStatus(numPeople, deviceFlag, deviceLabel) {
   const statusEl = document.getElementById('proctorStatusText');
   const banner = document.getElementById('proctorAlertBanner');
 
   let warn = null;
-  if (deviceFlag) warn = { msg: 'Device detected — remove any phone/device from view!', count: violationCounts.device };
-  else if (numPeople > 1) warn = { msg: 'Multiple people detected — only you should be visible!', count: violationCounts.multiFace };
-  else if (numPeople === 0) warn = { msg: 'Face not detected — please stay in camera view!', count: violationCounts.noFace };
+  if (deviceFlag) warn = { msg: `${deviceLabel || 'Device'} detected — remove any phone/device from view!`, count: violationCounts.device, limit: DEVICE_VIOLATION_LIMIT };
+  else if (numPeople > 1) warn = { msg: 'Multiple people detected — only you should be visible!', count: violationCounts.multiFace, limit: VIOLATION_LIMIT };
+  else if (numPeople === 0) warn = { msg: 'Face not detected — please stay in camera view!', count: violationCounts.noFace, limit: VIOLATION_LIMIT };
 
   if (warn) {
-    const remaining = Math.max(VIOLATION_LIMIT - warn.count, 0);
+    const remaining = Math.max(warn.limit - warn.count, 0);
     banner.style.display = 'flex';
     banner.querySelector('.proctor-alert-text').textContent =
       `${warn.msg} Assessment auto-submits in ${remaining} check${remaining === 1 ? '' : 's'} if unresolved.`;
@@ -567,10 +577,18 @@ async function submitAssessment(auto = false) {
     }
   }
 
-  // Record why this was auto-submitted (tab-switch or camera violation), if applicable.
-  // Stored as an extra key inside the answers JSON so no backend changes are required.
+  // Determine why this submission happened, for the HR admin dashboard.
+  // - Candidate clicked Submit  -> "manual"
+  // - Timer ran out             -> "auto" / "Time limit reached"
+  // - Anti-cheat / camera flag  -> "auto" / specific reason from autoSubmit()
+  let submissionType = 'manual';
+  let submissionReason = null;
   if (proctorViolationReason) {
-    answers['_proctoring_violation'] = proctorViolationReason;
+    submissionType = 'auto';
+    submissionReason = proctorViolationReason;
+  } else if (auto) {
+    submissionType = 'auto';
+    submissionReason = lastAutoSubmitReason || (timeLeft <= 0 ? 'Time limit reached' : 'Auto-submitted');
   }
   
   const name = document.getElementById('candName')?.value || '';
@@ -590,7 +608,9 @@ async function submitAssessment(auto = false) {
         applicant_email: email,
         application_id: appId ? parseInt(appId, 10) : null,
         answers: answers,
-        time_taken_minutes: parseFloat(timeTaken.toFixed(2))
+        time_taken_minutes: parseFloat(timeTaken.toFixed(2)),
+        submission_type: submissionType,
+        submission_reason: submissionReason
       })
     });
     const result = await res.json();
