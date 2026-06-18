@@ -232,7 +232,9 @@ async function loadAssessment() {
     antiCheatEnabled = assessment.anti_cheat;
     initCameraGate();
   } catch(e) {
+    console.error('[loadAssessment] failed:', e);
     document.getElementById('assessTitle').textContent = 'Error Loading Assessment';
+    document.getElementById('assessDesc').textContent = e?.message || 'Unknown error — open browser console (F12) for details.';
   }
 }
 
