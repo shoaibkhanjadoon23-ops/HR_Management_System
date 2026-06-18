@@ -155,6 +155,8 @@ let assessment = null;
 let answers = {};
 let timerInterval = null;
 let timeLeft = 0;
+let examEndAt = null;       // Date.now()-based deadline — timer reads real elapsed time so it
+                             // can never visually "stick", even if a tick gets delayed by CPU load
 let startTime = null;
 let antiCheatEnabled = false;
 let submitted = false;
@@ -174,15 +176,21 @@ let proctorViolationReason = null; // set when auto-submitted due to a camera vi
 let lastAutoSubmitReason = null;   // set for any auto-submit (tab switch, alt-tab, timer, camera, mic)
 let violationCounts = { noFace: 0, multiFace: 0, device: 0 };
 let proctorCheckInFlight = false;  // prevents overlapping detect() calls from queuing up and adding latency
-let gazeCheckInFlight = false;
 
 // ── Microphone / voice detection state ─────────────────────────────────
 let audioCtx = null, audioAnalyser = null, audioSource = null, micMonitorRAF = null;
 let micConfirmed = false;
 let voiceSampleWindow = []; // rolling true/false history of recent "loud" mic samples
+let micBaselineRms = 0.012; // ambient noise floor, measured per-candidate during setup (see calibrateMic)
 
-const PROCTOR_CHECK_MS = 300;      // how often we analyze a frame for object/face-count
-const GAZE_CHECK_MS = 300;         // how often we check head/eye direction
+// ── Gaze calibration (per-candidate "looking at the screen" reference pose) ─────
+let gazeBaselineYaw = 0;
+let gazeBaselinePitch = 0;
+let gazeCalibrated = false;
+
+const PROCTOR_CHECK_MS = 350;      // how often we analyze a frame for object/face-count
+const GAZE_CHECK_MS = 400;         // offset from PROCTOR_CHECK_MS so the two models don't both
+                                    // run in the same tick and starve the rest of the page (incl. the timer)
 const VIOLATION_LIMIT = 1;         // instant — no grace checks, no warning before auto-submit
 const DEVICE_VIOLATION_LIMIT = 1;  // a device only needs to be seen once
 const DEVICE_SCORE_THRESHOLD = 0.3; // lower threshold = catches phones held at odd angles/partial view
@@ -191,17 +199,19 @@ const DEVICE_SCORE_THRESHOLD = 0.3; // lower threshold = catches phones held at 
 // these other classes, so we flag all of them as a precaution.
 const FLAGGED_OBJECTS = ['cell phone', 'remote', 'tablet', 'laptop'];
 
-// Voice detection tuning: uses a rolling window instead of "continuously above threshold"
-// because real speech has natural micro-pauses between words/syllables that would
-// otherwise keep resetting a strict continuous timer and never trigger.
-const VOICE_RMS_THRESHOLD = 0.018;   // lower = catches soft/slow speech, not just loud talking
-const VOICE_WINDOW_MS = 1500;        // look at the last 1.5s of mic samples
-const VOICE_ACTIVE_RATIO = 0.30;     // if >=30% of that window had sound above threshold -> flag
+// Voice detection tuning: threshold is RELATIVE to each candidate's own measured ambient
+// noise floor (micBaselineRms), not a fixed global number — a quiet room and a noisy room
+// need different absolute thresholds for "that's a voice", but the same relative jump works
+// for both. Uses a rolling window so natural pauses between words/syllables don't reset it.
+const VOICE_DELTA = 0.012;           // how far above the candidate's own baseline counts as "talking"
+const VOICE_WINDOW_MS = 1200;        // look at the last 1.2s of mic samples
+const VOICE_ACTIVE_RATIO = 0.25;     // if >=25% of that window had sound above threshold -> flag
 const MIC_CHECK_MS = 100;
 
-// Gaze tuning: how far the head/eyes can turn from "facing the camera" before we
-// consider the candidate "looking away" — triggers an immediate auto-submit.
-const GAZE_YAW_THRESHOLD = 0.18;   // normalized horizontal offset of eye-midpoint from nose
+// Gaze tuning: deviation is measured from the candidate's OWN calibrated "looking at the
+// screen" pose (captured during setup), not an absolute zero — this catches small/slight
+// turns reliably regardless of where their camera is physically angled.
+const GAZE_THRESHOLD = 0.10;       // lower = more sensitive to slight turns/look-ups
 const GAZE_AWAY_GRACE_CHECKS = 1;  // instant — first away-check submits
 
 async function loadAssessment() {
@@ -249,6 +259,7 @@ function startAssessment() {
   document.getElementById('assessmentScreen').style.display = 'block';
   
   startTime = new Date();
+  examEndAt = Date.now() + assessment.duration_minutes * 60 * 1000;
   timeLeft = assessment.duration_minutes * 60;
   
   renderQuestions();
@@ -335,13 +346,13 @@ function updateAnsweredCount() {
 function startTimer() {
   updateTimerDisplay();
   timerInterval = setInterval(() => {
-    timeLeft--;
+    timeLeft = Math.max(0, Math.round((examEndAt - Date.now()) / 1000));
     updateTimerDisplay();
     if (timeLeft <= 0) {
       clearInterval(timerInterval);
       submitAssessment(true);
     }
-  }, 1000);
+  }, 250); // checked 4x/sec so the displayed number catches up fast even after a delayed tick
 }
 
 function updateTimerDisplay() {
@@ -450,7 +461,7 @@ async function loadCocoModelWithRetry(attempts = 3) {
   for (let i = 1; i <= attempts; i++) {
     try {
       await loadProctorLibs();
-      const config = COCO_SSD_MODEL_URL ? { modelUrl: COCO_SSD_MODEL_URL } : { base: 'mobilenet_v2' };
+      const config = COCO_SSD_MODEL_URL ? { modelUrl: COCO_SSD_MODEL_URL } : { base: 'lite_mobilenet_v2' };
       return await cocoSsd.load(config);
     } catch (e) {
       console.error(`[proctoring] model load attempt ${i}/${attempts} failed:`, e);
@@ -483,6 +494,11 @@ async function setupCamera() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     micConfirmed = true;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioSource = audioCtx.createMediaStreamSource(micStream);
+    audioAnalyser = audioCtx.createAnalyser();
+    audioAnalyser.fftSize = 1024;
+    audioSource.connect(audioAnalyser);
   } catch (e) {
     console.error('[proctoring] microphone getUserMedia failed:', e);
     statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Microphone access is required for this proctored assessment (used to detect talking). Please allow microphone permission and try again.</span>';
@@ -517,13 +533,13 @@ async function setupCamera() {
     return;
   }
 
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying your face is visible...';
-  await new Promise(r => setTimeout(r, 300)); // brief stabilize, cut from 800ms — model load above already took time
+  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calibrating — please look at the screen and stay quiet for a moment...';
+  await calibrateBaselines(video);
   const numPeople = await countPeopleInFrame(video);
 
   if (numPeople === 1) {
     wrap.className = 'face-ok';
-    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera &amp; microphone verified — you\'re ready to begin.</span>';
+    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera &amp; microphone verified — you\'re ready to begin.</span><div class="text-xs text-light mt-2">Tip: sit at a normal arm\'s-length distance so your hands and surroundings stay visible.</div>';
     confirmCameraReady();
   } else if (numPeople === 0) {
     wrap.className = 'face-warn';
@@ -551,17 +567,80 @@ function confirmCameraReady() {
   startBtn.style.opacity = '1';
 }
 
-// Returns how many people coco-ssd sees in the current frame.
+// Returns how many people we can see — combines coco-ssd's general person detector
+// with the face-mesh face count. Face-mesh is what actually saves us here: the general
+// object detector loses track of a person when they lean in close to the camera and get
+// cropped by the frame edges, which was previously causing false "no person" auto-submits
+// the moment someone leaned closer mid-exam. Trusting whichever model sees someone fixes that.
 async function countPeopleInFrame(video) {
+  let personCount = 0, faceCount = 0;
   try {
-    const objects = await proctorModels.object.detect(video, 20, 0.25);
-    return objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
-  } catch (e) {
-    console.error('[proctoring] detection failed:', e);
-    return -1; // signals "couldn't analyze" rather than "0 people"
-  }
+    if (proctorModels.object) {
+      const objects = await proctorModels.object.detect(video, 20, 0.25);
+      personCount = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
+    }
+  } catch (e) { console.error('[proctoring] detection failed:', e); }
+  try {
+    if (proctorModels.face) {
+      const faces = await proctorModels.face.estimateFaces(video);
+      faceCount = faces.length;
+    }
+  } catch (e) {}
+  return Math.max(personCount, faceCount);
 }
 
+function getCurrentRms() {
+  const data = new Uint8Array(audioAnalyser.fftSize);
+  audioAnalyser.getByteTimeDomainData(data);
+  let sumSquares = 0;
+  for (let i = 0; i < data.length; i++) { const n = (data[i] - 128) / 128; sumSquares += n * n; }
+  return Math.sqrt(sumSquares / data.length);
+}
+
+// MediaPipe FaceMesh indices: 1 ≈ nose tip, 33 = right eye outer, 263 = left eye outer.
+// Returns normalized horizontal (yaw) and vertical (pitch) offset of the eye-midpoint from
+// the nose, scaled by face width — this stays meaningful regardless of distance from camera.
+function computeGazeOffsets(face) {
+  const kp = face.keypoints;
+  const nose = kp.find(p => p.name === 'noseTip') || kp[1];
+  const rightEye = kp.find(p => p.name === 'rightEyeUpper0' || p.name === 'rightEye') || kp[33];
+  const leftEye = kp.find(p => p.name === 'leftEyeUpper0' || p.name === 'leftEye') || kp[263];
+  if (!nose || !rightEye || !leftEye) return null;
+  const eyeMidX = (rightEye.x + leftEye.x) / 2;
+  const eyeMidY = (rightEye.y + leftEye.y) / 2;
+  const faceWidth = Math.abs(leftEye.x - rightEye.x) || 1;
+  return { yaw: (eyeMidX - nose.x) / faceWidth, pitch: (eyeMidY - nose.y) / faceWidth };
+}
+
+// Samples a brief window right after setup (candidate told to look at the screen and stay
+// quiet) to build a PERSONAL baseline for "looking at the screen" pose and "room is silent"
+// mic level. Every later comparison is relative to these, not a fixed global number — that's
+// what lets us reliably catch slight head turns and soft speech regardless of camera angle,
+// mic quality, or room noise, none of which are the same from one candidate to the next.
+async function calibrateBaselines(video) {
+  const yawSamples = [], pitchSamples = [], rmsSamples = [];
+  for (let i = 0; i < 5; i++) {
+    if (proctorModels.face) {
+      try {
+        const faces = await proctorModels.face.estimateFaces(video);
+        if (faces.length) {
+          const g = computeGazeOffsets(faces[0]);
+          if (g) { yawSamples.push(g.yaw); pitchSamples.push(g.pitch); }
+        }
+      } catch (e) {}
+    }
+    if (audioAnalyser) { try { rmsSamples.push(getCurrentRms()); } catch (e) {} }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  if (yawSamples.length) {
+    gazeBaselineYaw = yawSamples.reduce((a, b) => a + b, 0) / yawSamples.length;
+    gazeBaselinePitch = pitchSamples.reduce((a, b) => a + b, 0) / pitchSamples.length;
+    gazeCalibrated = true;
+  }
+  if (rmsSamples.length) {
+    micBaselineRms = Math.max(0.004, rmsSamples.reduce((a, b) => a + b, 0) / rmsSamples.length);
+  }
+}
 
 // Moves the live video feed into the floating widget and starts periodic checks
 // (skipped if the AI model never loaded — camera stays visible either way).
@@ -578,88 +657,58 @@ function startProctoringMonitor() {
     return;
   }
   proctorInterval = setInterval(runProctorCheck, PROCTOR_CHECK_MS);
-
-  if (gazeDetectionAvailable) {
-    gazeInterval = setInterval(runGazeCheck, GAZE_CHECK_MS);
-  }
 }
 
+// One merged cycle: object detection (phones/people) + face-mesh (face count + gaze) share
+// a single inference pass each, instead of two separate intervals duplicating work — that
+// duplication was a big part of what was starving the page's own 1-second timer tick before.
 async function runProctorCheck() {
-  if (submitted || !proctorModels.object || proctorCheckInFlight) return;
+  if (submitted || proctorCheckInFlight) return;
   const video = document.getElementById('proctorVideo');
   if (!video || video.readyState < 2) return;
 
   proctorCheckInFlight = true;
-  let objects = [];
-  try { objects = await proctorModels.object.detect(video, 20, 0.25); } catch (e) { console.error('[proctoring] check failed:', e); proctorCheckInFlight = false; return; }
+  let objects = [], faces = [];
+  if (proctorModels.object) {
+    try { objects = await proctorModels.object.detect(video, 20, 0.25); } catch (e) { console.error('[proctoring] object check failed:', e); }
+  }
+  if (proctorModels.face) {
+    try { faces = await proctorModels.face.estimateFaces(video); } catch (e) { console.error('[proctoring] face check failed:', e); }
+  }
   proctorCheckInFlight = false;
 
-  const numPeople = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
+  const personCount = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
+  const numPeople = Math.max(personCount, faces.length);
   const devicesFound = objects.filter(o => FLAGGED_OBJECTS.includes(o.class) && o.score >= DEVICE_SCORE_THRESHOLD);
 
   violationCounts.noFace = numPeople === 0 ? violationCounts.noFace + 1 : 0;
   violationCounts.multiFace = numPeople > 1 ? violationCounts.multiFace + 1 : 0;
   violationCounts.device = devicesFound.length > 0 ? violationCounts.device + 1 : 0;
 
-  updateProctorStatus(numPeople, devicesFound.length > 0, devicesFound[0]?.class);
+  updateProctorStatus(numPeople, devicesFound.length > 0);
 
   if (violationCounts.device >= DEVICE_VIOLATION_LIMIT) {
     const deviceLabel = devicesFound[0]?.class || 'a device';
     autoSubmit(`A ${deviceLabel} was detected in your camera view`, true);
+    return;
   } else if (violationCounts.multiFace >= VIOLATION_LIMIT) {
     autoSubmit('Multiple people were detected in front of the camera', true);
+    return;
   } else if (violationCounts.noFace >= VIOLATION_LIMIT) {
     autoSubmit('You moved out of the camera frame', true);
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  Gaze tracking — pauses/resumes the exam timer based on head/eye direction.
-//  Uses face-landmarks-detection (MediaPipe FaceMesh) to estimate horizontal
-//  yaw from the eye midpoint relative to the nose tip and face width.
-// ════════════════════════════════════════════════════════════════════
-async function runGazeCheck() {
-  if (submitted || !proctorModels.face || gazeCheckInFlight) return;
-  const video = document.getElementById('proctorVideo');
-  if (!video || video.readyState < 2) return;
-
-  gazeCheckInFlight = true;
-  let faces = [];
-  try { faces = await proctorModels.face.estimateFaces(video); } catch (e) { console.error('[gaze] check failed:', e); gazeCheckInFlight = false; return; }
-  gazeCheckInFlight = false;
-
-  if (!faces.length) {
-    registerGazeAway(); // no face = can't confirm they're looking at the screen either
     return;
   }
 
-  const kp = faces[0].keypoints;
-  // MediaPipe FaceMesh indices: 1 = nose tip, 33 = right eye outer, 263 = left eye outer
-  const nose = kp.find(p => p.name === 'noseTip') || kp[1];
-  const rightEye = kp.find(p => p.name === 'rightEyeUpper0' || p.name === 'rightEye') || kp[33];
-  const leftEye = kp.find(p => p.name === 'leftEyeUpper0' || p.name === 'leftEye') || kp[263];
-  if (!nose || !rightEye || !leftEye) { registerGazeAway(); return; }
-
-  const eyeMidX = (rightEye.x + leftEye.x) / 2;
-  const faceWidth = Math.abs(leftEye.x - rightEye.x) || 1;
-  const yawOffset = (eyeMidX - nose.x) / faceWidth; // ~0 when facing camera, grows as head turns
-
-  if (Math.abs(yawOffset) > GAZE_YAW_THRESHOLD) {
-    registerGazeAway();
-  } else {
-    registerGazeForward();
+  // Gaze reuses the same face-mesh result above — no extra inference cost.
+  if (faces.length === 1 && gazeCalibrated) {
+    const g = computeGazeOffsets(faces[0]);
+    if (g) {
+      const deviation = Math.hypot(g.yaw - gazeBaselineYaw, g.pitch - gazeBaselinePitch);
+      if (deviation > GAZE_THRESHOLD) {
+        autoSubmit('Looking away from the screen was detected', true);
+      }
+    }
   }
-}
-
-let gazeAwayStreak = 0;
-function registerGazeAway() {
-  gazeAwayStreak++;
-  if (gazeAwayStreak >= GAZE_AWAY_GRACE_CHECKS) {
-    autoSubmit('Looking away from the screen was detected', true);
-  }
-}
-function registerGazeForward() {
-  gazeAwayStreak = 0;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -668,36 +717,19 @@ function registerGazeForward() {
 //  feeding the candidate an answer.
 // ════════════════════════════════════════════════════════════════════
 function startMicMonitor() {
-  if (!micStream) return;
-  try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioSource = audioCtx.createMediaStreamSource(micStream);
-    audioAnalyser = audioCtx.createAnalyser();
-    audioAnalyser.fftSize = 1024;
-    audioSource.connect(audioAnalyser);
-    pollMicVolume();
-  } catch (e) {
-    console.error('[proctoring] mic monitor failed to start:', e);
+  if (!audioAnalyser) {
     const micText = document.getElementById('proctorMicText');
     if (micText) micText.innerHTML = '<i class="fas fa-microphone-slash" style="font-size:9px"></i> Mic unavailable';
+    return;
   }
+  pollMicVolume();
 }
 
 function pollMicVolume() {
   if (submitted || !audioAnalyser) return;
-  const data = new Uint8Array(audioAnalyser.fftSize);
-  audioAnalyser.getByteTimeDomainData(data);
-
-  // RMS of the waveform, normalized 0-1 (128 = silence/midline for Uint8 PCM)
-  let sumSquares = 0;
-  for (let i = 0; i < data.length; i++) {
-    const norm = (data[i] - 128) / 128;
-    sumSquares += norm * norm;
-  }
-  const rms = Math.sqrt(sumSquares / data.length);
-
+  const rms = getCurrentRms();
   const micText = document.getElementById('proctorMicText');
-  const isLoud = rms >= VOICE_RMS_THRESHOLD;
+  const isLoud = rms >= (micBaselineRms + VOICE_DELTA);
 
   // Rolling window of recent samples — real speech has brief silent gaps between
   // words/syllables that would otherwise keep resetting a strict continuous timer
