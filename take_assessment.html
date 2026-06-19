@@ -189,8 +189,10 @@ let gazeBaselinePitch = 0;
 let gazeCalibrated = false;
 
 const PROCTOR_CHECK_MS = 350;      // how often we analyze a frame for object/face-count
-const GAZE_CHECK_MS = 400;         // offset from PROCTOR_CHECK_MS so the two models don't both
-                                    // run in the same tick and starve the rest of the page (incl. the timer)
+const GAZE_CHECK_MS = 120;         // dedicated, lightweight gaze-only loop — runs independently
+                                    // and much faster than PROCTOR_CHECK_MS so a quick left/right
+                                    // glance is still caught even if the candidate's head is back
+                                    // to center by the time the next heavy object-detection cycle runs
 const VIOLATION_LIMIT = 1;         // instant — no grace checks, no warning before auto-submit
 const DEVICE_VIOLATION_LIMIT = 1;  // a device only needs to be seen once
 const DEVICE_SCORE_THRESHOLD = 0.3; // lower threshold = catches phones held at odd angles/partial view
@@ -203,16 +205,19 @@ const FLAGGED_OBJECTS = ['cell phone', 'remote', 'tablet', 'laptop'];
 // noise floor (micBaselineRms), not a fixed global number — a quiet room and a noisy room
 // need different absolute thresholds for "that's a voice", but the same relative jump works
 // for both. Uses a rolling window so natural pauses between words/syllables don't reset it.
-const VOICE_DELTA = 0.012;           // how far above the candidate's own baseline counts as "talking"
-const VOICE_WINDOW_MS = 1200;        // look at the last 1.2s of mic samples
-const VOICE_ACTIVE_RATIO = 0.25;     // if >=25% of that window had sound above threshold -> flag
+// Lowered delta/ratio + shorter window so quiet/low talking is caught quickly, not just
+// loud, sustained speech.
+const VOICE_DELTA = 0.006;           // how far above the candidate's own baseline counts as "talking"
+const VOICE_WINDOW_MS = 800;         // look at the last 0.8s of mic samples (faster reaction)
+const VOICE_ACTIVE_RATIO = 0.15;     // if >=15% of that window had sound above threshold -> flag
 const MIC_CHECK_MS = 100;
 
 // Gaze tuning: deviation is measured from the candidate's OWN calibrated "looking at the
 // screen" pose (captured during setup), not an absolute zero — this catches small/slight
 // turns reliably regardless of where their camera is physically angled.
-const GAZE_THRESHOLD = 0.10;       // lower = more sensitive to slight turns/look-ups
+const GAZE_THRESHOLD = 0.085;      // lower = more sensitive to slight/fast turns
 const GAZE_AWAY_GRACE_CHECKS = 1;  // instant — first away-check submits
+let gazeCheckInFlight = false;     // prevents overlapping estimateFaces() calls from queuing up
 
 async function loadAssessment() {
   try {
@@ -355,6 +360,17 @@ function startTimer() {
       submitAssessment(true);
     }
   }, 250); // checked 4x/sec so the displayed number catches up fast even after a delayed tick
+
+  // Belt-and-braces: instantly resync the displayed number the moment the tab/window
+  // regains focus, in case a tick was delayed by background throttling or heavy work.
+  document.addEventListener('visibilitychange', resyncTimerNow);
+  window.addEventListener('focus', resyncTimerNow);
+}
+
+function resyncTimerNow() {
+  if (!examEndAt || submitted) return;
+  timeLeft = Math.max(0, Math.round((examEndAt - Date.now()) / 1000));
+  updateTimerDisplay();
 }
 
 function updateTimerDisplay() {
@@ -659,6 +675,31 @@ function startProctoringMonitor() {
     return;
   }
   proctorInterval = setInterval(runProctorCheck, PROCTOR_CHECK_MS);
+  if (gazeDetectionAvailable) {
+    gazeInterval = setInterval(runGazeCheck, GAZE_CHECK_MS);
+  }
+}
+
+// Dedicated, lightweight, FAST loop that does only the gaze check (face-mesh, no coco-ssd).
+// Runs independently of runProctorCheck's heavier object-detection cycle so a quick left/right
+// glance is caught even if it happens and recovers between the slower object-detection ticks.
+async function runGazeCheck() {
+  if (submitted || gazeCheckInFlight || !proctorModels.face || !gazeCalibrated) return;
+  const video = document.getElementById('proctorVideo');
+  if (!video || video.readyState < 2) return;
+
+  gazeCheckInFlight = true;
+  let faces = [];
+  try { faces = await proctorModels.face.estimateFaces(video); } catch (e) {}
+  gazeCheckInFlight = false;
+
+  if (faces.length !== 1) return; // face-count / no-face violations are handled by runProctorCheck
+  const g = computeGazeOffsets(faces[0]);
+  if (!g) return;
+  const deviation = Math.hypot(g.yaw - gazeBaselineYaw, g.pitch - gazeBaselinePitch);
+  if (deviation > GAZE_THRESHOLD) {
+    autoSubmit('Looking away from the screen was detected', true);
+  }
 }
 
 // One merged cycle: object detection (phones/people) + face-mesh (face count + gaze) share
@@ -674,6 +715,10 @@ async function runProctorCheck() {
   if (proctorModels.object) {
     try { objects = await proctorModels.object.detect(video, 20, 0.25); } catch (e) { console.error('[proctoring] object check failed:', e); }
   }
+  // Yield one tick back to the browser between the two model passes — lets the timer's
+  // own setInterval (and any pending paint) run in between instead of being stuck behind
+  // back-to-back synchronous inference calls.
+  await new Promise(r => setTimeout(r, 0));
   if (proctorModels.face) {
     try { faces = await proctorModels.face.estimateFaces(video); } catch (e) { console.error('[proctoring] face check failed:', e); }
   }
@@ -699,17 +744,6 @@ async function runProctorCheck() {
   } else if (violationCounts.noFace >= VIOLATION_LIMIT) {
     autoSubmit('You moved out of the camera frame', true);
     return;
-  }
-
-  // Gaze reuses the same face-mesh result above — no extra inference cost.
-  if (faces.length === 1 && gazeCalibrated) {
-    const g = computeGazeOffsets(faces[0]);
-    if (g) {
-      const deviation = Math.hypot(g.yaw - gazeBaselineYaw, g.pitch - gazeBaselinePitch);
-      if (deviation > GAZE_THRESHOLD) {
-        autoSubmit('Looking away from the screen was detected', true);
-      }
-    }
   }
 }
 
