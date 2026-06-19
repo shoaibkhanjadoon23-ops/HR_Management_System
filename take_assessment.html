@@ -291,17 +291,34 @@ function renderQuestions() {
   
   let html = '';
   questions.forEach((q, idx) => {
-    if (q.type === 'practical') {
+    const qType = q.type || 'mcq';
+    if (qType === 'practical' || qType === 'typing') {
+      const label = qType === 'typing' ? 'Your Answer:' : 'Your Answer (code / explanation):';
+      const placeholder = qType === 'typing' ? 'Type your answer here...' : 'Write your code or detailed explanation here...';
+      const typeLabel = qType === 'typing' ? 'Written Answer' : 'Practical';
       html += `
         <div class="question-card" id="qcard_${q.id}">
           <div class="question-num">
-            <span>Practical Question ${idx + 1} of ${total}</span>
+            <span>${typeLabel} Question ${idx + 1} of ${total}</span>
             <span class="level-${q.level || 'hard'}">${q.marks} pts</span>
           </div>
           <div class="question-text">${q.question}</div>
           <div class="form-group mt-4">
-            <label>Your Answer (code / explanation):</label>
-            <textarea id="practical_${q.id}" rows="6" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:monospace" placeholder="Write your code or detailed explanation here..."></textarea>
+            <label>${label}</label>
+            <textarea id="practical_${q.id}" rows="5" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:${qType==='typing'?'inherit':'monospace'}" placeholder="${placeholder}"></textarea>
+          </div>
+        </div>`;
+    } else if (qType === 'fill_blank') {
+      html += `
+        <div class="question-card" id="qcard_${q.id}">
+          <div class="question-num">
+            <span>Question ${idx + 1} of ${total}</span>
+            <span style="background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:20px;font-size:12px">Fill in the Blank</span>
+            <span style="margin-left:auto;color:var(--text-light)">${q.marks} pts</span>
+          </div>
+          <div class="question-text">${q.question}</div>
+          <div class="form-group mt-4">
+            <input type="text" id="fill_${q.id}" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px" placeholder="Type your answer here..." oninput="answers[${q.id}]=this.value;updateAnsweredCount()">
           </div>
         </div>`;
     } else {
@@ -326,9 +343,9 @@ function renderQuestions() {
   });
   document.getElementById('questionsContainer').innerHTML = html;
   
-  // Track practical answers on input
+  // Track practical / typing answers on input
   questions.forEach(q => {
-    if (q.type === 'practical') {
+    if (q.type === 'practical' || q.type === 'typing') {
       const ta = document.getElementById(`practical_${q.id}`);
       if (ta) {
         ta.addEventListener('input', () => {
@@ -836,12 +853,15 @@ async function submitAssessment(auto = false) {
   clearInterval(timerInterval);
   stopProctoring();
   
-  // Collect practical answers from textareas
+  // Collect all text-based answers at submission time
   const questions = assessment.questions || [];
   for (const q of questions) {
-    if (q.type === 'practical') {
+    if (q.type === 'practical' || q.type === 'typing') {
       const ta = document.getElementById(`practical_${q.id}`);
       if (ta) answers[q.id] = ta.value;
+    } else if (q.type === 'fill_blank') {
+      const inp = document.getElementById(`fill_${q.id}`);
+      if (inp) answers[q.id] = inp.value;
     }
   }
 
