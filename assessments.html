@@ -68,26 +68,67 @@
 <div id="createModal" class="modal-overlay" style="display:none">
   <div class="modal modal-lg">
     <div class="modal-header">
-      <h3><i class="fas fa-clipboard-check"></i> Create Assessment <span class="ai-badge"><i class="fas fa-robot"></i> AI Generated</span></h3>
+      <h3><i class="fas fa-clipboard-check"></i> Create Assessment</h3>
       <button class="modal-close" onclick="closeModal('createModal')"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body">
+
+      <!-- Mode Toggle -->
+      <div style="display:flex;gap:0;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px">
+        <button id="tabAI" onclick="switchMode('ai')" style="flex:1;padding:10px;border:none;background:var(--primary);color:#fff;font-weight:700;cursor:pointer;font-size:14px;transition:all .2s">
+          <i class="fas fa-robot"></i> AI Generated
+        </button>
+        <button id="tabCustom" onclick="switchMode('custom')" style="flex:1;padding:10px;border:none;background:var(--bg-card);color:var(--text);font-weight:700;cursor:pointer;font-size:14px;transition:all .2s">
+          <i class="fas fa-pen"></i> Custom
+        </button>
+      </div>
+
+      <!-- Shared fields -->
       <div class="grid-2">
         <div class="form-group"><label>Title</label><input type="text" id="aTitle" placeholder="Assessment title"></div>
         <div class="form-group"><label>Job *</label><select id="aJob" onchange="prefillFromJob()"><option value="">Select job...</option></select></div>
-        <div class="form-group"><label>Easy Questions</label><input type="number" id="aEasy" value="5" min="1" max="20"></div>
-        <div class="form-group"><label>Moderate Questions</label><input type="number" id="aModerate" value="5" min="1" max="20"></div>
-        <div class="form-group"><label>Hard Questions</label><input type="number" id="aHard" value="5" min="1" max="20"></div>
-        <div class="form-group"><label>Practical Questions</label><input type="number" id="aPractical" value="2" min="0" max="10"></div>
         <div class="form-group"><label>Duration (minutes) *</label><input type="number" id="aDuration" value="30" min="5" max="180"></div>
+        <div class="form-group" style="display:flex;align-items:center;padding-top:24px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="aAntiCheat" checked style="width:auto"> Enable Anti-Cheat</label>
+        </div>
       </div>
       <div class="form-group"><label>Description</label><textarea id="aDesc" rows="2"></textarea></div>
-      <div class="form-group"><label><input type="checkbox" id="aAntiCheat" checked style="width:auto"> Enable Anti-Cheat</label></div>
-      <div class="alert alert-info mt-2">Marks: Easy=2, Moderate=5, Hard=8, Practical=10. AI generates practical questions based on job skills and auto‑grades them.</div>
+
+      <!-- AI Panel -->
+      <div id="aiPanel">
+        <div style="height:1px;background:var(--border);margin:16px 0"></div>
+        <div class="grid-2">
+          <div class="form-group"><label>Easy Questions</label><input type="number" id="aEasy" value="5" min="1" max="20"></div>
+          <div class="form-group"><label>Moderate Questions</label><input type="number" id="aModerate" value="5" min="1" max="20"></div>
+          <div class="form-group"><label>Hard Questions</label><input type="number" id="aHard" value="5" min="1" max="20"></div>
+          <div class="form-group"><label>Practical Questions</label><input type="number" id="aPractical" value="2" min="0" max="10"></div>
+        </div>
+        <div class="alert alert-info">Marks: Easy=2, Moderate=5, Hard=8, Practical=10. AI generates and auto-grades all questions.</div>
+      </div>
+
+      <!-- Custom Panel -->
+      <div id="customPanel" style="display:none">
+        <div style="height:1px;background:var(--border);margin:16px 0"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span style="font-weight:700;font-size:14px">Questions <span id="customQCount" style="background:var(--primary);color:#fff;border-radius:20px;padding:1px 10px;font-size:12px;margin-left:6px">0</span></span>
+          <button class="btn btn-sm btn-primary" onclick="addCustomQuestion()"><i class="fas fa-plus"></i> Add Question</button>
+        </div>
+        <div id="customQList" style="display:flex;flex-direction:column;gap:12px;max-height:360px;overflow-y:auto;padding-right:4px"></div>
+        <div id="customQEmpty" style="text-align:center;padding:24px;color:var(--text-light);border:2px dashed var(--border);border-radius:10px">
+          <i class="fas fa-plus-circle" style="font-size:28px;margin-bottom:8px;display:block"></i>
+          Click <strong>Add Question</strong> to start building your assessment
+        </div>
+        <div style="margin-top:10px;font-size:12px;color:var(--text-light)">
+          <i class="fas fa-info-circle"></i> All question types are AI-graded automatically.
+        </div>
+      </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('createModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="createAssessment()" id="createBtn"><i class="fas fa-magic"></i> Generate with AI</button>
+      <button class="btn btn-primary" onclick="submitCreateAssessment()" id="createBtn">
+        <i class="fas fa-magic"></i> <span id="createBtnLabel">Generate with AI</span>
+      </button>
     </div>
   </div>
 </div>
@@ -231,7 +272,27 @@ function renderAssessments() {
     </div>`;
 }
 
-function openCreateModal() { openModal('createModal'); }
+// ─── Mode switching ───────────────────────────────────────────────
+let currentMode = 'ai';
+
+function switchMode(mode) {
+  currentMode = mode;
+  document.getElementById('aiPanel').style.display = mode === 'ai' ? '' : 'none';
+  document.getElementById('customPanel').style.display = mode === 'custom' ? '' : 'none';
+  document.getElementById('tabAI').style.background = mode === 'ai' ? 'var(--primary)' : 'var(--bg-card)';
+  document.getElementById('tabAI').style.color = mode === 'ai' ? '#fff' : 'var(--text)';
+  document.getElementById('tabCustom').style.background = mode === 'custom' ? 'var(--primary)' : 'var(--bg-card)';
+  document.getElementById('tabCustom').style.color = mode === 'custom' ? '#fff' : 'var(--text)';
+  document.getElementById('createBtnLabel').textContent = mode === 'ai' ? 'Generate with AI' : 'Save Assessment';
+  document.getElementById('createBtn').querySelector('i').className = mode === 'ai' ? 'fas fa-magic' : 'fas fa-save';
+}
+
+function openCreateModal() {
+  switchMode('ai');
+  customQuestions = [];
+  renderCustomQuestions();
+  openModal('createModal');
+}
 
 function prefillFromJob() {
   const sel = document.getElementById('aJob');
@@ -239,7 +300,116 @@ function prefillFromJob() {
   if (opt.value) document.getElementById('aTitle').value = `Assessment for ${opt.dataset.title}`;
 }
 
-async function createAssessment() {
+// ─── Custom question builder ───────────────────────────────────────
+let customQuestions = [];
+let customQIdCounter = 1;
+
+function addCustomQuestion() {
+  const id = customQIdCounter++;
+  customQuestions.push({ id, type: 'mcq', question: '', marks: 2, options: ['', '', '', ''], correct_answer: 0, correct_text: '', level: 'moderate' });
+  renderCustomQuestions();
+  // Scroll to bottom
+  setTimeout(() => {
+    const list = document.getElementById('customQList');
+    list.scrollTop = list.scrollHeight;
+  }, 50);
+}
+
+function removeCustomQuestion(id) {
+  customQuestions = customQuestions.filter(q => q.id !== id);
+  renderCustomQuestions();
+}
+
+function updateCustomQ(id, field, value) {
+  const q = customQuestions.find(x => x.id === id);
+  if (!q) return;
+  q[field] = value;
+  if (field === 'type') renderCustomQuestions(); // re-render on type change
+}
+
+function updateCustomOption(qId, optIdx, value) {
+  const q = customQuestions.find(x => x.id === qId);
+  if (q) q.options[optIdx] = value;
+}
+
+function renderCustomQuestions() {
+  const list = document.getElementById('customQList');
+  const empty = document.getElementById('customQEmpty');
+  document.getElementById('customQCount').textContent = customQuestions.length;
+  if (!customQuestions.length) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = customQuestions.map((q, idx) => {
+    const typeOpts = [
+      { v: 'mcq', l: 'MCQ' },
+      { v: 'fill_blank', l: 'Fill in the Blank' },
+      { v: 'typing', l: 'Written / Typing' }
+    ].map(o => `<option value="${o.v}" ${q.type===o.v?'selected':''}>${o.l}</option>`).join('');
+
+    let answerHtml = '';
+    if (q.type === 'mcq') {
+      answerHtml = `
+        <div style="margin-top:10px">
+          <label style="font-size:12px;font-weight:600;color:var(--text-light)">OPTIONS — tick the correct one</label>
+          ${[0,1,2,3].map(i => `
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+              <input type="radio" name="correct_${q.id}" value="${i}" ${q.correct_answer===i?'checked':''} onchange="updateCustomQ(${q.id},'correct_answer',${i})" title="Mark as correct">
+              <input type="text" placeholder="Option ${String.fromCharCode(65+i)}" value="${q.options[i]||''}" oninput="updateCustomOption(${q.id},${i},this.value)"
+                style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px">
+            </div>`).join('')}
+        </div>`;
+    } else if (q.type === 'fill_blank') {
+      answerHtml = `
+        <div style="margin-top:10px">
+          <label style="font-size:12px;font-weight:600;color:var(--text-light)">CORRECT ANSWER (used for auto-grading)</label>
+          <input type="text" placeholder="Expected answer..." value="${q.correct_text||''}" oninput="updateCustomQ(${q.id},'correct_text',this.value);updateCustomQ(${q.id},'correct_answer',this.value)"
+            style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;margin-top:6px">
+        </div>`;
+    } else {
+      answerHtml = `<div style="margin-top:8px;font-size:12px;color:var(--text-light)"><i class="fas fa-robot"></i> AI will grade this answer automatically based on content quality.</div>`;
+    }
+
+    return `
+      <div style="background:var(--bg-card);border:1.5px solid var(--border);border-radius:10px;padding:14px;position:relative">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-weight:700;font-size:13px;color:var(--text-light);min-width:24px">Q${idx+1}</span>
+          <select onchange="updateCustomQ(${q.id},'type',this.value)"
+            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600">
+            ${typeOpts}
+          </select>
+          <select onchange="updateCustomQ(${q.id},'level',this.value)"
+            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px">
+            <option value="easy" ${q.level==='easy'?'selected':''}>Easy</option>
+            <option value="moderate" ${q.level==='moderate'?'selected':''}>Moderate</option>
+            <option value="hard" ${q.level==='hard'?'selected':''}>Hard</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+            <label style="font-size:12px;font-weight:600">Marks</label>
+            <input type="number" value="${q.marks}" min="1" max="20" onchange="updateCustomQ(${q.id},'marks',parseInt(this.value)||1)"
+              style="width:58px;padding:5px;border:1.5px solid var(--border);border-radius:7px;text-align:center;font-size:13px">
+          </div>
+          <button onclick="removeCustomQuestion(${q.id})" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:4px;font-size:14px" title="Remove"><i class="fas fa-trash"></i></button>
+        </div>
+        <textarea placeholder="Question text..." rows="2" oninput="updateCustomQ(${q.id},'question',this.value)"
+          style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:vertical">${q.question}</textarea>
+        ${answerHtml}
+      </div>`;
+  }).join('');
+}
+
+// ─── Submission dispatcher ─────────────────────────────────────────
+async function submitCreateAssessment() {
+  if (currentMode === 'ai') {
+    await createAssessmentAI();
+  } else {
+    await createAssessmentCustom();
+  }
+}
+
+async function createAssessmentAI() {
   const jobId = document.getElementById('aJob').value;
   if (!jobId) { showToast('Please select a job', 'warning'); return; }
   const btn = document.getElementById('createBtn');
@@ -247,7 +417,7 @@ async function createAssessment() {
   try {
     const res = await API.post('/api/assessments', {
       job_id: parseInt(jobId),
-      title: document.getElementById('aTitle').value || `Assessment for Job`,
+      title: document.getElementById('aTitle').value || 'Assessment for Job',
       description: document.getElementById('aDesc').value,
       easy_count: parseInt(document.getElementById('aEasy').value) || 5,
       moderate_count: parseInt(document.getElementById('aModerate').value) || 5,
@@ -261,7 +431,58 @@ async function createAssessment() {
     closeModal('createModal');
     loadData();
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Generate with AI'; }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> <span id="createBtnLabel">Generate with AI</span>'; }
+}
+
+async function createAssessmentCustom() {
+  const jobId = document.getElementById('aJob').value;
+  if (!jobId) { showToast('Please select a job', 'warning'); return; }
+  if (!customQuestions.length) { showToast('Add at least one question', 'warning'); return; }
+  // Validate
+  for (let i = 0; i < customQuestions.length; i++) {
+    const q = customQuestions[i];
+    if (!q.question.trim()) { showToast(`Question ${i+1} has no text`, 'warning'); return; }
+    if (q.type === 'mcq') {
+      const filled = q.options.filter(o => o.trim()).length;
+      if (filled < 2) { showToast(`Question ${i+1}: MCQ needs at least 2 options`, 'warning'); return; }
+    }
+  }
+  const btn = document.getElementById('createBtn');
+  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  try {
+    // Build questions in the format the backend/grader expects
+    const questions = customQuestions.map((q, idx) => {
+      const base = {
+        id: idx + 1,
+        question: q.question.trim(),
+        type: q.type,
+        marks: q.marks,
+        level: q.level
+      };
+      if (q.type === 'mcq') {
+        return { ...base, options: q.options.filter(o => o.trim()), correct_answer: q.correct_answer, explanation: 'See correct option.' };
+      } else if (q.type === 'fill_blank') {
+        return { ...base, correct_answer: q.correct_answer || q.correct_text || '' };
+      } else {
+        return base; // typing — AI grades
+      }
+    });
+    const totalMarks = questions.reduce((s, q) => s + q.marks, 0);
+    const res = await API.post('/api/assessments/custom', {
+      job_id: parseInt(jobId),
+      title: document.getElementById('aTitle').value || 'Custom Assessment',
+      description: document.getElementById('aDesc').value,
+      questions,
+      total_marks: totalMarks,
+      duration_minutes: parseInt(document.getElementById('aDuration').value) || 30,
+      anti_cheat: document.getElementById('aAntiCheat').checked
+    });
+    showToast(`Custom assessment saved! ${questions.length} questions. Link copied!`, 'success', 5000);
+    copyToClipboard(res.link);
+    closeModal('createModal');
+    loadData();
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> <span id="createBtnLabel">Save Assessment</span>'; }
 }
 
 async function viewResults(id, title) {
@@ -325,30 +546,61 @@ async function viewDetailedAnswers(resultId, candidateName) {
     document.getElementById('answersTitle').innerHTML = `<i class="fas fa-tasks"></i> Answers by ${candidateName}`;
     let html = '';
     for (const q of data.questions) {
+      const typeLabel = { mcq: 'MCQ', fill_blank: 'Fill in the Blank', typing: 'Written Answer', practical: 'Practical' }[q.type] || q.type;
+      const typeBg = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
+      const typeColor = { mcq: '#2563eb', fill_blank: '#7c3aed', typing: '#059669', practical: '#d97706' }[q.type] || '#374151';
+      const editBtn = `<button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${q.id}', ${q.marks}, ${q.obtained_marks}, '${escapeHtml(q.feedback || '').replace(/'/g, "\\'")}')">Grade / Edit</button>`;
+      const correct = q.is_correct
+        ? '<span style="color:#059669;font-weight:700"><i class="fas fa-check-circle"></i> Correct</span>'
+        : '<span style="color:#dc2626;font-weight:700"><i class="fas fa-times-circle"></i> Incorrect</span>';
+
       if (q.type === 'mcq') {
         const userText = (q.user_answer !== undefined && q.user_answer !== -1 && q.options) ? (q.options[q.user_answer] || 'Invalid option') : 'Not answered';
         const correctText = (q.options && q.correct_answer !== undefined) ? (q.options[q.correct_answer] || 'N/A') : 'N/A';
         html += `
           <div class="card mb-4">
-            <div class="card-header"><strong>${escapeHtml(q.question)}</strong> (${q.marks} pts, Level: ${q.level})</div>
-            <div class="card-body">
-              <div><strong>Candidate Answer:</strong> ${escapeHtml(userText)}</div>
-              <div><strong>Correct Answer:</strong> ${escapeHtml(correctText)}</div>
-              <div><strong>Obtained Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <strong>${escapeHtml(q.question)}</strong>
+              <span style="background:${typeBg};color:${typeColor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${typeLabel}</span>
+            </div>
+            <div class="card-body" style="display:grid;gap:6px">
+              <div>${correct}</div>
+              <div><strong>Candidate:</strong> ${escapeHtml(userText)}</div>
+              <div><strong>Correct:</strong> ${escapeHtml(correctText)}</div>
+              <div><strong>Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
               <div><strong>Feedback:</strong> ${escapeHtml(q.feedback || 'No feedback')}</div>
-              <div class="mt-2"><button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${q.id}', ${q.marks}, ${q.obtained_marks}, '${escapeHtml(q.feedback || '').replace(/'/g, "\\'")}')">Edit Marks</button></div>
+              <div class="mt-2">${editBtn}</div>
+            </div>
+          </div>`;
+      } else if (q.type === 'fill_blank') {
+        html += `
+          <div class="card mb-4">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <strong>${escapeHtml(q.question)}</strong>
+              <span style="background:${typeBg};color:${typeColor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${typeLabel}</span>
+            </div>
+            <div class="card-body" style="display:grid;gap:6px">
+              <div>${correct}</div>
+              <div><strong>Candidate Answer:</strong> ${escapeHtml(q.user_answer || 'Not answered')}</div>
+              <div><strong>Expected Answer:</strong> ${escapeHtml(q.correct_answer || 'N/A')}</div>
+              <div><strong>Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
+              <div><strong>AI Feedback:</strong> ${escapeHtml(q.feedback || 'No feedback')}</div>
+              <div class="mt-2">${editBtn}</div>
             </div>
           </div>`;
       } else {
         html += `
           <div class="card mb-4">
-            <div class="card-header"><strong>[Practical] ${escapeHtml(q.question)}</strong> (${q.marks} pts)</div>
-            <div class="card-body">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <strong>${escapeHtml(q.question)}</strong>
+              <span style="background:${typeBg};color:${typeColor};padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700">${typeLabel}</span>
+            </div>
+            <div class="card-body" style="display:grid;gap:6px">
               <div><strong>Candidate Answer:</strong></div>
-              <pre style="background:#f8fafc;padding:12px;border-radius:8px;white-space:pre-wrap">${escapeHtml(q.user_answer || 'No answer provided')}</pre>
-              <div><strong>Obtained Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
-              <div><strong>Feedback:</strong> ${escapeHtml(q.feedback || 'Not graded yet')}</div>
-              <div class="mt-2"><button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${q.id}', ${q.marks}, ${q.obtained_marks}, '${escapeHtml(q.feedback || '').replace(/'/g, "\\'")}')">Grade / Edit</button></div>
+              <pre style="background:#f8fafc;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:13px">${escapeHtml(q.user_answer || 'No answer provided')}</pre>
+              <div><strong>Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
+              <div><strong>AI Feedback:</strong> ${escapeHtml(q.feedback || 'Not graded yet')}</div>
+              <div class="mt-2">${editBtn}</div>
             </div>
           </div>`;
       }
