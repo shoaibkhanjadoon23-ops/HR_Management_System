@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Deliberately generic title/robots — this page isn't linked from anywhere in the app,
+     but in case it's ever crawled, don't advertise that it's an admin login. -->
+<meta name="robots" content="noindex, nofollow">
+<title>Sign In</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="auth-body">
+<div class="auth-container" style="grid-template-columns:1fr">
+  <div class="auth-card" style="margin:auto">
+    <div class="auth-logo">
+      <div class="logo-icon"><i class="fas fa-shield-halved"></i></div>
+      <h1>HR<span>Pro</span></h1>
+      <p>Owner Console</p>
+    </div>
+    <form id="ownerLoginForm" class="auth-form">
+      <h2>Founder Sign In</h2>
+      <p class="form-subtitle">Restricted access</p>
+
+      <div class="form-group">
+        <label><i class="fas fa-envelope"></i> Email or Username</label>
+        <input type="text" id="email" autocomplete="username" placeholder="Enter email or username" required>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-lock"></i> Password</label>
+        <div class="password-wrap">
+          <input type="password" id="password" autocomplete="current-password" placeholder="Enter password" required>
+          <button type="button" class="pwd-toggle" onclick="togglePwd('password')"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+
+      <div id="loginError" class="alert alert-error" style="display:none"></div>
+
+      <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+        <span class="btn-text">Sign In</span>
+        <span class="btn-loader" style="display:none"><i class="fas fa-spinner fa-spin"></i></span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+const BACKEND_URL = "https://hrhiringpro-hrpro.hf.space";
+
+localStorage.removeItem('owner_token');
+
+document.getElementById('ownerLoginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  btn.querySelector('.btn-text').style.display = 'none';
+  btn.querySelector('.btn-loader').style.display = 'inline';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/owner/login`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+      })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('owner_token', data.access_token);
+      localStorage.setItem('owner_user', JSON.stringify(data.user));
+      window.location.href = '/owner_dashboard.html';
+    } else {
+      showError(data.detail || 'Login failed');
+    }
+  } catch (e) {
+    showError('Connection error. Please try again.');
+  } finally {
+    btn.querySelector('.btn-text').style.display = 'inline';
+    btn.querySelector('.btn-loader').style.display = 'none';
+    btn.disabled = false;
+  }
+});
+
+function showError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function togglePwd(id) {
+  const input = document.getElementById(id);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+</script>
+</body>
+</html>
