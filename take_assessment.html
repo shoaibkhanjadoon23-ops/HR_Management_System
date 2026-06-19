@@ -180,8 +180,10 @@ let proctorCheckInFlight = false;  // prevents overlapping detect() calls from q
 // ── Microphone / voice detection state ─────────────────────────────────
 let audioCtx = null, audioAnalyser = null, audioSource = null, micMonitorRAF = null;
 let micConfirmed = false;
-let voiceSampleWindow = []; // rolling true/false history of recent "loud" mic samples
+let voiceSampleWindow = []; // rolling true/false history of recent "voice-like" mic samples
 let micBaselineRms = 0.012; // ambient noise floor, measured per-candidate during setup (see calibrateMic)
+let voiceConditionStreak = 0; // consecutive poll cycles where the rolling window already looked like sustained speech
+let cachedFreqData = null;  // reused Uint8Array buffer for frequency-domain reads (avoid re-allocating every 100ms)
 
 // ── Gaze calibration (per-candidate "looking at the screen" reference pose) ─────
 let gazeBaselineYaw = 0;
@@ -201,15 +203,36 @@ const DEVICE_SCORE_THRESHOLD = 0.3; // lower threshold = catches phones held at 
 // these other classes, so we flag all of them as a precaution.
 const FLAGGED_OBJECTS = ['cell phone', 'remote', 'tablet', 'laptop'];
 
-// Voice detection tuning: threshold is RELATIVE to each candidate's own measured ambient
-// noise floor (micBaselineRms), not a fixed global number — a quiet room and a noisy room
-// need different absolute thresholds for "that's a voice", but the same relative jump works
-// for both. Uses a rolling window so natural pauses between words/syllables don't reset it.
-// Lowered delta/ratio + shorter window so quiet/low talking is caught quickly, not just
-// loud, sustained speech.
-const VOICE_DELTA = 0.006;           // how far above the candidate's own baseline counts as "talking"
-const VOICE_WINDOW_MS = 800;         // look at the last 0.8s of mic samples (faster reaction)
-const VOICE_ACTIVE_RATIO = 0.15;     // if >=15% of that window had sound above threshold -> flag
+// Voice detection tuning.
+//
+// Volume (RMS) alone can't tell a voice apart from environmental noise — a door closing,
+// a fan kicking in, papers shuffling, or a chair creak can all be just as "loud" as someone
+// talking. So loudness is only step one. A sample is only treated as "voice-like" if it is
+// ALSO loud in the right frequency range and has the right shape:
+//   1. isLoud      — RMS is above the candidate's own measured ambient noise floor.
+//   2. voiceRatio  — most of the spectral energy sits in the human speech band (~300-3400Hz),
+//                    which is where vowel formants live. Low rumble (AC hum, traffic) and
+//                    very high-frequency hiss mostly fall outside this band.
+//   3. peakiness   — speech has distinct formant peaks within that band (it's tonal), while
+//                    broadband noise (fan/static/wind) is comparatively flat across it.
+// Only when all three agree do we count the sample as "voice-like" — this is what filters
+// out environmental noise that was previously triggering false auto-submits.
+//
+// On top of that, "too fast" reactions are fixed with two layers of debounce:
+//   - a rolling window (VOICE_WINDOW_MS) so brief gaps between words/syllables don't reset
+//     the count, but also long enough to give the frequency analysis several samples to
+//     average over instead of judging a single 100ms slice (which is what made fast speech
+//     or a quick transient noise look identical to the old logic).
+//   - a streak requirement (VOICE_STREAK_NEEDED) so the window has to look like sustained
+//     speech for several consecutive checks in a row, not just once, before we auto-submit.
+const VOICE_DELTA = 0.006;            // how far above the candidate's own baseline counts as "loud"
+const VOICE_BAND_LOW_HZ = 300;        // lower bound of the human speech band we score against
+const VOICE_BAND_HIGH_HZ = 3400;      // upper bound (covers fundamentals + main formants)
+const VOICE_RATIO_MIN = 0.35;         // >=35% of total spectral energy must sit in the speech band
+const VOICE_PEAKINESS_MIN = 1.6;      // loudest bin in-band must be notably above the in-band average
+const VOICE_WINDOW_MS = 1500;         // look at the last 1.5s of mic samples
+const VOICE_ACTIVE_RATIO = 0.25;      // if >=25% of that window was voice-like -> count this cycle
+const VOICE_STREAK_NEEDED = 4;        // ...and that has to be true for 4 cycles in a row before submit
 const MIC_CHECK_MS = 100;
 
 // Gaze tuning: deviation is measured from the candidate's OWN calibrated "looking at the
@@ -636,6 +659,37 @@ function getCurrentRms() {
   return Math.sqrt(sumSquares / data.length);
 }
 
+// Frequency-domain check used to tell an actual voice apart from environmental noise that
+// happens to be loud. Returns how much of the spectrum sits in the speech band (voiceRatio)
+// and how "peaky"/tonal that band looks (peakiness) — see the tuning comment above for why
+// both are needed.
+function computeVoiceFeatures() {
+  if (!cachedFreqData || cachedFreqData.length !== audioAnalyser.frequencyBinCount) {
+    cachedFreqData = new Uint8Array(audioAnalyser.frequencyBinCount);
+  }
+  audioAnalyser.getByteFrequencyData(cachedFreqData);
+
+  const binHz = audioCtx.sampleRate / audioAnalyser.fftSize;
+  const lowBin = Math.max(0, Math.floor(VOICE_BAND_LOW_HZ / binHz));
+  const highBin = Math.min(cachedFreqData.length - 1, Math.ceil(VOICE_BAND_HIGH_HZ / binHz));
+
+  let totalEnergy = 0, voiceEnergy = 0, peak = 0;
+  for (let i = 0; i < cachedFreqData.length; i++) {
+    const v = cachedFreqData[i];
+    totalEnergy += v;
+    if (i >= lowBin && i <= highBin) {
+      voiceEnergy += v;
+      if (v > peak) peak = v;
+    }
+  }
+  const bandWidth = Math.max(1, highBin - lowBin + 1);
+  const voiceMean = voiceEnergy / bandWidth;
+  const voiceRatio = totalEnergy > 0 ? voiceEnergy / totalEnergy : 0;
+  const peakiness = voiceMean > 0.5 ? peak / voiceMean : 0; // guard against near-silence divide-by-tiny-number
+
+  return { voiceRatio, peakiness };
+}
+
 // MediaPipe FaceMesh indices: 1 ≈ nose tip, 33 = right eye outer, 263 = left eye outer.
 // Returns normalized horizontal (yaw) and vertical (pitch) offset of the eye-midpoint from
 // the nose, scaled by face width — this stays meaningful regardless of distance from camera.
@@ -793,26 +847,46 @@ function pollMicVolume() {
   const micText = document.getElementById('proctorMicText');
   const isLoud = rms >= (micBaselineRms + VOICE_DELTA);
 
+  // Only bother with the (slightly pricier) frequency analysis when something is loud
+  // enough to matter — silence/ambient-floor samples are cheaply rejected by isLoud first.
+  let isVoiceLike = false;
+  if (isLoud) {
+    const { voiceRatio, peakiness } = computeVoiceFeatures();
+    isVoiceLike = voiceRatio >= VOICE_RATIO_MIN && peakiness >= VOICE_PEAKINESS_MIN;
+  }
+
   // Rolling window of recent samples — real speech has brief silent gaps between
   // words/syllables that would otherwise keep resetting a strict continuous timer
-  // and never trigger. Instead we ask: "was there sound for a chunk of the last
-  // VOICE_WINDOW_MS, not necessarily all of it?"
+  // and never trigger. Instead we ask: "was a chunk of the last VOICE_WINDOW_MS
+  // voice-like, not necessarily all of it?"
   const maxSamples = Math.ceil(VOICE_WINDOW_MS / MIC_CHECK_MS);
-  voiceSampleWindow.push(isLoud);
+  voiceSampleWindow.push(isVoiceLike);
   if (voiceSampleWindow.length > maxSamples) voiceSampleWindow.shift();
 
   const activeCount = voiceSampleWindow.filter(Boolean).length;
   const activeRatio = activeCount / voiceSampleWindow.length;
+  const windowLooksLikeSpeech = voiceSampleWindow.length >= maxSamples && activeRatio >= VOICE_ACTIVE_RATIO;
 
-  if (isLoud && micText) {
+  if (isVoiceLike && micText) {
     micText.className = 'proctor-status-text issue';
     micText.innerHTML = '<i class="fas fa-microphone" style="font-size:9px"></i> Voice detected...';
+  } else if (isLoud && micText) {
+    // Loud but didn't pass the voice-band/peakiness check — almost certainly environmental
+    // noise rather than someone talking, so we don't scare the candidate with "voice detected".
+    micText.className = 'proctor-status-text ok';
+    micText.innerHTML = '<i class="fas fa-volume-up" style="font-size:9px"></i> Mic monitoring';
   } else if (micText) {
     micText.className = 'proctor-status-text ok';
     micText.innerHTML = '<i class="fas fa-microphone" style="font-size:9px"></i> Mic monitoring';
   }
 
-  if (voiceSampleWindow.length >= maxSamples && activeRatio >= VOICE_ACTIVE_RATIO) {
+  // Second debounce layer: the window has to keep looking like sustained speech for several
+  // consecutive cycles in a row (not just the instant it first fills up) before we act on it.
+  // This is what stops a quick door-slam, cough, or chair creak — which can momentarily pass
+  // the voice-band check too — from instantly auto-submitting.
+  voiceConditionStreak = windowLooksLikeSpeech ? voiceConditionStreak + 1 : 0;
+
+  if (voiceConditionStreak >= VOICE_STREAK_NEEDED) {
     autoSubmit('Talking/voice was detected near the microphone during the assessment', true);
     return;
   }
@@ -836,6 +910,8 @@ function stopProctoring() {
   if (proctorInterval) { clearInterval(proctorInterval); proctorInterval = null; }
   if (gazeInterval) { clearInterval(gazeInterval); gazeInterval = null; }
   if (micMonitorRAF) { clearTimeout(micMonitorRAF); micMonitorRAF = null; }
+  voiceSampleWindow = [];
+  voiceConditionStreak = 0;
   if (proctorStream) { proctorStream.getTracks().forEach(t => t.stop()); proctorStream = null; }
   if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
   if (audioSource) { try { audioSource.disconnect(); } catch(e) {} audioSource = null; }
