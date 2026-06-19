@@ -136,6 +136,27 @@
   </div>
 </div>
 
+
+<!-- Delete Assessment Confirmation Modal -->
+<div id="deleteAssessmentModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <h3><i class="fas fa-trash" style="color:var(--danger,#dc2626)"></i> Delete Assessment</h3>
+      <button class="modal-close" onclick="closeModal('deleteAssessmentModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p>Are you sure you want to delete <strong id="deleteAssessmentName"></strong>?</p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:12px;margin-top:12px">
+        <i class="fas fa-exclamation-triangle"></i>
+        <strong> This will permanently delete the assessment and all candidate results.</strong> This cannot be undone.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('deleteAssessmentModal')">Cancel</button>
+      <button class="btn btn-danger" id="confirmDeleteAssessmentBtn" onclick="deleteAssessment()"><i class="fas fa-trash"></i> Delete</button>
+    </div>
+  </div>
+</div>
 <script src="/static/app.js"></script>
 <script>
 // ⚠️ Must match the Hugging Face backend URL defined in app.js
@@ -198,7 +219,10 @@ function renderAssessments() {
                 <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${fixedLink}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
                 <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},'${a.title}')"><i class="fas fa-chart-bar"></i> Results</button>
               </div>
-              <div><button class="btn btn-sm btn-secondary" onclick="toggleActive(${a.id},${!a.is_active})">${a.is_active ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button></div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-secondary" onclick="toggleActive(${a.id},${!a.is_active})" title="${a.is_active ? 'Deactivate' : 'Activate'}">${a.is_active ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button>
+                <button class="btn btn-sm btn-danger" onclick="confirmDeleteAssessment(${a.id})" title="Delete Assessment"><i class="fas fa-trash"></i></button>
+              </div>
             </div>
             <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px"><i class="fas fa-link"></i> <span style="color:var(--text-light)">${fixedLink}</span></div>
           </div>
@@ -385,6 +409,32 @@ async function toggleActive(id, active) {
 }
 
 loadData();
+
+let pendingDeleteAssessmentId = null;
+function confirmDeleteAssessment(id) {
+  pendingDeleteAssessmentId = id;
+  const a = assessments.find(x => x.id === id);
+  document.getElementById("deleteAssessmentName").textContent = a ? a.title : 'this assessment';
+  openModal("deleteAssessmentModal");
+}
+async function deleteAssessment() {
+  if (!pendingDeleteAssessmentId) return;
+  const btn = document.getElementById("confirmDeleteAssessmentBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+  try {
+    await API.delete(`/api/assessments/${pendingDeleteAssessmentId}`);
+    showToast("Assessment deleted successfully", "success");
+    closeModal("deleteAssessmentModal");
+    pendingDeleteAssessmentId = null;
+    loadData();
+  } catch(e) {
+    showToast("Error deleting assessment: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+  }
+}
 </script>
 </body>
 </html>
