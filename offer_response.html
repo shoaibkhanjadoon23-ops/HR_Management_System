@@ -7,18 +7,17 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body style="background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
-<div style="max-width:500px;width:100%;background:white;border-radius:20px;padding:48px;text-align:center;box-shadow:var(--shadow-lg)">
-  {% if action == 'accepted' %}
-  <div style="font-size:72px;margin-bottom:20px">🎉</div>
-  <h1 style="font-size:28px;font-weight:800;color:var(--success);margin-bottom:12px">Welcome to the Team!</h1>
-  {% else %}
-  <div style="font-size:72px;margin-bottom:20px">👋</div>
-  <h1 style="font-size:28px;font-weight:800;color:var(--text);margin-bottom:12px">Thank You</h1>
-  {% endif %}
-  <p style="font-size:16px;line-height:1.7;color:var(--text-light);margin-bottom:24px">{{ message }}</p>
-  {% if action == 'accepted' %}
-  <div class="alert alert-success"><i class="fas fa-envelope"></i> A welcome email has been sent to your inbox with all the details you need for your first day.</div>
-  {% endif %}
+<div id="card" style="max-width:500px;width:100%;background:white;border-radius:20px;padding:48px;text-align:center;box-shadow:var(--shadow-lg)">
+  <div id="spinner">
+    <div style="font-size:48px;margin-bottom:20px"><i class="fas fa-spinner fa-spin"></i></div>
+    <p style="color:var(--text-light)">Recording your response...</p>
+  </div>
+  <div id="result" style="display:none">
+    <div id="resultIcon" style="font-size:72px;margin-bottom:20px"></div>
+    <h1 id="resultTitle" style="font-size:28px;font-weight:800;margin-bottom:12px"></h1>
+    <p id="resultMessage" style="font-size:16px;line-height:1.7;color:var(--text-light);margin-bottom:24px"></p>
+    <div id="welcomeAlert" class="alert alert-success" style="display:none"><i class="fas fa-envelope"></i> A welcome email has been sent to your inbox with all the details you need for your first day.</div>
+  </div>
   <div style="margin-top:24px;font-size:13px;color:var(--text-light)">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px">
       <div style="width:32px;height:32px;background:var(--gradient);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:14px"><i class="fas fa-users-cog"></i></div>
@@ -26,5 +25,82 @@
     </div>
   </div>
 </div>
+
+<script>
+const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
+
+// Path is /offer-response/{offer_id}/{accept|decline}
+const segments = window.location.pathname.split('/').filter(Boolean);
+const offerId = parseInt(segments[segments.length - 2], 10);
+const action = segments[segments.length - 1]; // "accept" or "decline"
+
+function showResult({ icon, title, message, success, showWelcome }) {
+  document.getElementById('spinner').style.display = 'none';
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('resultIcon').textContent = icon;
+  const titleEl = document.getElementById('resultTitle');
+  titleEl.textContent = title;
+  titleEl.style.color = success ? 'var(--success)' : 'var(--text)';
+  document.getElementById('resultMessage').textContent = message;
+  if (showWelcome) document.getElementById('welcomeAlert').style.display = 'block';
+}
+
+async function submitResponse() {
+  if (!offerId || !['accept', 'decline'].includes(action)) {
+    showResult({
+      icon: '⚠️', title: 'Invalid Link',
+      message: 'This offer link looks incomplete or incorrect. Please use the link from your offer email, or contact HR.',
+      success: false
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/offers/${offerId}/respond`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action === 'accept' ? 'accept' : 'decline' })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      showResult({
+        icon: '⚠️', title: 'Something Went Wrong',
+        message: data.detail || 'We could not record your response. Please contact HR directly.',
+        success: false
+      });
+      return;
+    }
+
+    if (data.status === 'accepted') {
+      showResult({
+        icon: '🎉', title: 'Welcome to the Team!',
+        message: "Thank you for accepting the offer! We're thrilled to have you join us. Our HR team will be in touch shortly with next steps.",
+        success: true, showWelcome: true
+      });
+    } else if (data.status === 'declined') {
+      showResult({
+        icon: '👋', title: 'Thank You',
+        message: "Thank you for letting us know. We appreciate the time you took to consider this opportunity and wish you all the best.",
+        success: false
+      });
+    } else {
+      showResult({
+        icon: 'ℹ️', title: 'Already Responded',
+        message: data.message || 'A response has already been recorded for this offer.',
+        success: false
+      });
+    }
+  } catch (e) {
+    showResult({
+      icon: '⚠️', title: 'Connection Error',
+      message: 'We could not reach the server to record your response. Please try again or contact HR directly.',
+      success: false
+    });
+  }
+}
+
+submitResponse();
+</script>
 </body>
 </html>
