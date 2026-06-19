@@ -189,7 +189,7 @@ let gazeBaselinePitch = 0;
 let gazeCalibrated = false;
 
 const PROCTOR_CHECK_MS = 350;      // how often we analyze a frame for object/face-count
-const GAZE_CHECK_MS = 120;         // dedicated, lightweight gaze-only loop — runs independently
+const GAZE_CHECK_MS = 150;         // dedicated, lightweight gaze-only loop — runs independently
                                     // and much faster than PROCTOR_CHECK_MS so a quick left/right
                                     // glance is still caught even if the candidate's head is back
                                     // to center by the time the next heavy object-detection cycle runs
@@ -216,7 +216,11 @@ const MIC_CHECK_MS = 100;
 // screen" pose (captured during setup), not an absolute zero — this catches small/slight
 // turns reliably regardless of where their camera is physically angled.
 const GAZE_THRESHOLD = 0.085;      // lower = more sensitive to slight/fast turns
-const GAZE_AWAY_GRACE_CHECKS = 1;  // instant — first away-check submits
+const GAZE_AWAY_STREAK_NEEDED = 2; // require 2 consecutive over-threshold checks (~240ms at
+                                    // GAZE_CHECK_MS) before submitting — small buffer so a single
+                                    // noisy frame / blink doesn't instantly trigger, while still
+                                    // catching genuine fast left-right glances almost immediately
+let gazeAwayStreak = 0;            // consecutive over-threshold checks so far
 let gazeCheckInFlight = false;     // prevents overlapping estimateFaces() calls from queuing up
 
 async function loadAssessment() {
@@ -693,12 +697,17 @@ async function runGazeCheck() {
   try { faces = await proctorModels.face.estimateFaces(video); } catch (e) {}
   gazeCheckInFlight = false;
 
-  if (faces.length !== 1) return; // face-count / no-face violations are handled by runProctorCheck
+  if (faces.length !== 1) { gazeAwayStreak = 0; return; } // face-count/no-face handled by runProctorCheck
   const g = computeGazeOffsets(faces[0]);
   if (!g) return;
   const deviation = Math.hypot(g.yaw - gazeBaselineYaw, g.pitch - gazeBaselinePitch);
   if (deviation > GAZE_THRESHOLD) {
-    autoSubmit('Looking away from the screen was detected', true);
+    gazeAwayStreak++;
+    if (gazeAwayStreak >= GAZE_AWAY_STREAK_NEEDED) {
+      autoSubmit('Looking away from the screen was detected', true);
+    }
+  } else {
+    gazeAwayStreak = 0;
   }
 }
 
