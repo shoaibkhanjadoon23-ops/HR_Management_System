@@ -254,8 +254,9 @@ async function submitChangePwd() {
   const new_password = document.getElementById('newPwd').value;
   const msg = document.getElementById('pwdMsg');
   try {
-    const res = await ownerFetch('/api/owner/change-password', {
+    const res = await fetch(`${BACKEND_URL}/api/owner/change-password`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ current_password, new_password })
     });
     const data = await res.json();
