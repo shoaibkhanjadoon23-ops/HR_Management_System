@@ -243,6 +243,29 @@ tr:hover td { background: #f8faff; }
 .timer-box.danger { background: var(--danger); animation: pulse .5s infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
 
+/* ── Interview Cards ──────────────────────────────────────── */
+.interview-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.interview-date {
+  flex-shrink: 0;
+  width: 64px;
+  text-align: center;
+  background: var(--primary-light);
+  border-radius: 10px;
+  padding: 10px 6px;
+}
+.interview-date .day { font-size: 22px; font-weight: 800; color: var(--primary-dark); line-height: 1.1; }
+.interview-date .month { font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-top: 2px; }
+
 /* ── Skill Gap ────────────────────────────────────────────── */
 .skill-gap-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .skill-gap-item:last-child { border-bottom: none; }
