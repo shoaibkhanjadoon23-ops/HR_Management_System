@@ -282,6 +282,8 @@ const pathSegments = window.location.pathname.split('/').filter(Boolean);
 const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
 const prefilledCode = new URLSearchParams(window.location.search).get('code') || '';
 
+console.log('[HRPro] Assessment page loaded. ID:', assessmentId);
+
 // ═════════════════════════════════════════════════════════════
 //  GLOBAL STATE
 // ═════════════════════════════════════════════════════════════
@@ -326,28 +328,18 @@ const state = {
 // ═════════════════════════════════════════════════════════════
 const CFG = {
   MAX_WARNINGS: 3,
-
-  // Head position — must be sustained to count as "look away"
-  HEAD_OFFSET_THRESHOLD: 0.34,      // nose x-offset / half face width; 0.34 ≈ ~30°
-  HEAD_SUSTAIN_MS: 1800,            // must be sustained this long
+  HEAD_OFFSET_THRESHOLD: 0.34,
+  HEAD_SUSTAIN_MS: 1800,
   NO_FACE_SUSTAIN_MS: 2000,
   MULTI_FACE_SUSTAIN_MS: 1500,
   PHONE_SUSTAIN_MS: 1500,
   VOICE_SUSTAIN_MS: 1800,
-
-  // Voice detection
-  VOICE_ENERGY_MIN: 95,             // avg 300-3400Hz energy (0-255)
-  VOICE_RMS_MIN: 0.09,              // requires near-mic loudness
-
-  // Phone detection
+  VOICE_ENERGY_MIN: 95,
+  VOICE_RMS_MIN: 0.09,
   PHONE_CONFIDENCE_MIN: 0.55,
-
-  // Cooldowns between warnings of same sensor
   CAM_COOLDOWN_MS: 8000,
   VOICE_COOLDOWN_MS: 8000,
   TAB_COOLDOWN_MS: 5000,
-
-  // Polling intervals
   FACE_CHECK_MS: 600,
   OBJECT_CHECK_MS: 2000,
   VOICE_CHECK_MS: 300,
@@ -363,9 +355,11 @@ if (prefilledCode) {
 // ═════════════════════════════════════════════════════════════
 async function loadAssessment() {
   try {
+    console.log('[HRPro] Fetching assessment details...');
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
     if (!res.ok) throw new Error('Assessment not found');
     assessment = await res.json();
+    console.log('[HRPro] Assessment loaded:', assessment);
     document.getElementById('jobTitle').textContent = assessment.title;
     state.timeLeftSeconds = assessment.duration_minutes * 60;
     applyGateMode();
@@ -462,11 +456,8 @@ function showCodeError(msg) {
 }
 
 function proceedToPermissionGate() {
-  if (assessment.anti_cheat === false) {
-    // No proctoring — straight into assessment
-    beginAssessment();
-    return;
-  }
+  console.log('[HRPro] Proceeding to permission gate...');
+  // ALWAYS show the permission gate, regardless of anti_cheat flag.
   document.getElementById('startGate').style.display = 'none';
   document.getElementById('permissionGate').style.display = 'block';
   document.getElementById('cameraPreview').style.display = 'block';
@@ -482,6 +473,7 @@ async function enableCamera() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
 
   try {
+    console.log('[HRPro] Requesting camera access...');
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 640, height: 480, facingMode: 'user' },
       audio: false,
@@ -500,6 +492,7 @@ async function enableCamera() {
     btn.disabled = true;
     document.getElementById('camPermRow').classList.add('granted');
     document.getElementById('permError').style.display = 'none';
+    console.log('[HRPro] Camera access granted.');
   } catch (e) {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-video"></i> Enable Camera';
@@ -507,6 +500,7 @@ async function enableCamera() {
     err.textContent = 'Camera access failed: ' + (e.message || 'permission denied') +
       '. Please allow camera access in your browser settings and try again.';
     err.style.display = 'block';
+    console.error('[HRPro] Camera access failed:', e);
   }
   checkReadyToStart();
 }
@@ -517,6 +511,7 @@ async function enableMic() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
 
   try {
+    console.log('[HRPro] Requesting microphone access...');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     state.micStream = stream;
 
@@ -529,6 +524,7 @@ async function enableMic() {
     btn.disabled = true;
     document.getElementById('micPermRow').classList.add('granted');
     document.getElementById('permError').style.display = 'none';
+    console.log('[HRPro] Microphone access granted.');
   } catch (e) {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-microphone"></i> Enable Microphone';
@@ -536,6 +532,7 @@ async function enableMic() {
     err.textContent = 'Microphone access failed: ' + (e.message || 'permission denied') +
       '. Please allow microphone access in your browser settings and try again.';
     err.style.display = 'block';
+    console.error('[HRPro] Microphone access failed:', e);
   }
   checkReadyToStart();
 }
@@ -568,12 +565,14 @@ function startMicLevelMeter(stream) {
 function checkReadyToStart() {
   const ready = !!state.cameraStream && !!state.micStream;
   document.getElementById('startAssessmentBtn').disabled = !ready;
+  if (ready) console.log('[HRPro] Both permissions granted. Start button unlocked.');
 }
 
 // ═════════════════════════════════════════════════════════════
 //  BEGIN ASSESSMENT
 // ═════════════════════════════════════════════════════════════
 async function beginAssessment() {
+  console.log('[HRPro] Starting assessment...');
   document.getElementById('permissionGate').style.display = 'none';
   document.getElementById('assessmentArea').style.display = 'block';
   document.getElementById('proctorBar').style.display = 'flex';
@@ -582,9 +581,8 @@ async function beginAssessment() {
   startTimer();
   state.startTime = Date.now();
 
-  if (assessment.anti_cheat !== false) {
-    await startProctoring();
-  }
+  // Always start proctoring if they granted permissions
+  await startProctoring();
 }
 
 function renderQuestions() {
@@ -659,33 +657,31 @@ function startTimer() {
 // ═════════════════════════════════════════════════════════════
 async function startProctoring() {
   try {
-    // Load face-api models
+    console.log('[HRPro] Initializing proctoring models...');
     const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
       faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath),
     ]);
 
-    // Load COCO-SSD for phone/gadget detection (best effort — continue if it fails)
     try {
+      console.log('[HRPro] Loading object detection model...');
       state.cocoModel = await cocoSsd.load();
     } catch (e) {
-      console.warn('COCO-SSD failed to load; phone detection disabled:', e);
+      console.warn('[HRPro] COCO-SSD failed to load; phone detection disabled:', e);
       state.cocoModel = null;
     }
 
-    // Start polling loops
     state.faceDetectTimer   = setInterval(checkFace, CFG.FACE_CHECK_MS);
     if (state.cocoModel) {
       state.objectDetectTimer = setInterval(checkObjects, CFG.OBJECT_CHECK_MS);
     }
     await startVoiceDetection();
 
-    // Listen for tab/app switches
     document.addEventListener('visibilitychange', onVisibilityChange);
+    console.log('[HRPro] Proctoring active.');
   } catch (e) {
-    console.error('Proctoring setup failed:', e);
-    // Don't auto-submit — just log and let candidate finish manually
+    console.error('[HRPro] Proctoring setup failed:', e);
   }
 }
 
@@ -701,7 +697,6 @@ async function checkFace() {
 
     const now = Date.now();
 
-    // ── No face at all ─────────────────────────────────
     if (detections.length === 0) {
       if (state.noFaceStart === null) state.noFaceStart = now;
       if (now - state.noFaceStart > CFG.NO_FACE_SUSTAIN_MS &&
@@ -715,7 +710,6 @@ async function checkFace() {
     }
     state.noFaceStart = null;
 
-    // ── More than one face ────────────────────────────
     if (detections.length > 1) {
       if (state.multiFaceStart === null) state.multiFaceStart = now;
       if (now - state.multiFaceStart > CFG.MULTI_FACE_SUSTAIN_MS &&
@@ -728,7 +722,6 @@ async function checkFace() {
     }
     state.multiFaceStart = null;
 
-    // ── Exactly 1 face: check head pose ───────────────
     const p = detections[0].landmarks.positions;
     const noseTip   = p[30];
     const leftFace  = p[16];
@@ -748,7 +741,7 @@ async function checkFace() {
       state.lookAwayStart = null;
     }
   } catch (e) {
-    // Transient detection error — silently skip this tick
+    // ignore transient errors
   }
 }
 
@@ -783,7 +776,6 @@ async function checkObjects() {
 async function startVoiceDetection() {
   if (!state.micStream) return;
   try {
-    // Cancel the mic-meter animation frame from the permission gate
     if (state.micLevelAnimFrame) {
       cancelAnimationFrame(state.micLevelAnimFrame);
       state.micLevelAnimFrame = null;
@@ -806,12 +798,10 @@ async function startVoiceDetection() {
       analyser.getByteFrequencyData(freqData);
       analyser.getByteTimeDomainData(timeData);
 
-      // Energy in 300-3400Hz (human speech band)
       let energy = 0;
       for (let i = voiceBinLo; i < voiceBinHi; i++) energy += freqData[i];
       energy /= (voiceBinHi - voiceBinLo);
 
-      // RMS — requires near-mic loudness (filters birds, traffic, distant chatter)
       let rms = 0;
       for (let i = 0; i < timeData.length; i++) {
         const v = (timeData[i] - 128) / 128;
@@ -845,8 +835,6 @@ function onVisibilityChange() {
   if (state.submitted) return;
 
   if (document.hidden) {
-    // Leaving the tab — pause proctoring so no-face detection doesn't
-    // fire while the user can't possibly be looking at the screen.
     state.paused = true;
     resetSustainTrackers();
     issueTabWarning('You left the assessment tab/app');
@@ -897,7 +885,6 @@ function issueVoiceWarning(reason) {
 }
 
 function issueTabWarning(reason) {
-  // Cooldown prevents rapid tab-switching from filling all 3 warnings instantly
   const now = Date.now();
   if (now - state.lastTabWarn < CFG.TAB_COOLDOWN_MS) return;
   state.lastTabWarn = now;
@@ -930,7 +917,6 @@ function updateWarnUI() {
 function flashCounter(id) {
   const el = document.getElementById(id);
   el.classList.remove('flash');
-  // Trigger reflow so the animation restarts
   void el.offsetWidth;
   el.classList.add('flash');
 }
@@ -969,7 +955,6 @@ async function submitAssessment(type = 'manual', reason = null) {
   if (state.submitted) return;
   state.submitted = true;
 
-  // Stop all timers and streams
   clearInterval(state.timerInterval);
   clearInterval(state.faceDetectTimer);
   clearInterval(state.objectDetectTimer);
