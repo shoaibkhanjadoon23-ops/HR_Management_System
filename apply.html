@@ -5,6 +5,54 @@
 <title>Apply for Job - HRPro</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+/* Application-code display block shown on the success screen */
+.code-reveal {
+  margin: 24px auto 0;
+  max-width: 460px;
+  padding: 20px;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  border: 2px dashed #6366f1;
+  border-radius: 14px;
+  text-align: center;
+}
+.code-reveal .label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4f46e5;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.code-reveal .code {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 6px;
+  color: #4338ca;
+  margin: 10px 0;
+  font-family: 'Courier New', monospace;
+  user-select: all;
+}
+.code-reveal .hint {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+.code-reveal .copy-btn {
+  margin-top: 12px;
+  padding: 8px 18px;
+  background: white;
+  border: 1.5px solid #6366f1;
+  color: #4f46e5;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.code-reveal .copy-btn:hover { background: #6366f1; color: white; }
+.code-reveal .copy-btn.copied { background: #059669; border-color: #059669; color: white; }
+</style>
 </head>
 <body style="background:#f8fafc">
 <div class="apply-page" id="applyPage">
@@ -12,7 +60,7 @@
 </div>
 
 <script>
-// Get job ID from the URL path (e.g., /apply/123)
+// Get job ID from the URL query string (e.g., /apply.html?job=123)
 const jobId = parseInt(new URLSearchParams(window.location.search).get('job'), 10);
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 let job = null;
@@ -20,11 +68,16 @@ let job = null;
 async function loadJob() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/jobs/${jobId}/public`);
-    if (!res.ok) { document.getElementById('applyPage').innerHTML = '<div class="alert alert-error">Job not found or no longer active.</div>'; return; }
+    if (!res.ok) {
+      document.getElementById('applyPage').innerHTML =
+        '<div class="alert alert-error">Job not found or no longer active.</div>';
+      return;
+    }
     job = await res.json();
     renderForm();
-  } catch(e) {
-    document.getElementById('applyPage').innerHTML = '<div class="alert alert-error">Error loading job. Please try again.</div>';
+  } catch (e) {
+    document.getElementById('applyPage').innerHTML =
+      '<div class="alert alert-error">Error loading job. Please try again.</div>';
   }
 }
 
@@ -38,7 +91,7 @@ function renderForm() {
   }
 
   const sections = job.form_fields?.sections || getDefaultSections();
-  
+
   document.getElementById('applyPage').innerHTML = `
     <div class="apply-header">
       <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-briefcase"></i> Job Application</div>
@@ -69,7 +122,7 @@ function renderForm() {
             </div>
           </div>
         </div>`).join('')}
-      
+
       <!-- CV Upload Field -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><h3><i class="fas fa-file-alt"></i> CV/Resume Upload</h3></div>
@@ -84,7 +137,7 @@ function renderForm() {
 
       <div id="submitSection" style="text-align:center;margin-top:20px">
         <div id="appError" class="alert alert-error" style="display:none"></div>
-        <div id="appSuccess" class="alert alert-success" style="display:none"></div>
+        <div id="appSuccess" style="display:none"></div>
         <button type="submit" class="btn btn-primary" id="submitBtn" style="font-size:16px;padding:14px 50px">
           <span class="btn-text"><i class="fas fa-paper-plane"></i> Submit Application</span>
           <span class="btn-loader" style="display:none"><i class="fas fa-spinner fa-spin"></i> Submitting...</span>
@@ -92,7 +145,7 @@ function renderForm() {
         <p class="text-xs text-light mt-4">By submitting, you confirm all information is accurate.</p>
       </div>
     </form>`;
-    
+
   document.getElementById('applicationForm').addEventListener('submit', submitApp);
 }
 
@@ -114,8 +167,11 @@ function getDefaultSections() {
 
 function renderField(field) {
   const req = field.required ? '<span style="color:red">*</span>' : '';
-  const isFullWidth = ['textarea','file'].includes(field.type) || field.id?.includes('cover') || field.id?.includes('address') || field.id?.includes('description');
-  
+  const isFullWidth = ['textarea','file'].includes(field.type)
+    || field.id?.includes('cover')
+    || field.id?.includes('address')
+    || field.id?.includes('description');
+
   let input = '';
   if (field.type === 'textarea') {
     input = `<textarea name="${field.id}" id="field_${field.id}" rows="4" placeholder="${field.placeholder||''}" ${field.required?'required':''}></textarea>`;
@@ -142,7 +198,7 @@ function renderField(field) {
     const t = field.type === 'phone' ? 'tel' : field.type === 'email' ? 'email' : 'text';
     input = `<input type="${t}" name="${field.id}" id="field_${field.id}" placeholder="${field.placeholder||''}" ${field.required?'required':''}>`;
   }
-  
+
   return `<div class="form-group ${isFullWidth ? 'form-group-full' : ''}">
     <label for="field_${field.id}">${field.label} ${req}</label>
     ${input}
@@ -151,20 +207,24 @@ function renderField(field) {
 
 async function submitApp(e) {
   e.preventDefault();
+
   const btn = document.getElementById('submitBtn');
   const fileInput = document.getElementById('cv_file');
+
   if (!fileInput.files.length) {
     alert('Please upload your CV/Resume');
     return;
   }
-  
+
   btn.querySelector('.btn-text').style.display = 'none';
   btn.querySelector('.btn-loader').style.display = 'inline';
   btn.disabled = true;
-  
+
+  document.getElementById('appError').style.display = 'none';
+
   const form = document.getElementById('applicationForm');
   const formData = new FormData(form);
-  
+
   // Collect regular fields into payload JSON
   const data = {};
   for (const [key, val] of formData.entries()) {
@@ -177,7 +237,7 @@ async function submitApp(e) {
       }
     }
   }
-  
+
   const payload = {
     ...data,
     full_name: data.full_name || data.name || '',
@@ -185,55 +245,135 @@ async function submitApp(e) {
     phone: data.phone || '',
     experience_years: parseFloat(data.experience_years) || 0,
     cgpa: parseFloat(data.cgpa) || 0,
-    skills: data.skills ? (Array.isArray(data.skills) ? data.skills : data.skills.split(',').map(s=>s.trim())) : [],
+    skills: data.skills
+      ? (Array.isArray(data.skills) ? data.skills : data.skills.split(',').map(s => s.trim()))
+      : [],
     cover_letter: data.cover_letter || ''
   };
-  
+
   const submitData = new FormData();
   submitData.append('payload', JSON.stringify(payload));
   submitData.append('cv_file', fileInput.files[0]);
-  
+
   try {
     const res = await fetch(`${BACKEND_URL}/api/apply/${jobId}`, {
       method: 'POST',
       body: submitData
     });
     const result = await res.json();
-    
+
     if (res.ok) {
-      document.getElementById('applicationForm').style.display = 'none';
-      document.getElementById('appSuccess').style.display = 'block';
-      document.getElementById('appSuccess').innerHTML = `
-        <i class="fas fa-check-circle" style="font-size:24px"></i><br>
-        <b>Application Submitted Successfully!</b><br>
-        <p style="margin-top:8px">Thank you for applying. We'll review your application and get back to you within 5-7 business days. A confirmation email has been sent to your email address.</p>
-        <div style="margin-top:12px">
-          <div style="font-size:32px">🎉</div>
-          <p class="text-sm mt-2">Application ID: #${result.application_id}</p>
-        </div>`;
-      
-      // Company rating section
-      document.getElementById('submitSection').insertAdjacentHTML('afterbegin', `
-        <div class="card mt-4" style="text-align:center;padding:20px">
-          <h3 style="margin-bottom:12px">Rate Your Application Experience</h3>
-          <div class="star-rating" style="justify-content:center;margin-bottom:12px" id="companyRating">
-            ${[1,2,3,4,5].map(i=>`<span class="star" onclick="rateCompany(${result.application_id},${i})" style="font-size:32px">★</span>`).join('')}
-          </div>
-          <textarea id="ratingFeedback" placeholder="Share your feedback (optional)..." rows="2" style="width:100%;max-width:400px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit"></textarea>
-          <br><button class="btn btn-secondary mt-2" onclick="submitRating(${result.application_id})">Submit Rating</button>
-        </div>`);
+      renderSuccessScreen(result);
     } else {
-      document.getElementById('appError').textContent = result.detail || 'Submission failed';
-      document.getElementById('appError').style.display = 'block';
+      const errorEl = document.getElementById('appError');
+      errorEl.textContent = result.detail || 'Submission failed';
+      errorEl.style.display = 'block';
+      btn.querySelector('.btn-text').style.display = 'inline';
+      btn.querySelector('.btn-loader').style.display = 'none';
+      btn.disabled = false;
     }
-  } catch(err) {
-    document.getElementById('appError').textContent = 'Network error. Please try again.';
-    document.getElementById('appError').style.display = 'block';
-  } finally {
+  } catch (err) {
+    const errorEl = document.getElementById('appError');
+    errorEl.textContent = 'Network error. Please try again.';
+    errorEl.style.display = 'block';
     btn.querySelector('.btn-text').style.display = 'inline';
     btn.querySelector('.btn-loader').style.display = 'none';
     btn.disabled = false;
   }
+}
+
+function renderSuccessScreen(result) {
+  // Hide the form and the original submit button block
+  document.getElementById('applicationForm').style.display = 'none';
+
+  const successEl = document.getElementById('appSuccess');
+  successEl.style.display = 'block';
+  successEl.innerHTML = `
+    <div class="card" style="padding:32px 24px;text-align:center;margin-bottom:16px">
+      <div style="font-size:56px;margin-bottom:12px">🎉</div>
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:8px;color:#059669">
+        Application Submitted Successfully!
+      </h2>
+      <p style="font-size:14px;line-height:1.7;color:#6b7280;max-width:520px;margin:0 auto">
+        Thank you for applying. We will review your application and get back to you within
+        5–7 business days. A confirmation email has been sent to
+        <b>${result.applicant_email || 'your inbox'}</b>.
+      </p>
+
+      <!-- Application Code Reveal -->
+      <div class="code-reveal">
+        <div class="label">Your Application Code</div>
+        <div class="code" id="appCode">${result.application_code || '--------'}</div>
+        <button class="copy-btn" id="copyCodeBtn" onclick="copyAppCode()">
+          <i class="fas fa-copy"></i> Copy Code
+        </button>
+        <div class="hint">
+          <i class="fas fa-info-circle"></i>
+          <b>Save this code — you will need it to take the assessment if you are shortlisted.</b><br>
+          Each code can only be used once. A copy has also been sent to your email.
+        </div>
+      </div>
+
+      <p style="font-size:12px;color:#9ca3af;margin-top:18px">
+        Application ID: #${result.application_id}
+      </p>
+    </div>
+
+    <!-- Company Rating Section -->
+    <div class="card" style="padding:24px;text-align:center;margin-bottom:16px">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">
+        Rate Your Application Experience
+      </h3>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
+        Your feedback helps us improve the process for future candidates.
+      </p>
+      <div class="star-rating" style="justify-content:center;margin-bottom:16px" id="companyRating">
+        ${[1,2,3,4,5].map(i =>
+          `<span class="star" onclick="rateCompany(${result.application_id},${i})"
+                 style="font-size:36px;cursor:pointer">★</span>`
+        ).join('')}
+      </div>
+      <textarea id="ratingFeedback" rows="2" placeholder="Share your feedback (optional)..."
+        style="width:100%;max-width:460px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+      <br>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="submitRating(${result.application_id})">
+        <i class="fas fa-star"></i> Submit Rating
+      </button>
+    </div>
+  `;
+
+  // Scroll to top so the candidate sees the success message immediately
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function copyAppCode() {
+  const code = document.getElementById('appCode').textContent.trim();
+  if (!code || code === '--------') return;
+
+  // Prefer clipboard API; fall back to a hidden textarea for older browsers
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(code).then(() => markCopied());
+  } else {
+    const tmp = document.createElement('textarea');
+    tmp.value = code;
+    tmp.style.position = 'fixed';
+    tmp.style.opacity = '0';
+    document.body.appendChild(tmp);
+    tmp.select();
+    try { document.execCommand('copy'); markCopied(); } catch (e) { /* ignore */ }
+    document.body.removeChild(tmp);
+  }
+}
+
+function markCopied() {
+  const btn = document.getElementById('copyCodeBtn');
+  const original = btn.innerHTML;
+  btn.classList.add('copied');
+  btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+  setTimeout(() => {
+    btn.classList.remove('copied');
+    btn.innerHTML = original;
+  }, 2000);
 }
 
 let selectedRating = 0;
@@ -241,6 +381,7 @@ function rateCompany(appId, rating) {
   selectedRating = rating;
   document.querySelectorAll('#companyRating .star').forEach((s, i) => {
     s.classList.toggle('active', i < rating);
+    s.style.color = i < rating ? '#f59e0b' : '#d1d5db';
   });
 }
 
@@ -249,11 +390,22 @@ async function submitRating(appId) {
   try {
     await fetch(`${BACKEND_URL}/api/applications/${appId}/rate-company`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({rating: selectedRating, feedback: document.getElementById('ratingFeedback').value})
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rating: selectedRating,
+        feedback: document.getElementById('ratingFeedback').value
+      })
     });
     alert('Thank you for your rating!');
-  } catch(e) { alert('Error submitting rating'); }
+    selectedRating = 0;
+    document.querySelectorAll('#companyRating .star').forEach(s => {
+      s.classList.remove('active');
+      s.style.color = '#d1d5db';
+    });
+    document.getElementById('ratingFeedback').value = '';
+  } catch (e) {
+    alert('Error submitting rating');
+  }
 }
 
 loadJob();
