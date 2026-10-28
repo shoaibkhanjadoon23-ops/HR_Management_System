@@ -277,12 +277,13 @@
 </div>
 
 <script>
+// ── VERSION CHECK ──
+console.log("✅ HRPro Proctoring Script V3.0 Loaded");
+
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
 const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
 const prefilledCode = new URLSearchParams(window.location.search).get('code') || '';
-
-console.log('[HRPro] Assessment page loaded. ID:', assessmentId);
 
 // ═════════════════════════════════════════════════════════════
 //  GLOBAL STATE
@@ -294,21 +295,17 @@ let totalQuestions = 0;
 
 const state = {
   submitted: false,
-  // warning counters
   camWarnings: 0,
   voiceWarnings: 0,
   tabWarnings: 0,
-  // sustain trackers
   lookAwayStart: null,
   noFaceStart: null,
   multiFaceStart: null,
   phoneStart: null,
   voiceStart: null,
-  // per-violation cooldowns (last warn timestamp)
   lastCamWarn: 0,
   lastVoiceWarn: 0,
   lastTabWarn: 0,
-  // resources
   cameraStream: null,
   micStream: null,
   audioContext: null,
@@ -323,9 +320,6 @@ const state = {
   paused: false,
 };
 
-// ═════════════════════════════════════════════════════════════
-//  TUNING — change here if too sensitive or too lenient
-// ═════════════════════════════════════════════════════════════
 const CFG = {
   MAX_WARNINGS: 3,
   HEAD_OFFSET_THRESHOLD: 0.34,
@@ -355,11 +349,9 @@ if (prefilledCode) {
 // ═════════════════════════════════════════════════════════════
 async function loadAssessment() {
   try {
-    console.log('[HRPro] Fetching assessment details...');
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
     if (!res.ok) throw new Error('Assessment not found');
     assessment = await res.json();
-    console.log('[HRPro] Assessment loaded:', assessment);
     document.getElementById('jobTitle').textContent = assessment.title;
     state.timeLeftSeconds = assessment.duration_minutes * 60;
     applyGateMode();
@@ -397,6 +389,7 @@ function applyGateMode() {
 //  GATE 1 — handle start / verify
 // ═════════════════════════════════════════════════════════════
 async function handleStart() {
+  if (!assessment) return;
   if (assessment.require_application_code !== false) {
     return verifyCode();
   }
@@ -456,12 +449,18 @@ function showCodeError(msg) {
 }
 
 function proceedToPermissionGate() {
-  console.log('[HRPro] Proceeding to permission gate...');
-  // ALWAYS show the permission gate, regardless of anti_cheat flag.
+  console.log('[HRPro] Transitioning to permission gate...');
+  
   document.getElementById('startGate').style.display = 'none';
   document.getElementById('permissionGate').style.display = 'block';
   document.getElementById('cameraPreview').style.display = 'block';
   window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Auto-trigger the browser prompts to ensure the user sees them
+  setTimeout(() => {
+    enableCamera();
+    enableMic();
+  }, 300);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -469,11 +468,12 @@ function proceedToPermissionGate() {
 // ═════════════════════════════════════════════════════════════
 async function enableCamera() {
   const btn = document.getElementById('camBtn');
+  if (!btn || btn.classList.contains('granted')) return;
+
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
 
   try {
-    console.log('[HRPro] Requesting camera access...');
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 640, height: 480, facingMode: 'user' },
       audio: false,
@@ -492,7 +492,6 @@ async function enableCamera() {
     btn.disabled = true;
     document.getElementById('camPermRow').classList.add('granted');
     document.getElementById('permError').style.display = 'none';
-    console.log('[HRPro] Camera access granted.');
   } catch (e) {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-video"></i> Enable Camera';
@@ -507,11 +506,12 @@ async function enableCamera() {
 
 async function enableMic() {
   const btn = document.getElementById('micBtn');
+  if (!btn || btn.classList.contains('granted')) return;
+
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
 
   try {
-    console.log('[HRPro] Requesting microphone access...');
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     state.micStream = stream;
 
@@ -524,7 +524,6 @@ async function enableMic() {
     btn.disabled = true;
     document.getElementById('micPermRow').classList.add('granted');
     document.getElementById('permError').style.display = 'none';
-    console.log('[HRPro] Microphone access granted.');
   } catch (e) {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-microphone"></i> Enable Microphone';
@@ -565,14 +564,12 @@ function startMicLevelMeter(stream) {
 function checkReadyToStart() {
   const ready = !!state.cameraStream && !!state.micStream;
   document.getElementById('startAssessmentBtn').disabled = !ready;
-  if (ready) console.log('[HRPro] Both permissions granted. Start button unlocked.');
 }
 
 // ═════════════════════════════════════════════════════════════
 //  BEGIN ASSESSMENT
 // ═════════════════════════════════════════════════════════════
 async function beginAssessment() {
-  console.log('[HRPro] Starting assessment...');
   document.getElementById('permissionGate').style.display = 'none';
   document.getElementById('assessmentArea').style.display = 'block';
   document.getElementById('proctorBar').style.display = 'flex';
@@ -581,7 +578,6 @@ async function beginAssessment() {
   startTimer();
   state.startTime = Date.now();
 
-  // Always start proctoring if they granted permissions
   await startProctoring();
 }
 
@@ -657,7 +653,6 @@ function startTimer() {
 // ═════════════════════════════════════════════════════════════
 async function startProctoring() {
   try {
-    console.log('[HRPro] Initializing proctoring models...');
     const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
     await Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
@@ -665,11 +660,9 @@ async function startProctoring() {
     ]);
 
     try {
-      console.log('[HRPro] Loading object detection model...');
       state.cocoModel = await cocoSsd.load();
     } catch (e) {
-      console.warn('[HRPro] COCO-SSD failed to load; phone detection disabled:', e);
-      state.cocoModel = null;
+      console.warn('[HRPro] Phone detection disabled (COCO-SSD failed).');
     }
 
     state.faceDetectTimer   = setInterval(checkFace, CFG.FACE_CHECK_MS);
@@ -679,7 +672,6 @@ async function startProctoring() {
     await startVoiceDetection();
 
     document.addEventListener('visibilitychange', onVisibilityChange);
-    console.log('[HRPro] Proctoring active.');
   } catch (e) {
     console.error('[HRPro] Proctoring setup failed:', e);
   }
@@ -740,9 +732,7 @@ async function checkFace() {
     } else {
       state.lookAwayStart = null;
     }
-  } catch (e) {
-    // ignore transient errors
-  }
+  } catch (e) {}
 }
 
 async function checkObjects() {
@@ -768,9 +758,7 @@ async function checkObjects() {
     } else {
       state.phoneStart = null;
     }
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
 }
 
 async function startVoiceDetection() {
@@ -828,9 +816,6 @@ async function startVoiceDetection() {
   }
 }
 
-// ═════════════════════════════════════════════════════════════
-//  TAB / APP SWITCH DETECTION
-// ═════════════════════════════════════════════════════════════
 function onVisibilityChange() {
   if (state.submitted) return;
 
@@ -860,10 +845,7 @@ function issueCamWarning(reason) {
   updateWarnUI();
   flashCounter('camWarnItem');
   playWarningBeep();
-  showWarningToast(
-    `⚠️ Camera Warning ${state.camWarnings}/${CFG.MAX_WARNINGS}: ${reason}`,
-    'cam'
-  );
+  showWarningToast(`⚠️ Camera Warning ${state.camWarnings}/${CFG.MAX_WARNINGS}: ${reason}`, 'cam');
   if (state.camWarnings >= CFG.MAX_WARNINGS) {
     submitAssessment('auto', `3 camera warnings — last: ${reason}`);
   }
@@ -875,10 +857,7 @@ function issueVoiceWarning(reason) {
   updateWarnUI();
   flashCounter('voiceWarnItem');
   playWarningBeep();
-  showWarningToast(
-    `⚠️ Voice Warning ${state.voiceWarnings}/${CFG.MAX_WARNINGS}: ${reason}`,
-    'voice'
-  );
+  showWarningToast(`⚠️ Voice Warning ${state.voiceWarnings}/${CFG.MAX_WARNINGS}: ${reason}`, 'voice');
   if (state.voiceWarnings >= CFG.MAX_WARNINGS) {
     submitAssessment('auto', `3 voice warnings — last: ${reason}`);
   }
@@ -893,10 +872,7 @@ function issueTabWarning(reason) {
   updateWarnUI();
   flashCounter('tabWarnItem');
   playWarningBeep();
-  showWarningToast(
-    `⚠️ Tab Warning ${state.tabWarnings}/${CFG.MAX_WARNINGS}: ${reason}`,
-    'tab'
-  );
+  showWarningToast(`⚠️ Tab Warning ${state.tabWarnings}/${CFG.MAX_WARNINGS}: ${reason}`, 'tab');
   if (state.tabWarnings >= CFG.MAX_WARNINGS) {
     submitAssessment('auto', `3 tab/app switches — last: ${reason}`);
   }
@@ -943,9 +919,7 @@ function playWarningBeep() {
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
     osc.start(t);
     osc.stop(t + 0.35);
-  } catch (e) {
-    // ignore
-  }
+  } catch (e) {}
 }
 
 // ═════════════════════════════════════════════════════════════
