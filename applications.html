@@ -5,6 +5,35 @@
 <title>Applications - HRPro</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+/* Small style helpers for the application-code cells */
+.code-pill {
+  display: inline-block;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.code-pill .copy {
+  margin-left: 6px;
+  cursor: pointer;
+  color: #6366f1;
+  transition: color .15s;
+}
+.code-pill .copy:hover { color: #4338ca; }
+.code-pill.muted {
+  background: #f3f4f6;
+  color: #9ca3af;
+  font-family: inherit;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+</style>
 </head>
 <body>
 <div class="sidebar" id="sidebar">
@@ -116,10 +145,21 @@
     <div class="table-wrapper">
       <table>
         <thead>
-          <tr><th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th><th>Applicant</th><th>Job</th><th>Experience</th><th>CGPA</th><th>Skills Match</th><th>Applied</th><th>Status</th><th>Actions</th></tr>
+          <tr>
+            <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+            <th>Applicant</th>
+            <th>Job</th>
+            <th>App Code</th>
+            <th>Experience</th>
+            <th>CGPA</th>
+            <th>Skills Match</th>
+            <th>Applied</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
         </thead>
         <tbody id="appsBody">
-          <tr><td colspan="9" style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+          <tr><td colspan="10" style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -192,7 +232,7 @@
   </div>
 </div>
 
-<!-- Offer Letter Modal (with manual toggle) -->
+<!-- Offer Letter Modal -->
 <div id="offerModal" class="modal-overlay" style="display:none">
   <div class="modal modal-xl">
     <div class="modal-header">
@@ -302,8 +342,10 @@
 
 <script src="/static/app.js"></script>
 <script>
-// ⚠️ Must match the Hugging Face backend URL defined in app.js
-const APPLICATIONS_BACKEND_URL = typeof BACKEND_URL !== 'undefined' ? BACKEND_URL : 'https://hrhiringpro-hrpro.hf.space';
+// Must match the Hugging Face backend URL defined in app.js
+const APPLICATIONS_BACKEND_URL = typeof BACKEND_URL !== 'undefined'
+  ? BACKEND_URL
+  : 'https://hrhiringpro-hrpro.hf.space';
 
 requireAuth();
 renderSidebarUser();
@@ -318,8 +360,10 @@ let currentOfferId = null;
 let currentOfferAppTitle = '';
 
 document.getElementById('iType').onchange = function() {
-  document.getElementById('officeLocationGroup').style.display = this.value === 'office' ? 'block' : 'none';
-  document.getElementById('meetingInfo').style.display = this.value === 'online' ? 'block' : 'none';
+  document.getElementById('officeLocationGroup').style.display =
+    this.value === 'office' ? 'block' : 'none';
+  document.getElementById('meetingInfo').style.display =
+    this.value === 'online' ? 'block' : 'none';
 };
 
 async function loadApps() {
@@ -330,6 +374,7 @@ async function loadApps() {
   const minCgpa = document.getElementById('fMinCgpa').value;
   const maxCgpa = document.getElementById('fMaxCgpa').value;
   const search = document.getElementById('fSearch').value;
+
   if (s) params.append('status', s);
   if (minExp) params.append('min_experience', minExp);
   if (maxExp) params.append('max_experience', maxExp);
@@ -341,17 +386,56 @@ async function loadApps() {
     apps = await API.get('/api/applications?' + params);
     document.getElementById('appCount').textContent = apps.length;
     renderApps();
-  } catch(e) { showToast('Error loading applications', 'error'); }
+  } catch (e) {
+    showToast('Error loading applications', 'error');
+  }
+}
+
+/** Render a code pill with copy button (or muted placeholder when absent). */
+function renderAppCode(code) {
+  if (!code) return '<span class="code-pill muted">—</span>';
+  const safe = String(code).replace(/[^A-Z0-9]/gi, '');
+  return `<span class="code-pill">${safe}
+    <i class="fas fa-copy copy"
+       title="Copy application code"
+       onclick="event.stopPropagation();copyCode('${safe}')"></i>
+  </span>`;
+}
+
+function copyCode(code) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(code)
+      .then(() => showToast(`Copied: ${code}`, 'success', 2000))
+      .catch(() => copyFallback(code));
+  } else {
+    copyFallback(code);
+  }
+}
+
+function copyFallback(code) {
+  const tmp = document.createElement('textarea');
+  tmp.value = code;
+  tmp.style.position = 'fixed';
+  tmp.style.opacity = '0';
+  document.body.appendChild(tmp);
+  tmp.select();
+  try { document.execCommand('copy'); showToast(`Copied: ${code}`, 'success', 2000); }
+  catch (e) { showToast('Copy failed', 'error'); }
+  document.body.removeChild(tmp);
 }
 
 function renderApps() {
   if (!apps.length) {
-    document.getElementById('appsBody').innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><h3>No Applications Found</h3><p>Try adjusting your filters</p></div></td></tr>';
+    document.getElementById('appsBody').innerHTML =
+      '<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i><h3>No Applications Found</h3><p>Try adjusting your filters</p></div></td></tr>';
     return;
   }
+
   document.getElementById('appsBody').innerHTML = apps.map(a => {
     const match = a.skill_gap_analysis?.match_percentage || 0;
-    const matchColor = match >= 70 ? 'var(--success)' : match >= 40 ? 'var(--warning)' : 'var(--danger)';
+    const matchColor = match >= 70 ? 'var(--success)'
+                     : match >= 40 ? 'var(--warning)'
+                     : 'var(--danger)';
     return `<tr>
       <td><input type="checkbox" class="app-check" value="${a.id}" onchange="toggleSelect(${a.id})"></td>
       <td>
@@ -360,6 +444,7 @@ function renderApps() {
         <div class="text-xs text-light">${a.applicant_phone || ''}</div>
       </td>
       <td class="text-sm">${a.job_title}</td>
+      <td>${renderAppCode(a.application_code)}</td>
       <td class="text-sm">${a.experience_years} yrs</td>
       <td class="text-sm">${a.cgpa || '-'}</td>
       <td>
@@ -389,7 +474,7 @@ function toggleSelect(id) {
 
 function toggleAll(cb) {
   apps.forEach(a => cb.checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
-  document.querySelectorAll('.app-check').forEach(c => c.checked = cb.checked);
+  document.querySelectorAll('.app-check').forEach(c => (c.checked = cb.checked));
   updateSelectionBar();
 }
 
@@ -398,12 +483,14 @@ function updateSelectionBar() {
   if (selectedIds.size > 0) {
     bar.style.display = 'block';
     document.getElementById('selCount').textContent = selectedIds.size;
-  } else { bar.style.display = 'none'; }
+  } else {
+    bar.style.display = 'none';
+  }
 }
 
 function clearSelection() {
   selectedIds.clear();
-  document.querySelectorAll('.app-check').forEach(c => c.checked = false);
+  document.querySelectorAll('.app-check').forEach(c => (c.checked = false));
   document.getElementById('selectAll').checked = false;
   updateSelectionBar();
 }
@@ -411,14 +498,20 @@ function clearSelection() {
 async function bulkStatus(action) {
   if (!selectedIds.size) return;
   try {
-    const reason = action === 'rejected' ? prompt('Rejection reason:') || 'Application not selected' : '';
+    const reason = action === 'rejected'
+      ? (prompt('Rejection reason:') || 'Application not selected')
+      : '';
     await API.post('/api/applications/bulk-action', {
-      application_ids: [...selectedIds], action, rejection_reason: reason
+      application_ids: [...selectedIds],
+      action,
+      rejection_reason: reason,
     });
-    showToast(`Bulk action applied`, 'success');
+    showToast('Bulk action applied', 'success');
     clearSelection();
     loadApps();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 async function quickStatus(id, status) {
@@ -426,7 +519,9 @@ async function quickStatus(id, status) {
     await API.put(`/api/applications/${id}/status`, { status });
     showToast(`Status updated to ${status}`, 'success');
     loadApps();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 function openReject(id) {
@@ -443,22 +538,26 @@ async function confirmReject() {
   if (!reason) { showToast('Please enter a rejection reason', 'warning'); return; }
   try {
     await API.put(`/api/applications/${rejectingAppId}/status`, {
-      status: 'rejected', rejection_reason: reason
+      status: 'rejected',
+      rejection_reason: reason,
     });
     showToast('Application rejected and email sent', 'success');
     closeModal('rejectModal');
     loadApps();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 async function viewApp(id) {
   try {
     const a = await API.get(`/api/applications/${id}`);
-    document.getElementById('appDetailTitle').innerHTML = `<i class="fas fa-user"></i> ${a.applicant_name} — ${a.job_title}`;
-    
+    document.getElementById('appDetailTitle').innerHTML =
+      `<i class="fas fa-user"></i> ${a.applicant_name} — ${a.job_title}`;
+
     const skillGap = a.skill_gap_analysis || {};
     const skills = a.skills || [];
-    
+
     document.getElementById('appDetailBody').innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">
         <div style="flex:1;min-width:280px">
@@ -472,6 +571,14 @@ async function viewApp(id) {
                 <div><b>Experience:</b> ${a.experience_years} years</div>
                 <div><b>CGPA:</b> ${a.cgpa || '-'}</div>
                 <div><b>Applied:</b> ${fmtDate(a.applied_at)}</div>
+                <div style="grid-column:1/-1">
+                  <b>Application Code:</b>
+                  ${a.application_code
+                    ? `<span class="code-pill" style="margin-left:6px">${a.application_code}
+                        <i class="fas fa-copy copy" title="Copy" onclick="copyCode('${a.application_code}')"></i>
+                       </span>`
+                    : '<span class="text-light">—</span>'}
+                </div>
               </div>
               <div class="mt-4"><b>Skills:</b><div class="tags-wrap mt-2">${skills.map(s => `<span class="tag">${s}</span>`).join('') || '<span class="text-light">None listed</span>'}</div></div>
               ${a.cover_letter ? `<div class="mt-4"><b>Cover Letter:</b><p class="text-sm mt-2" style="line-height:1.7;background:#f8fafc;padding:12px;border-radius:8px">${a.cover_letter}</p></div>` : ''}
@@ -498,7 +605,9 @@ async function viewApp(id) {
                   </div>
                   <div class="progress-bar mt-2"><div class="progress-fill" style="width:${r.percentage}%"></div></div>
                   ${r.ai_feedback ? `<p class="text-sm text-light mt-2">${r.ai_feedback}</p>` : ''}
-                  ${!r.mark_sheet_sent ? `<button class="btn btn-sm btn-info mt-2" onclick="sendMarksheet(${r.id})"><i class="fas fa-paper-plane"></i> Send Marksheet</button>` : '<span class="text-xs text-light mt-2">✓ Marksheet sent</span>'}
+                  ${!r.mark_sheet_sent
+                    ? `<button class="btn btn-sm btn-info mt-2" onclick="sendMarksheet(${r.id})"><i class="fas fa-paper-plane"></i> Send Marksheet</button>`
+                    : '<span class="text-xs text-light mt-2">✓ Marksheet sent</span>'}
                 </div>`).join('')}
             </div>
           </div>` : ''}
@@ -527,7 +636,9 @@ async function viewApp(id) {
               <div><b>Date:</b> ${fmtDateTime(a.interview.date)}</div>
               ${a.interview.meeting_link ? `<div><b>Link:</b> <a href="${a.interview.meeting_link}" target="_blank" style="color:var(--primary)">${a.interview.meeting_link}</a></div>` : ''}
               <div class="mt-2">${statusBadge(a.interview.status)}</div>
-              ${a.interview.status === 'scheduled' ? `<button class="btn btn-sm btn-success mt-2" onclick="markInterviewPassed(${a.interview.id})"><i class="fas fa-check"></i> Mark Passed</button>` : ''}
+              ${a.interview.status === 'scheduled'
+                ? `<button class="btn btn-sm btn-success mt-2" onclick="markInterviewPassed(${a.interview.id})"><i class="fas fa-check"></i> Mark Passed</button>`
+                : ''}
             </div>
           </div>` : ''}
 
@@ -549,7 +660,7 @@ async function viewApp(id) {
           </div>` : ''}
         </div>
       </div>`;
-    
+
     document.getElementById('appDetailFooter').innerHTML = `
       <button class="btn btn-secondary" onclick="closeModal('appDetailModal')">Close</button>
       <button class="btn btn-info" onclick="openCustomEmailModal('${a.applicant_email}', '${a.applicant_name}')"><i class="fas fa-envelope"></i> Send Custom Email</button>
@@ -557,9 +668,11 @@ async function viewApp(id) {
       <button class="btn btn-info" onclick="openInterviewModal(${a.id},'${a.job_title}')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-calendar"></i> Schedule Interview</button>
       <button class="btn btn-success" onclick="openOfferModal(${a.id},'${a.job_title}')" ${!['interview_passed','shortlisted'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
       <button class="btn btn-danger" onclick="openReject(${a.id});closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
-    
+
     openModal('appDetailModal');
-  } catch(e) { showToast('Error loading details: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error loading details: ' + e.message, 'error');
+  }
 }
 
 function openInterviewModal(appId, jobTitle) {
@@ -576,13 +689,15 @@ async function scheduleInterview() {
       interview_type: document.getElementById('iType').value,
       scheduled_date: date,
       duration_minutes: parseInt(document.getElementById('iDuration').value) || 60,
-      location: document.getElementById('iLocation').value
+      location: document.getElementById('iLocation').value,
     });
     showToast(`Interview scheduled! ${res.meeting_link ? 'Meeting link: ' + res.meeting_link : ''}`, 'success', 5000);
     closeModal('interviewModal');
     closeModal('appDetailModal');
     loadApps();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 async function markInterviewPassed(interviewId) {
@@ -591,7 +706,9 @@ async function markInterviewPassed(interviewId) {
     showToast('Interview marked as passed', 'success');
     closeModal('appDetailModal');
     loadApps();
-  } catch(e) { showToast('Error', 'error'); }
+  } catch (e) {
+    showToast('Error', 'error');
+  }
 }
 
 function openOfferModal(appId, jobTitle) {
@@ -621,14 +738,16 @@ async function generateOffer() {
       joining_date: document.getElementById('offerJoinDate').value,
       reporting_to: document.getElementById('offerReporting').value,
       benefits: document.getElementById('offerBenefits').value,
-      job_type: document.getElementById('offerJobType').value
+      job_type: document.getElementById('offerJobType').value,
     });
     currentOfferId = data.id;
     document.getElementById('offerContent').value = data.content;
     document.getElementById('offerPreview').style.display = 'block';
     document.getElementById('sendOfferBtn').style.display = 'inline-flex';
     showToast('Offer letter generated!', 'success');
-  } catch(e) { showToast('Error generating offer: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error generating offer: ' + e.message, 'error');
+  }
 }
 
 async function sendOffer() {
@@ -643,24 +762,36 @@ async function sendOffer() {
         joining_date: document.getElementById('offerJoinDate').value,
         reporting_to: document.getElementById('offerReporting').value,
         benefits: document.getElementById('offerBenefits').value,
-        job_type: document.getElementById('offerJobType').value
+        job_type: document.getElementById('offerJobType').value,
       });
       currentOfferId = data.id;
-      await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
-    } catch(e) { showToast('Error creating offer: ' + e.message, 'error'); return; }
+      await API.put(`/api/offers/${currentOfferId}`, {
+        content: document.getElementById('offerContent').value,
+      });
+    } catch (e) {
+      showToast('Error creating offer: ' + e.message, 'error');
+      return;
+    }
   } else {
     try {
-      await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
-    } catch(e) { showToast('Error saving changes: ' + e.message, 'error'); return; }
+      await API.put(`/api/offers/${currentOfferId}`, {
+        content: document.getElementById('offerContent').value,
+      });
+    } catch (e) {
+      showToast('Error saving changes: ' + e.message, 'error');
+      return;
+    }
   }
-  
+
   try {
     await API.post(`/api/offers/${currentOfferId}/send`, {});
     showToast('Offer letter sent to applicant!', 'success');
     closeModal('offerModal');
     closeModal('appDetailModal');
     loadApps();
-  } catch(e) { showToast('Error sending offer: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error sending offer: ' + e.message, 'error');
+  }
 }
 
 async function sendMarksheet(resultId) {
@@ -668,7 +799,9 @@ async function sendMarksheet(resultId) {
     await API.post(`/api/assessment-results/${resultId}/send-marksheet`, {});
     showToast('Marksheet sent!', 'success');
     closeModal('appDetailModal');
-  } catch(e) { showToast('Error', 'error'); }
+  } catch (e) {
+    showToast('Error', 'error');
+  }
 }
 
 function bulkActionModal() { openModal('bulkModal'); }
@@ -680,18 +813,24 @@ async function applyBulkAction(action) {
     const minCgpa = parseFloat(document.getElementById('fMinCgpa').value) || 0;
     return a.experience_years < minExp || a.cgpa < minCgpa;
   });
-  
-  if (!nonMatching.length) { showToast('No non-matching applications found with current filters', 'info'); return; }
-  
+
+  if (!nonMatching.length) {
+    showToast('No non-matching applications found with current filters', 'info');
+    return;
+  }
+
   try {
     await API.post('/api/applications/bulk-action', {
       application_ids: nonMatching.map(a => a.id),
-      action, rejection_reason: reason
+      action,
+      rejection_reason: reason,
     });
     showToast(`${action} applied to ${nonMatching.length} applications`, 'success');
     closeModal('bulkModal');
     loadApps();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
 function clearFilters() {
@@ -705,13 +844,16 @@ function clearFilters() {
 async function exportEmails() {
   try {
     const data = await API.get('/api/employees/export-emails');
-    const csv = 'Name,Email,Department\n' + data.map(e => `${e.name},${e.email},${e.department}`).join('\n');
-    const blob = new Blob([csv], {type: 'text/csv'});
+    const csv = 'Name,Email,Department\n' +
+      data.map(e => `${e.name},${e.email},${e.department}`).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'employee_emails.csv';
     a.click();
-  } catch(e) { showToast('Export failed', 'error'); }
+  } catch (e) {
+    showToast('Export failed', 'error');
+  }
 }
 
 let currentCustomEmail = { to: '', name: '' };
@@ -727,18 +869,21 @@ function openCustomEmailModal(email, name) {
 async function sendCustomEmail() {
   const subject = document.getElementById('customEmailSubject').value;
   const body = document.getElementById('customEmailBody').value;
-  if (!subject || !body) { showToast('Subject and message required', 'warning'); return; }
-  
+  if (!subject || !body) {
+    showToast('Subject and message required', 'warning');
+    return;
+  }
+
   try {
     await API.post('/api/send-custom-email', {
       to_email: currentCustomEmail.to,
       recipient_name: currentCustomEmail.name,
       subject: subject,
-      body: body
+      body: body,
     });
     showToast('Email sent successfully!', 'success');
     closeModal('customEmailModal');
-  } catch(e) {
+  } catch (e) {
     showToast('Error sending email: ' + e.message, 'error');
   }
 }
@@ -752,12 +897,9 @@ async function downloadCV(applicationId) {
     }
     const response = await fetch(`${APPLICATIONS_BACKEND_URL}/api/applications/${applicationId}/cv`, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!response.ok) {
-      // Response may be HTML (error page) or JSON — handle both safely
       const contentType = response.headers.get('Content-Type') || '';
       if (contentType.includes('application/json')) {
         const error = await response.json();
@@ -781,7 +923,7 @@ async function downloadCV(applicationId) {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
-  } catch(e) {
+  } catch (e) {
     showToast('Error downloading CV: ' + e.message, 'error');
   }
 }
