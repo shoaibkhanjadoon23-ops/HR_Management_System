@@ -191,7 +191,7 @@
 .app-summary .row .k { font-weight: 600; color: #6b7280; }
 .app-summary .row .v { font-weight: 700; color: #111827; text-align: right; }
 
-/* ── Rating card (kept from before) ───────────────────── */
+/* ── Rating card ──────────────────────────────────────── */
 .rating-card {
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -243,17 +243,17 @@ function renderForm() {
   document.getElementById('applyPage').innerHTML = `
     <div class="apply-header">
       <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-briefcase"></i> Job Application</div>
-      <h1>${job.title}</h1>
-      <p>${job.department} | ${job.location || 'Remote'} | ${job.job_type?.replace('_',' ') || 'Full Time'}</p>
+      <h1>${escapeHtml(job.title)}</h1>
+      <p>${escapeHtml(job.department || '')} | ${escapeHtml(job.location || 'Remote')} | ${escapeHtml(job.job_type?.replace('_',' ') || 'Full Time')}</p>
       ${deadline ? `<p style="margin-top:8px;font-size:13px;opacity:0.8"><i class="fas fa-clock"></i> Apply by: ${deadline.toLocaleDateString()}</p>` : ''}
     </div>
 
     <div class="card" style="margin-bottom:20px">
       <div class="card-header"><h3><i class="fas fa-info-circle"></i> Job Overview</h3></div>
       <div class="card-body">
-        <p class="text-sm" style="line-height:1.8">${job.description}</p>
+        <p class="text-sm" style="line-height:1.8">${job.description || ''}</p>
         ${job.requirements ? `<div class="mt-4"><b>Requirements:</b><p class="text-sm mt-2" style="line-height:1.8">${job.requirements}</p></div>` : ''}
-        ${job.skills_required?.length ? `<div class="mt-4"><b>Required Skills:</b><div class="tags-wrap mt-2">${job.skills_required.map(s=>`<span class="tag">${s}</span>`).join('')}</div></div>` : ''}
+        ${job.skills_required?.length ? `<div class="mt-4"><b>Required Skills:</b><div class="tags-wrap mt-2">${job.skills_required.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div></div>` : ''}
         <div class="grid-2 mt-4 text-sm" style="gap:8px">
           ${job.experience_years ? `<div><i class="fas fa-briefcase text-light"></i> Min Experience: <b>${job.experience_years} years</b></div>` : ''}
         </div>
@@ -263,7 +263,7 @@ function renderForm() {
     <form id="applicationForm" enctype="multipart/form-data">
       ${sections.map(section => `
         <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><h3><i class="fas fa-list"></i> ${section.title}</h3></div>
+          <div class="card-header"><h3><i class="fas fa-list"></i> ${escapeHtml(section.title)}</h3></div>
           <div class="card-body">
             <div class="form-grid-2">
               ${(section.fields || []).map(field => renderField(field)).join('')}
@@ -285,7 +285,6 @@ function renderForm() {
 
       <div id="submitSection" style="text-align:center;margin-top:20px">
         <div id="appError" class="alert alert-error" style="display:none"></div>
-        <div id="appSuccess" style="display:none"></div>
         <button type="submit" class="btn btn-primary" id="submitBtn" style="font-size:16px;padding:14px 50px">
           <span class="btn-text"><i class="fas fa-paper-plane"></i> Submit Application</span>
           <span class="btn-loader" style="display:none"><i class="fas fa-spinner fa-spin"></i> Submitting...</span>
@@ -322,33 +321,33 @@ function renderField(field) {
 
   let input = '';
   if (field.type === 'textarea') {
-    input = `<textarea name="${field.id}" id="field_${field.id}" rows="4" placeholder="${field.placeholder||''}" ${field.required?'required':''}></textarea>`;
+    input = `<textarea name="${field.id}" id="field_${field.id}" rows="4" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'required':''}></textarea>`;
   } else if (field.type === 'select' && field.options?.length) {
     input = `<select name="${field.id}" id="field_${field.id}" ${field.required?'required':''}>
       <option value="">Select...</option>
-      ${field.options.map(o=>`<option value="${o}">${o}</option>`).join('')}
+      ${field.options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
     </select>`;
   } else if (field.type === 'radio' && field.options?.length) {
     input = `<div style="display:flex;flex-direction:column;gap:8px">${field.options.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="radio" name="${field.id}" value="${o}" ${field.required?'required':''}> ${o}
+        <input type="radio" name="${field.id}" value="${escapeHtml(o)}" ${field.required?'required':''}> ${escapeHtml(o)}
       </label>`).join('')}</div>`;
   } else if (field.type === 'checkbox' && field.options?.length) {
     input = `<div class="checkbox-group">${field.options.map(o=>`
-      <label class="checkbox-item"><input type="checkbox" name="${field.id}[]" value="${o}"> ${o}</label>`).join('')}</div>`;
+      <label class="checkbox-item"><input type="checkbox" name="${field.id}[]" value="${escapeHtml(o)}"> ${escapeHtml(o)}</label>`).join('')}</div>`;
   } else if (field.type === 'file') {
     input = `<input type="file" name="${field.id}" id="field_${field.id}" accept=".pdf,.doc,.docx">`;
   } else if (field.type === 'number') {
-    input = `<input type="number" name="${field.id}" id="field_${field.id}" placeholder="${field.placeholder||''}" ${field.required?'required':''} step="0.1" min="0">`;
+    input = `<input type="number" name="${field.id}" id="field_${field.id}" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'required':''} step="0.1" min="0">`;
   } else if (field.type === 'date') {
     input = `<input type="date" name="${field.id}" id="field_${field.id}" ${field.required?'required':''}>`;
   } else {
     const t = field.type === 'phone' ? 'tel' : field.type === 'email' ? 'email' : 'text';
-    input = `<input type="${t}" name="${field.id}" id="field_${field.id}" placeholder="${field.placeholder||''}" ${field.required?'required':''}>`;
+    input = `<input type="${t}" name="${field.id}" id="field_${field.id}" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'required':''}>`;
   }
 
   return `<div class="form-group ${isFullWidth ? 'form-group-full' : ''}">
-    <label for="field_${field.id}">${field.label} ${req}</label>
+    <label for="field_${field.id}">${escapeHtml(field.label)} ${req}</label>
     ${input}
   </div>`;
 }
@@ -430,16 +429,19 @@ async function submitApp(e) {
   }
 }
 
+/**
+ * FIXED: Renders success content directly into #applyPage — the top-level wrapper.
+ * The previous version tried to show #appSuccess, but #appSuccess was INSIDE
+ * #applicationForm, so hiding the form also hid the success card. Replacing the
+ * whole page content avoids that parent-hiding problem.
+ */
 function renderSuccessScreen(result, payload) {
-  document.getElementById('applicationForm').style.display = 'none';
+  const code    = result.application_code || '—';
+  const hasCode = !!result.application_code;
+  const email   = payload.email || '';
 
-  const code = result.application_code || '--------';
-  const email = payload.email || '';
-
-  const successEl = document.getElementById('appSuccess');
-  successEl.style.display = 'block';
-  successEl.innerHTML = `
-    <!-- 1. Congratulations hero -->
+  document.getElementById('applyPage').innerHTML = `
+    <!-- 1. Congratulation hero -->
     <div class="success-hero">
       <div class="success-icon"><i class="fas fa-check"></i></div>
       <h1>Congratulations, ${escapeHtml(payload.full_name || 'Candidate')}!</h1>
@@ -449,7 +451,8 @@ function renderSuccessScreen(result, payload) {
       </p>
     </div>
 
-    <!-- 2. Application code — the star of the page -->
+    ${hasCode ? `
+    <!-- 2. Application code card -->
     <div class="code-card">
       <div class="label">Your Unique Application Code</div>
       <div class="sub">Save this code — it's your key to the next step</div>
@@ -474,7 +477,7 @@ function renderSuccessScreen(result, payload) {
       </p>
     </div>
 
-    <!-- 3. Warning + instructions -->
+    <!-- 3. Warning card -->
     <div class="warning-card">
       <div class="warn-head">
         <i class="fas fa-exclamation-triangle"></i>
@@ -520,6 +523,27 @@ function renderSuccessScreen(result, payload) {
         </div>
       </div>
     </div>
+    ` : `
+    <!-- Code was NOT returned by the backend — show a clear diagnostic -->
+    <div style="background:#fef2f2;border:3px solid #ef4444;border-radius:14px;padding:24px;margin-bottom:20px">
+      <h2 style="color:#991b1b;margin-bottom:10px">
+        <i class="fas fa-exclamation-triangle"></i>
+        Submission received — but no application code was returned
+      </h2>
+      <p style="color:#7f1d1d;line-height:1.7;margin-bottom:10px">
+        Your application <strong>was saved</strong> (ID: <strong>#${result.application_id}</strong>).
+        The backend did not return an application code for it.
+      </p>
+      <p style="color:#7f1d1d;line-height:1.7;font-size:13px">
+        <strong>Please contact HR directly</strong> and quote your Application ID
+        <strong>#${result.application_id}</strong> so they can look up your record.
+        Do <strong>not</strong> submit a new application — you would be rejected for duplicate submission.
+      </p>
+      <p style="margin-top:12px;font-size:11px;color:#b91c1c;font-family:monospace;word-break:break-all">
+        Diagnostic — backend response: ${escapeHtml(JSON.stringify(result))}
+      </p>
+    </div>
+    `}
 
     <!-- 4. Application summary -->
     <div class="app-summary">
@@ -574,7 +598,7 @@ function escapeHtml(str) {
 /* ─── Code actions ────────────────────────────────────── */
 function copyAppCode() {
   const code = document.getElementById('appCode').textContent.trim();
-  if (!code || code === '--------') return;
+  if (!code || code === '—') return;
 
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(code).then(() => markCopied());
@@ -592,6 +616,7 @@ function copyAppCode() {
 
 function markCopied() {
   const btn = document.getElementById('copyCodeBtn');
+  if (!btn) return;
   const original = btn.innerHTML;
   btn.classList.add('copied');
   btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
