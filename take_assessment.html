@@ -36,7 +36,7 @@
 /* Camera preview with debug overlay */
 .camera-preview {
   position: fixed; bottom: 20px; right: 20px;
-  width: 240px; height: 180px; border-radius: 12px;
+  width: 260px; height: 195px; border-radius: 12px;
   border: 3px solid #6366f1; overflow: hidden; z-index: 1000;
   background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
@@ -44,12 +44,12 @@
 .camera-preview canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
 .debug-info {
   position: absolute; bottom: 0; left: 0; right: 0;
-  background: rgba(0,0,0,0.8); color: #10b981;
-  font-family: monospace; font-size: 11px; padding: 4px;
-  text-align: center; z-index: 2;
+  background: rgba(0,0,0,0.85); color: #10b981;
+  font-family: monospace; font-size: 11px; padding: 5px;
+  text-align: center; z-index: 2; line-height: 1.4;
 }
 @media (max-width: 640px) {
-  .camera-preview { width: 160px; height: 120px; bottom: 12px; right: 12px; }
+  .camera-preview { width: 180px; height: 135px; bottom: 12px; right: 12px; }
 }
 
 .warning-toast {
@@ -117,7 +117,7 @@
   </div>
 </div>
 
-<!-- ══ Setup Screen (Identity + Permissions together) ══ -->
+<!-- ══ Setup Screen ══ -->
 <div id="startGate" class="apply-page">
   <div class="apply-header">
     <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-shield-alt"></i> Secure Assessment</div>
@@ -128,7 +128,6 @@
     </span>
   </div>
 
-  <!-- Card 1: Identity -->
   <div class="card" style="margin-bottom:16px">
     <div class="card-header"><h3><i class="fas fa-user-check"></i> Identity Verification</h3></div>
     <div class="card-body">
@@ -139,7 +138,6 @@
                  style="font-size:20px;text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
         </div>
       </div>
-
       <div id="identityGateFields" style="display:none">
         <div class="alert alert-warning" style="margin-bottom:16px">
           <i class="fas fa-exclamation-triangle"></i> This assessment is open-access. Please enter your name to continue.
@@ -156,7 +154,6 @@
     </div>
   </div>
 
-  <!-- Card 2: Hardware -->
   <div class="card" style="margin-bottom:16px">
     <div class="card-header"><h3><i class="fas fa-shield-alt"></i> Proctoring Setup</h3></div>
     <div class="card-body">
@@ -195,7 +192,6 @@
   </button>
 </div>
 
-<!-- ══ Assessment Area ══ -->
 <div id="assessmentArea" style="display:none">
   <div class="apply-page">
     <div id="warningsBanner" class="alert alert-warning" style="display:none">
@@ -225,7 +221,7 @@
 </div>
 
 <script>
-console.log("✅ HRPro Proctoring Script V6.0 Loaded");
+console.log("✅ HRPro Proctoring Script V7.0 Loaded");
 
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
@@ -240,21 +236,20 @@ let totalQuestions = 0;
 const state = {
   submitted: false, camWarnings: 0, voiceWarnings: 0,
   lookAwayStart: null, noFaceStart: null, voiceStart: null,
-  lastCamWarn: 0, lastVoiceWarn: 0,
+  lastCamWarn: 0, lastVoiceWarn: 0, lastVoiceLoudTime: 0, lastFaceOffset: '0.00',
   cameraStream: null, micStream: null, audioContext: null,
   faceDetectTimer: null, voiceDetectTimer: null, micLevelAnimFrame: null,
   timerInterval: null, startTime: null, timeLeftSeconds: 0
 };
 
-// Lowered thresholds for better sensitivity based on user feedback
 const CFG = {
   MAX_WARNINGS: 3, 
   HEAD_OFFSET_THRESHOLD: 0.35, 
   HEAD_SUSTAIN_MS: 1500, 
   NO_FACE_SUSTAIN_MS: 1500,
-  VOICE_SUSTAIN_MS: 1000,
-  VOICE_ENERGY_MIN: 30,  // Was 95, much lower now
-  VOICE_RMS_MIN: 0.02,   // Was 0.09, much lower now
+  VOICE_SUSTAIN_MS: 1000, // Requires 1 second of speaking
+  VOICE_ENERGY_MIN: 25,   // Lowered for better sensitivity
+  VOICE_RMS_MIN: 0.015,   // Lowered for better sensitivity
   CAM_COOLDOWN_MS: 5000, 
   VOICE_COOLDOWN_MS: 5000
 };
@@ -342,8 +337,12 @@ async function enableMic() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     state.micStream = stream;
     
+    // Initialize AudioContext ONCE here so it's shared
+    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    await state.audioContext.resume();
+    
     document.getElementById('micLevelWrap').style.display = 'block';
-    startMicLevelMeter(stream);
+    startMicLevelMeter();
     
     btn.classList.add('granted');
     btn.innerHTML = '<i class="fas fa-check"></i> Microphone Ready';
@@ -358,11 +357,10 @@ async function enableMic() {
   }
 }
 
-function startMicLevelMeter(stream) {
+function startMicLevelMeter() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = ctx.createMediaStreamSource(stream);
-    const analyser = ctx.createAnalyser();
+    const src = state.audioContext.createMediaStreamSource(state.micStream);
+    const analyser = state.audioContext.createAnalyser();
     analyser.fftSize = 256;
     src.connect(analyser);
     const data = new Uint8Array(analyser.frequencyBinCount);
@@ -505,7 +503,7 @@ async function startProctoring() {
     
     document.getElementById('debugInfo').textContent = "Monitoring Active...";
     
-    state.faceDetectTimer = setInterval(checkFace, 500); // Check face every half second
+    state.faceDetectTimer = setInterval(checkFace, 500);
     await startVoiceDetection();
     
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -525,7 +523,6 @@ async function checkFace() {
     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks(true);
     const now = Date.now();
     
-    // Clear canvas
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
     canvas.width = video.videoWidth;
@@ -533,7 +530,7 @@ async function checkFace() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (detections.length === 0) {
-      debugEl.textContent = `Faces: 0 | No Face`;
+      debugEl.innerHTML = `Faces: 0 | No Face<br>Mic E: -- | R: --`;
       debugEl.style.color = '#ef4444';
       if (state.noFaceStart === null) state.noFaceStart = now;
       if (now - state.noFaceStart > CFG.NO_FACE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
@@ -544,14 +541,13 @@ async function checkFace() {
     }
     state.noFaceStart = null;
 
-    // Draw green box around face
     const box = detections[0].detection.box;
     ctx.strokeStyle = '#10b981';
     ctx.lineWidth = 4;
     ctx.strokeRect(box.x, box.y, box.width, box.height);
 
     if (detections.length > 1) {
-      debugEl.textContent = `Faces: ${detections.length} | Multiple!`;
+      debugEl.innerHTML = `Faces: ${detections.length} | Multiple!<br>Mic E: -- | R: --`;
       debugEl.style.color = '#ef4444';
       if (state.multiFaceStart === null) state.multiFaceStart = now;
       if (now - state.multiFaceStart > CFG.MULTI_FACE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
@@ -562,19 +558,15 @@ async function checkFace() {
     }
     state.multiFaceStart = null;
 
-    // Calculate head turn
     const p = detections[0].landmarks.positions;
     const noseTip = p[30];
     const centerX = (p[16].x + p[0].x) / 2;
     const halfW = Math.abs(p[16].x - p[0].x) / 2;
     const offset = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
-
-    // Show live debug info
-    debugEl.textContent = `Faces: 1 | Offset: ${offset.toFixed(2)}`;
-    debugEl.style.color = '#10b981';
+    state.lastFaceOffset = offset.toFixed(2);
 
     if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
-      debugEl.textContent = `Faces: 1 | Offset: ${offset.toFixed(2)} (Looking Away!)`;
+      debugEl.innerHTML = `Faces: 1 | Offset: ${state.lastFaceOffset} (Looking Away!)<br>Mic E: -- | R: --`;
       debugEl.style.color = '#f59e0b';
       
       if (state.lookAwayStart === null) state.lookAwayStart = now;
@@ -583,22 +575,17 @@ async function checkFace() {
         state.lookAwayStart = null;
       }
     } else {
+      debugEl.innerHTML = `Faces: 1 | Offset: ${state.lastFaceOffset}<br>Mic E: -- | R: --`;
+      debugEl.style.color = '#10b981';
       state.lookAwayStart = null;
     }
-  } catch (e) {
-    console.error("Face check error", e);
-  }
+  } catch (e) {}
 }
 
 async function startVoiceDetection() {
-  if (!state.micStream) return;
+  if (!state.micStream || !state.audioContext) return;
   try {
-    if (state.micLevelAnimFrame) cancelAnimationFrame(state.micLevelAnimFrame);
-    
-    // Ensure AudioContext is resumed (browsers block it by default until interaction)
-    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    await state.audioContext.resume(); 
-    
+    // Reuse the existing AudioContext, but create a new analyser
     const src = state.audioContext.createMediaStreamSource(state.micStream);
     const analyser = state.audioContext.createAnalyser();
     analyser.fftSize = 2048;
@@ -623,24 +610,32 @@ async function startVoiceDetection() {
       for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; rms += v * v; }
       rms = Math.sqrt(rms / timeData.length);
 
-      // Show voice debug info
+      // Update debug text with mic numbers
       const debugEl = document.getElementById('debugInfo');
       if (debugEl && document.getElementById('startGate').style.display === 'none') {
-        // Only overwrite face text if the voice is currently loud
-        if (energy > CFG.VOICE_ENERGY_MIN && rms > CFG.VOICE_RMS_MIN) {
-           debugEl.textContent += ` | 🔊 Voice: ${energy.toFixed(0)}`;
-           debugEl.style.color = '#f59e0b';
+        const faceText = state.lastFaceOffset !== null && state.lastFaceOffset !== '0.00'
+                         ? `Offset: ${state.lastFaceOffset}` : `Cam: Active`;
+        debugEl.innerHTML = `${faceText}<br>Mic E: ${energy.toFixed(0)} | R: ${rms.toFixed(3)}`;
+        if (energy > CFG.VOICE_ENERGY_MIN || rms > CFG.VOICE_RMS_MIN) {
+          debugEl.style.color = '#f59e0b';
         }
       }
 
       const now = Date.now();
       if (energy > CFG.VOICE_ENERGY_MIN && rms > CFG.VOICE_RMS_MIN) {
         if (state.voiceStart === null) state.voiceStart = now;
+        state.lastVoiceLoudTime = now;
+        
         if (now - state.voiceStart > CFG.VOICE_SUSTAIN_MS && now - state.lastVoiceWarn > CFG.VOICE_COOLDOWN_MS) {
           issueVoiceWarning('Loud voice heard near you');
           state.voiceStart = null;
         }
-      } else { state.voiceStart = null; }
+      } else {
+        // 500ms Grace period: don't reset instantly if you pause for a breath
+        if (state.voiceStart !== null && (now - state.lastVoiceLoudTime > 500)) {
+          state.voiceStart = null;
+        }
+      }
     }, 250);
   } catch (e) { console.error("Voice error", e); }
 }
