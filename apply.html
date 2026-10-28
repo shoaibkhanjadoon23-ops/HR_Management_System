@@ -6,52 +6,200 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
-/* Application-code display block shown on the success screen */
-.code-reveal {
-  margin: 24px auto 0;
-  max-width: 460px;
-  padding: 20px;
-  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
-  border: 2px dashed #6366f1;
-  border-radius: 14px;
+/* ── Success screen ──────────────────────────────────────── */
+.success-hero {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border: 2px solid #10b981;
+  border-radius: 16px;
+  padding: 40px 28px 32px;
   text-align: center;
+  margin-bottom: 20px;
+  animation: fadeInUp .5s ease;
 }
-.code-reveal .label {
-  font-size: 12px;
-  font-weight: 700;
-  color: #4f46e5;
-  letter-spacing: 1.5px;
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.success-icon {
+  width: 80px; height: 80px;
+  background: #10b981; color: white;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 42px;
+  margin: 0 auto 20px;
+  box-shadow: 0 8px 24px rgba(16,185,129,.35);
+  animation: popIn .5s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn {
+  0%   { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+.success-hero h1 {
+  font-size: 26px; font-weight: 800; color: #065f46;
+  margin-bottom: 8px;
+}
+.success-hero p.lead {
+  font-size: 15px; color: #047857; line-height: 1.6;
+  max-width: 540px; margin: 0 auto;
+}
+
+/* ── Application-code card ────────────────────────────── */
+.code-card {
+  background: #fff;
+  border: 3px dashed #6366f1;
+  border-radius: 16px;
+  padding: 28px 24px;
+  text-align: center;
+  margin-bottom: 20px;
+  position: relative;
+}
+.code-card::before {
+  content: "★";
+  position: absolute;
+  top: -14px; left: 50%;
+  transform: translateX(-50%);
+  background: #6366f1; color: white;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.code-card .label {
+  font-size: 12px; font-weight: 800;
+  color: #4f46e5; letter-spacing: 2px;
   text-transform: uppercase;
+  margin-bottom: 4px;
 }
-.code-reveal .code {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: 6px;
-  color: #4338ca;
-  margin: 10px 0;
+.code-card .sub {
+  font-size: 12px; color: #6b7280; margin-bottom: 16px;
+}
+.code-display {
+  display: inline-block;
   font-family: 'Courier New', monospace;
+  font-size: 42px; font-weight: 900;
+  letter-spacing: 8px;
+  color: #312e81;
+  background: #eef2ff;
+  padding: 16px 28px;
+  border-radius: 12px;
+  border: 2px solid #c7d2fe;
   user-select: all;
+  margin-bottom: 18px;
+  line-height: 1.2;
+  word-break: break-all;
 }
-.code-reveal .hint {
-  font-size: 12px;
-  color: #6b7280;
-  line-height: 1.5;
-  margin-top: 8px;
+@media (max-width: 520px) {
+  .code-display { font-size: 28px; letter-spacing: 5px; padding: 14px 18px; }
 }
-.code-reveal .copy-btn {
-  margin-top: 12px;
-  padding: 8px 18px;
-  background: white;
-  border: 1.5px solid #6366f1;
-  color: #4f46e5;
-  border-radius: 8px;
-  font-weight: 700;
+.code-actions {
+  display: flex; gap: 10px; justify-content: center;
+  flex-wrap: wrap; margin-bottom: 18px;
+}
+.code-actions button {
+  padding: 11px 22px;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all .2s;
+  border: 2px solid #6366f1;
+  background: white; color: #4f46e5;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.code-actions button:hover {
+  background: #6366f1; color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99,102,241,.35);
+}
+.code-actions button.primary {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white; border: none;
+}
+.code-actions button.primary:hover {
+  box-shadow: 0 6px 20px rgba(99,102,241,.5);
+}
+.code-actions button.copied {
+  background: #10b981; color: white;
+  border-color: #10b981;
+}
+
+/* ── Warning / instructions card ──────────────────────── */
+.warning-card {
+  background: #fffbeb;
+  border: 2px solid #f59e0b;
+  border-radius: 16px;
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+.warning-card .warn-head {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px;
+  color: #b45309;
+}
+.warning-card .warn-head i { font-size: 24px; }
+.warning-card .warn-head h3 {
+  font-size: 16px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.warning-card ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.warning-card ul li {
+  display: flex; gap: 12px;
+  font-size: 14px; line-height: 1.6;
+  color: #78350f;
+  padding-left: 4px;
+}
+.warning-card ul li .li-icon {
+  flex-shrink: 0;
+  width: 24px; height: 24px;
+  background: #fde68a;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: #92400e; font-size: 12px;
+  margin-top: 1px;
+}
+.warning-card ul li strong { color: #7c2d12; font-weight: 700; }
+
+/* ── Danger callout (bottom of warning) ──────────────── */
+.danger-note {
+  margin-top: 16px;
+  background: #fef2f2;
+  border: 2px solid #ef4444;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+  color: #991b1b;
+}
+.danger-note i { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+.danger-note .txt { font-size: 13px; line-height: 1.55; }
+.danger-note strong { color: #7f1d1d; }
+
+/* ── Application summary footer ───────────────────────── */
+.app-summary {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
   font-size: 13px;
-  cursor: pointer;
-  transition: all .2s;
 }
-.code-reveal .copy-btn:hover { background: #6366f1; color: white; }
-.code-reveal .copy-btn.copied { background: #059669; border-color: #059669; color: white; }
+.app-summary .row {
+  display: flex; justify-content: space-between;
+  padding: 4px 0;
+  color: #4b5563;
+}
+.app-summary .row .k { font-weight: 600; color: #6b7280; }
+.app-summary .row .v { font-weight: 700; color: #111827; text-align: right; }
+
+/* ── Rating card (kept from before) ───────────────────── */
+.rating-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 20px;
+}
 </style>
 </head>
 <body style="background:#f8fafc">
@@ -263,7 +411,7 @@ async function submitApp(e) {
     const result = await res.json();
 
     if (res.ok) {
-      renderSuccessScreen(result);
+      renderSuccessScreen(result, payload);
     } else {
       const errorEl = document.getElementById('appError');
       errorEl.textContent = result.detail || 'Submission failed';
@@ -282,45 +430,108 @@ async function submitApp(e) {
   }
 }
 
-function renderSuccessScreen(result) {
-  // Hide the form and the original submit button block
+function renderSuccessScreen(result, payload) {
   document.getElementById('applicationForm').style.display = 'none';
+
+  const code = result.application_code || '--------';
+  const email = payload.email || '';
 
   const successEl = document.getElementById('appSuccess');
   successEl.style.display = 'block';
   successEl.innerHTML = `
-    <div class="card" style="padding:32px 24px;text-align:center;margin-bottom:16px">
-      <div style="font-size:56px;margin-bottom:12px">🎉</div>
-      <h2 style="font-size:22px;font-weight:800;margin-bottom:8px;color:#059669">
-        Application Submitted Successfully!
-      </h2>
-      <p style="font-size:14px;line-height:1.7;color:#6b7280;max-width:520px;margin:0 auto">
-        Thank you for applying. We will review your application and get back to you within
-        5–7 business days. A confirmation email has been sent to
-        <b>${result.applicant_email || 'your inbox'}</b>.
-      </p>
-
-      <!-- Application Code Reveal -->
-      <div class="code-reveal">
-        <div class="label">Your Application Code</div>
-        <div class="code" id="appCode">${result.application_code || '--------'}</div>
-        <button class="copy-btn" id="copyCodeBtn" onclick="copyAppCode()">
-          <i class="fas fa-copy"></i> Copy Code
-        </button>
-        <div class="hint">
-          <i class="fas fa-info-circle"></i>
-          <b>Save this code — you will need it to take the assessment if you are shortlisted.</b><br>
-          Each code can only be used once. A copy has also been sent to your email.
-        </div>
-      </div>
-
-      <p style="font-size:12px;color:#9ca3af;margin-top:18px">
-        Application ID: #${result.application_id}
+    <!-- 1. Congratulations hero -->
+    <div class="success-hero">
+      <div class="success-icon"><i class="fas fa-check"></i></div>
+      <h1>Congratulations, ${escapeHtml(payload.full_name || 'Candidate')}!</h1>
+      <p class="lead">
+        Your application for <strong>${escapeHtml(job.title)}</strong> has been submitted successfully.
+        Our team will review it and reach out within <strong>5–7 business days</strong>.
       </p>
     </div>
 
-    <!-- Company Rating Section -->
-    <div class="card" style="padding:24px;text-align:center;margin-bottom:16px">
+    <!-- 2. Application code — the star of the page -->
+    <div class="code-card">
+      <div class="label">Your Unique Application Code</div>
+      <div class="sub">Save this code — it's your key to the next step</div>
+
+      <div class="code-display" id="appCode">${escapeHtml(code)}</div>
+
+      <div class="code-actions">
+        <button class="primary" id="copyCodeBtn" onclick="copyAppCode()">
+          <i class="fas fa-copy"></i> Copy Code
+        </button>
+        <button onclick="downloadCode()">
+          <i class="fas fa-download"></i> Save as File
+        </button>
+        <button onclick="window.print()">
+          <i class="fas fa-print"></i> Print
+        </button>
+      </div>
+
+      <p style="font-size:12px;color:#6b7280;margin:0">
+        <i class="fas fa-envelope"></i>
+        This code has also been emailed to <strong>${escapeHtml(email || 'your inbox')}</strong>
+      </p>
+    </div>
+
+    <!-- 3. Warning + instructions -->
+    <div class="warning-card">
+      <div class="warn-head">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3>Keep This Code Safe — Read Carefully</h3>
+      </div>
+      <ul>
+        <li>
+          <span class="li-icon"><i class="fas fa-shield-alt"></i></span>
+          <div>
+            <strong>Do not share this code with anyone.</strong>
+            Treat it like a password — anyone with it can take your assessment on your behalf.
+          </div>
+        </li>
+        <li>
+          <span class="li-icon"><i class="fas fa-key"></i></span>
+          <div>
+            <strong>This code is required to start the assessment</strong> if you are shortlisted.
+            You will need it every time you access the assessment link we email you.
+          </div>
+        </li>
+        <li>
+          <span class="li-icon"><i class="fas fa-lock"></i></span>
+          <div>
+            <strong>Each code can be used only once.</strong>
+            Once you begin the assessment, your code is permanently locked — you cannot restart or retake it.
+          </div>
+        </li>
+        <li>
+          <span class="li-icon"><i class="fas fa-bookmark"></i></span>
+          <div>
+            <strong>Keep a copy in multiple places</strong> — screenshot it, save the email, or print this page.
+            Store it somewhere safe until you hear back from us.
+          </div>
+        </li>
+      </ul>
+
+      <div class="danger-note">
+        <i class="fas fa-ban"></i>
+        <div class="txt">
+          <strong>If you lose this code, you will be disqualified</strong> from taking
+          the assessment — and therefore from being considered for this position.
+          We cannot issue a replacement code.
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Application summary -->
+    <div class="app-summary">
+      <div class="row"><span class="k">Application ID</span><span class="v">#${result.application_id}</span></div>
+      <div class="row"><span class="k">Position</span><span class="v">${escapeHtml(job.title)}</span></div>
+      <div class="row"><span class="k">Applicant</span><span class="v">${escapeHtml(payload.full_name || '—')}</span></div>
+      <div class="row"><span class="k">Email</span><span class="v">${escapeHtml(email || '—')}</span></div>
+      <div class="row"><span class="k">Status</span><span class="v" style="color:#d97706">Pending Review</span></div>
+    </div>
+
+    <!-- 5. Company rating -->
+    <div class="rating-card">
       <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">
         Rate Your Application Experience
       </h3>
@@ -340,17 +551,31 @@ function renderSuccessScreen(result) {
         <i class="fas fa-star"></i> Submit Rating
       </button>
     </div>
+
+    <!-- 6. What's next -->
+    <div style="text-align:center;padding:16px;color:#6b7280;font-size:13px;line-height:1.8">
+      <strong style="color:#374151">What happens next?</strong><br>
+      1. Our team reviews your application<br>
+      2. If shortlisted, you'll receive an assessment link by email<br>
+      3. Use your code above to unlock and take the assessment<br>
+      4. We'll be in touch with the final decision
+    </div>
   `;
 
-  // Scroll to top so the candidate sees the success message immediately
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+/* ─── Code actions ────────────────────────────────────── */
 function copyAppCode() {
   const code = document.getElementById('appCode').textContent.trim();
   if (!code || code === '--------') return;
 
-  // Prefer clipboard API; fall back to a hidden textarea for older browsers
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(code).then(() => markCopied());
   } else {
@@ -373,9 +598,47 @@ function markCopied() {
   setTimeout(() => {
     btn.classList.remove('copied');
     btn.innerHTML = original;
-  }, 2000);
+  }, 2200);
 }
 
+function downloadCode() {
+  const code = document.getElementById('appCode').textContent.trim();
+  const text = [
+    '═══════════════════════════════════════════════════',
+    '        YOUR APPLICATION CODE — KEEP IT SAFE        ',
+    '═══════════════════════════════════════════════════',
+    '',
+    `  Application Code:  ${code}`,
+    `  Position:          ${job.title}`,
+    `  Applied on:        ${new Date().toLocaleString()}`,
+    '',
+    '═══════════════════════════════════════════════════',
+    '  IMPORTANT',
+    '═══════════════════════════════════════════════════',
+    '',
+    '  • Do NOT share this code with anyone.',
+    '  • You will need this code to take the assessment',
+    '    if you are shortlisted.',
+    '  • Each code can be used only ONCE.',
+    '  • If you lose this code, you will be DISQUALIFIED',
+    '    from the assessment and from being considered',
+    '    for this position.',
+    '',
+    '  Keep this file in a safe place.',
+    '═══════════════════════════════════════════════════',
+  ].join('\n');
+
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `application-code-${code}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+/* ─── Rating ──────────────────────────────────────────── */
 let selectedRating = 0;
 function rateCompany(appId, rating) {
   selectedRating = rating;
