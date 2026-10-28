@@ -1,1015 +1,486 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Assessment - HRPro</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 <style>
-/* ── Camera Proctoring Styles ───────────────────────────────────────── */
-.camera-check-box .card-body { padding: 24px 20px; }
-#proctorPreviewWrap video {
-  width: 220px; height: 165px; border-radius: 12px; object-fit: cover;
-  background: #111; transform: scaleX(-1); border: 3px solid var(--border);
+.proctor-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: #1e1b4b; color: #fff; padding: 12px 20px;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 20px; flex-wrap: wrap;
 }
-#proctorPreviewWrap.face-ok video { border-color: var(--success); }
-#proctorPreviewWrap.face-warn video { border-color: var(--danger); }
-
-.proctor-widget {
-  position: fixed; bottom: 20px; right: 20px; z-index: 500;
-  background: white; border-radius: 14px; box-shadow: var(--shadow-lg);
-  border: 1px solid var(--border); padding: 10px; display: flex;
-  flex-direction: column; align-items: center; gap: 6px; width: 150px;
+.warn-counter { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.warn-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; background: rgba(255,255,255,.1);
+  border-radius: 8px; font-size: 14px; transition: background .3s;
 }
-.proctor-video-slot video {
-  width: 130px; height: 98px; border-radius: 10px; object-fit: cover;
-  background: #111; transform: scaleX(-1); display: block;
+.warn-item.warned { background: #dc2626; animation: pulse-warn 1s infinite; }
+@keyframes pulse-warn { 0%,100% { opacity:1 } 50% { opacity:.65 } }
+.camera-preview {
+  position: fixed; bottom: 20px; right: 20px;
+  width: 190px; height: 143px; border-radius: 12px;
+  border: 3px solid #6366f1; overflow: hidden; z-index: 1000;
+  background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
-.proctor-status-text { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.4; }
-.proctor-status-text.issue { color: var(--danger); animation: pulse .8s infinite; }
-.proctor-status-text.ok { color: var(--success); }
-
-.proctor-alert-banner {
-  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
-  z-index: 600; background: var(--danger); color: white; padding: 12px 22px;
-  border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 13px; font-weight: 600;
-  display: flex; align-items: center; gap: 10px; max-width: 90%; text-align: left;
-  animation: pulse 1s infinite;
+.camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.warning-toast {
+  position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+  background: #dc2626; color: #fff; padding: 16px 32px; border-radius: 12px;
+  font-weight: 700; font-size: 16px; z-index: 2000;
+  animation: slideDown .3s ease; box-shadow: 0 10px 30px rgba(220,38,38,.5);
+  max-width: 90vw;
 }
-@media (max-width: 600px) {
-  .proctor-widget { width: 110px; right: 10px; bottom: 10px; }
-  .proctor-video-slot video { width: 90px; height: 68px; }
-}
+@keyframes slideDown { from { top:-60px; opacity:0 } to { top:80px; opacity:1 } }
 </style>
 </head>
-<body style="background:#f8fafc">
+<body>
 
-<!-- Floating live camera widget shown during the assessment -->
-<div id="proctorWidget" class="proctor-widget" style="display:none">
-  <div class="proctor-video-slot"></div>
-  <div id="proctorStatusText" class="proctor-status-text ok"><i class="fas fa-circle" style="font-size:7px"></i> Monitoring active</div>
-  <div id="proctorMicText" class="proctor-status-text ok"><i class="fas fa-microphone" style="font-size:9px"></i> Mic monitoring</div>
-</div>
-
-
-<!-- Violation warning banner -->
-<div id="proctorAlertBanner" class="proctor-alert-banner" style="display:none">
-  <i class="fas fa-exclamation-triangle"></i>
-  <span class="proctor-alert-text"></span>
-</div>
-
-<div style="max-width:800px;margin:0 auto;padding:20px">
-  <div id="startScreen">
-    <div style="text-align:center;padding:60px 20px">
-      <div style="width:80px;height:80px;background:var(--gradient);border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:36px;color:white">
-        <i class="fas fa-clipboard-check"></i>
-      </div>
-      <h1 id="assessTitle" style="font-size:26px;font-weight:800;margin-bottom:8px">Loading...</h1>
-      <p id="assessDesc" class="text-light" style="font-size:15px;margin-bottom:30px"></p>
-      <div id="assessInfo" style="display:inline-flex;gap:24px;background:white;padding:20px 40px;border-radius:12px;box-shadow:var(--shadow);margin-bottom:30px"></div>
-      <div class="alert alert-warning" style="text-align:left;max-width:500px;margin:0 auto 24px">
-        <b><i class="fas fa-exclamation-triangle"></i> Important Rules:</b>
-        <ul style="margin-top:8px;padding-left:20px;font-size:13px;line-height:1.8">
-          <li>Do NOT switch tabs or open other windows</li>
-          <li>Do NOT go back in browser during the exam</li>
-          <li>Switching tabs/windows will AUTO-SUBMIT your assessment</li>
-          <li id="ruleCameraOn" style="display:none">Keep your <b>camera on</b> and your face clearly visible at all times</li>
-          <li id="ruleAlone" style="display:none">Make sure you are <b>alone</b> — no other person should appear on camera</li>
-          <li id="ruleNoDevices" style="display:none">Do NOT use a phone or any other device within view of the camera</li>
-          <li id="ruleGaze" style="display:none">Look directly at the screen at all times — looking away will <b>AUTO-SUBMIT</b> your assessment</li>
-          <li id="ruleNoSpeaking" style="display:none">Do NOT speak during the assessment — talking or anyone speaking near you will <b>AUTO-SUBMIT</b> your assessment</li>
-          <li id="ruleCameraAutoSubmit" style="display:none">Leaving the frame, multiple people, or a phone/device on camera will <b>AUTO-SUBMIT</b> your assessment</li>
-          <li>Timer will count down — submit before it runs out</li>
-          <li>All questions are mandatory (MCQ and practical)</li>
-        </ul>
-      </div>
-      <div id="cameraCheckSection" style="display:none;max-width:480px;margin:0 auto 24px">
-        <div class="card camera-check-box">
-          <div class="card-header"><h3><i class="fas fa-video"></i> Camera &amp; Microphone Verification Required</h3></div>
-          <div class="card-body" style="text-align:center">
-            <p class="text-sm text-light" style="margin-bottom:16px">This assessment is monitored by an AI proctoring system. We need to confirm your camera and microphone work, and that you're alone, before you can begin.</p>
-            <div id="proctorPreviewWrap" style="display:none;margin-bottom:16px">
-              <video id="proctorVideo" autoplay muted playsinline></video>
-            </div>
-            <div id="cameraStatus" class="text-sm" style="min-height:20px;margin-bottom:16px"></div>
-            <button class="btn btn-secondary" id="enableCameraBtn" onclick="setupCamera()"><i class="fas fa-video"></i> Enable Camera &amp; Mic</button>
-          </div>
-        </div>
-      </div>
-      <div class="grid-2" style="max-width:400px;margin:0 auto 24px">
-        <div class="form-group"><label>Your Full Name *</label><input type="text" id="candName" placeholder="John Doe"></div>
-        <div class="form-group"><label>Your Email *</label><input type="email" id="candEmail" placeholder="john@email.com"></div>
-      </div>
-      <div class="form-group" style="max-width:400px;margin:0 auto 24px">
-        <label>Application ID (if provided)</label>
-        <input type="number" id="candAppId" placeholder="Leave blank if not provided">
-      </div>
-      <button class="btn btn-primary" id="startAssessBtn" onclick="startAssessment()" style="font-size:16px;padding:14px 40px"><i class="fas fa-play"></i> Start Assessment</button>
+<!-- Proctoring bar with warning counters -->
+<div id="proctorBar" class="proctor-bar" style="display:none">
+  <div class="warn-counter">
+    <div class="warn-item" id="camWarnItem">
+      <i class="fas fa-video"></i> Camera: <b><span id="camWarnCount">0</span>/3</b>
+    </div>
+    <div class="warn-item" id="voiceWarnItem">
+      <i class="fas fa-microphone"></i> Voice: <b><span id="voiceWarnCount">0</span>/3</b>
     </div>
   </div>
+  <div style="display:flex;gap:20px;align-items:center">
+    <div style="font-size:14px"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
+    <div id="submitStatus" style="font-size:13px;color:#a5b4fc"></div>
+  </div>
+</div>
 
-  <div id="assessmentScreen" style="display:none">
-    <div style="position:sticky;top:0;background:white;border-radius:12px;padding:16px 20px;margin-bottom:20px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:space-between;z-index:100">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-light)">Question Progress</div>
-        <div id="progressText" style="font-size:15px;font-weight:700"></div>
+<!-- Application-code gate -->
+<div id="codeGate" class="apply-page">
+  <div class="apply-header">
+    <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-shield-alt"></i> Secure Assessment</div>
+    <h1 id="jobTitle">Loading…</h1>
+    <p>Enter your application code to begin</p>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="form-group">
+        <label>Application Code *</label>
+        <input type="text" id="appCodeInput" maxlength="12"
+               placeholder="e.g. A3B5K9XZ"
+               style="font-size:20px;text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
+        <div class="text-xs text-light mt-2">
+          You received this code in your application confirmation email.
+        </div>
       </div>
-      <div class="timer-box" id="timer">
-        <i class="fas fa-clock"></i>
-        <span id="timerDisplay">00:00</span>
-      </div>
-      <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text-light)">Answered</div>
-        <div id="answeredCount" style="font-size:15px;font-weight:700">0 / 0</div>
+      <div id="codeError" class="alert alert-error" style="display:none"></div>
+      <button class="btn btn-primary btn-full" id="verifyBtn" onclick="verifyCode()">
+        <i class="fas fa-check"></i> Verify &amp; Start Assessment
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Assessment -->
+<div id="assessmentArea" style="display:none">
+  <div class="apply-page">
+    <div id="warningsBanner" class="alert alert-warning" style="display:none">
+      <b><i class="fas fa-exclamation-triangle"></i> Total warnings: <span id="totalWarnings">0</span>/3</b>
+      — The assessment auto-submits once either counter reaches 3.
+    </div>
+
+    <div class="card mb-4">
+      <div class="card-body">
+        <div id="assessmentTitle"></div>
+        <div id="assessmentMeta" class="text-sm text-light mt-2"></div>
+        <div class="progress-bar mt-4"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
       </div>
     </div>
 
     <div id="questionsContainer"></div>
 
-    <div style="text-align:center;margin-top:24px;padding:20px;background:white;border-radius:12px;box-shadow:var(--shadow)">
-      <p class="text-light mb-4" style="font-size:13px">Make sure you've answered all questions before submitting.</p>
-      <button class="btn btn-primary" onclick="submitAssessment()" style="font-size:16px;padding:14px 40px" id="submitBtn">
-        <i class="fas fa-check-circle"></i> Submit Assessment
+    <div style="text-align:center;margin:24px 0 80px">
+      <button class="btn btn-primary" id="submitBtn" onclick="submitAssessment('manual')"
+              style="font-size:16px;padding:14px 50px">
+        <i class="fas fa-paper-plane"></i> Submit Assessment
       </button>
-    </div>
-  </div>
-
-  <div id="resultScreen" style="display:none">
-    <div style="text-align:center;padding:60px 20px;background:white;border-radius:16px;box-shadow:var(--shadow)">
-      <div id="resultIcon" style="font-size:64px;margin-bottom:16px"></div>
-      <h2 id="resultTitle" style="font-size:28px;font-weight:800;margin-bottom:8px"></h2>
-      <div id="resultScore" style="font-size:48px;font-weight:900;background:var(--gradient);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:8px"></div>
-      <p id="resultGrade" style="font-size:20px;font-weight:700;margin-bottom:16px"></p>
-      <p id="resultFeedback" class="text-light" style="font-size:14px;max-width:500px;margin:0 auto 24px;line-height:1.7"></p>
-      <div class="alert alert-success"><i class="fas fa-envelope"></i> Your results have been sent to your email address.</div>
     </div>
   </div>
 </div>
 
+<!-- Camera preview -->
+<div class="camera-preview" id="cameraPreview" style="display:none">
+  <video id="camera" autoplay muted playsinline></video>
+</div>
+
 <script>
-// Get assessment ID from template – using a data attribute to avoid linter warnings
-const pathSegments = window.location.pathname.split('/');
-const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
+const pathSegments = window.location.pathname.split('/').filter(Boolean);
+const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
+const prefilledCode = new URLSearchParams(window.location.search).get('code') || '';
+
 let assessment = null;
+let verifiedApplication = null;
 let answers = {};
-let timerInterval = null;
-let timeLeft = 0;
-let examEndAt = null;       // Date.now()-based deadline — timer reads real elapsed time so it
-                             // can never visually "stick", even if a tick gets delayed by CPU load
-let startTime = null;
-let antiCheatEnabled = false;
+let totalQuestions = 0;
 let submitted = false;
 
-// ── Camera Proctoring state ──────────────────────────────────────────
-let proctorStream = null;          // MediaStream from getUserMedia (video)
-let micStream = null;              // MediaStream from getUserMedia (audio)
-let proctorModels = { object: null, face: null };
-let proctorInterval = null;
-let gazeInterval = null;
-let cameraConfirmed = false;       // candidate passed the pre-start camera check
-let proctorLibsLoaded = false;
-let faceLibLoaded = false;
-let aiDetectionAvailable = true;   // false if the object-detection model couldn't load (network/region issue)
-let gazeDetectionAvailable = true; // false if the face-landmarks model couldn't load
-let proctorViolationReason = null; // set when auto-submitted due to a camera violation
-let lastAutoSubmitReason = null;   // set for any auto-submit (tab switch, alt-tab, timer, camera, mic)
-let violationCounts = { noFace: 0, multiFace: 0, device: 0 };
-let proctorCheckInFlight = false;  // prevents overlapping detect() calls from queuing up and adding latency
+/* ── Proctoring state ─────────────────────────────────────── */
+const MAX_WARNINGS          = 3;
+const HEAD_OFFSET_THRESHOLD = 0.34;   // nose off-centre ratio — ignore slight turns
+const HEAD_SUSTAIN_MS       = 1800;   // must be sustained this long to warn
+const VOICE_SUSTAIN_MS      = 1800;
+const WARNING_COOLDOWN_MS   = 5000;   // gap between warnings, so 3s head turn ≠ 3 warnings
+const VOICE_ENERGY_MIN      = 95;     // avg 300–3400 Hz energy (0–255)
+const VOICE_RMS_MIN         = 0.09;   // loudness (near-mic voice); filters distant/quiet noise
 
-// ── Microphone / voice detection state ─────────────────────────────────
-let audioCtx = null, audioAnalyser = null, audioSource = null, micMonitorRAF = null;
-let micConfirmed = false;
-let voiceSampleWindow = []; // rolling true/false history of recent "voice-like" mic samples
-let micBaselineRms = 0.012; // ambient noise floor, measured per-candidate during setup (see calibrateMic)
-let voiceConditionStreak = 0; // consecutive poll cycles where the rolling window already looked like sustained speech
-let cachedFreqData = null;  // reused Uint8Array buffer for frequency-domain reads (avoid re-allocating every 100ms)
+let camWarnings = 0, voiceWarnings = 0;
+let headAwayStart = null, voiceStart = null;
+let lastCamWarnAt = 0,   lastVoiceWarnAt = 0;
+let cameraStream = null, audioContext = null;
+let faceDetectInterval = null, voiceDetectInterval = null;
 
-// ── Gaze calibration (per-candidate "looking at the screen" reference pose) ─────
-let gazeBaselineYaw = 0;
-let gazeBaselinePitch = 0;
-let gazeCalibrated = false;
+let startTime = null, timeLeftSeconds = 0, timerInterval = null;
 
-const PROCTOR_CHECK_MS = 350;      // how often we analyze a frame for object/face-count
-const GAZE_CHECK_MS = 150;         // dedicated, lightweight gaze-only loop — runs independently
-                                    // and much faster than PROCTOR_CHECK_MS so a quick left/right
-                                    // glance is still caught even if the candidate's head is back
-                                    // to center by the time the next heavy object-detection cycle runs
-const VIOLATION_LIMIT = 1;         // instant — no grace checks, no warning before auto-submit
-const DEVICE_VIOLATION_LIMIT = 1;  // a device only needs to be seen once
-const DEVICE_SCORE_THRESHOLD = 0.3; // lower threshold = catches phones held at odd angles/partial view
-// COCO-SSD classes treated as a "gadget" violation. Cell phones are most common, but a
-// second phone/tablet propped on a stand is often misclassified by COCO-SSD as one of
-// these other classes, so we flag all of them as a precaution.
-const FLAGGED_OBJECTS = ['cell phone', 'remote', 'tablet', 'laptop'];
-
-// Voice detection tuning.
-//
-// Volume (RMS) alone can't tell a voice apart from environmental noise — a door closing,
-// a fan kicking in, papers shuffling, or a chair creak can all be just as "loud" as someone
-// talking. So loudness is only step one. A sample is only treated as "voice-like" if it is
-// ALSO loud in the right frequency range and has the right shape:
-//   1. isLoud      — RMS is above the candidate's own measured ambient noise floor.
-//   2. voiceRatio  — most of the spectral energy sits in the human speech band (~300-3400Hz),
-//                    which is where vowel formants live. Low rumble (AC hum, traffic) and
-//                    very high-frequency hiss mostly fall outside this band.
-//   3. peakiness   — speech has distinct formant peaks within that band (it's tonal), while
-//                    broadband noise (fan/static/wind) is comparatively flat across it.
-// Only when all three agree do we count the sample as "voice-like" — this is what filters
-// out environmental noise that was previously triggering false auto-submits.
-//
-// On top of that, "too fast" reactions are fixed with two layers of debounce:
-//   - a rolling window (VOICE_WINDOW_MS) so brief gaps between words/syllables don't reset
-//     the count, but also long enough to give the frequency analysis several samples to
-//     average over instead of judging a single 100ms slice (which is what made fast speech
-//     or a quick transient noise look identical to the old logic).
-//   - a streak requirement (VOICE_STREAK_NEEDED) so the window has to look like sustained
-//     speech for several consecutive checks in a row, not just once, before we auto-submit.
-const VOICE_DELTA = 0.006;            // how far above the candidate's own baseline counts as "loud"
-const VOICE_BAND_LOW_HZ = 300;        // lower bound of the human speech band we score against
-const VOICE_BAND_HIGH_HZ = 3400;      // upper bound (covers fundamentals + main formants)
-const VOICE_RATIO_MIN = 0.35;         // >=35% of total spectral energy must sit in the speech band
-const VOICE_PEAKINESS_MIN = 1.6;      // loudest bin in-band must be notably above the in-band average
-const VOICE_WINDOW_MS = 1500;         // look at the last 1.5s of mic samples
-const VOICE_ACTIVE_RATIO = 0.25;      // if >=25% of that window was voice-like -> count this cycle
-const VOICE_STREAK_NEEDED = 4;        // ...and that has to be true for 4 cycles in a row before submit
-const MIC_CHECK_MS = 100;
-
-// Gaze tuning: deviation is measured from the candidate's OWN calibrated "looking at the
-// screen" pose (captured during setup), not an absolute zero — this catches small/slight
-// turns reliably regardless of where their camera is physically angled.
-const GAZE_THRESHOLD = 0.085;      // lower = more sensitive to slight/fast turns
-const GAZE_AWAY_STREAK_NEEDED = 2; // require 2 consecutive over-threshold checks (~240ms at
-                                    // GAZE_CHECK_MS) before submitting — small buffer so a single
-                                    // noisy frame / blink doesn't instantly trigger, while still
-                                    // catching genuine fast left-right glances almost immediately
-let gazeAwayStreak = 0;            // consecutive over-threshold checks so far
-let gazeCheckInFlight = false;     // prevents overlapping estimateFaces() calls from queuing up
+if (prefilledCode) document.getElementById('appCodeInput').value = prefilledCode.toUpperCase();
 
 async function loadAssessment() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
+    if (!res.ok) throw new Error('Assessment not found');
     assessment = await res.json();
-    if (!assessment.is_active) {
-      document.getElementById('assessTitle').textContent = 'Assessment Not Available';
-      document.getElementById('assessDesc').textContent = 'This assessment is currently inactive.';
+    document.getElementById('jobTitle').textContent = assessment.title;
+    timeLeftSeconds = assessment.duration_minutes * 60;
+  } catch (e) {
+    document.getElementById('codeGate').innerHTML =
+      '<div class="alert alert-error">Assessment not found or inactive.</div>';
+  }
+}
+
+async function verifyCode() {
+  const code = document.getElementById('appCodeInput').value.trim().toUpperCase();
+  if (!code) return showCodeError('Please enter your application code');
+
+  const btn = document.getElementById('verifyBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying…';
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/verify-application`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ application_code: code }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showCodeError(data.detail || 'Invalid application code');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-check"></i> Verify &amp; Start Assessment';
       return;
     }
-    document.getElementById('assessTitle').textContent = assessment.title;
-    document.getElementById('assessDesc').textContent = assessment.description || 'Please read all questions carefully before answering.';
-    document.getElementById('assessInfo').innerHTML = `
-      <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--primary)">${assessment.questions?.length || 0}</div><div style="font-size:12px;color:var(--text-light)">Questions</div></div>
-      <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--success)">${assessment.total_marks}</div><div style="font-size:12px;color:var(--text-light)">Total Marks</div></div>
-      <div style="text-align:center"><div style="font-size:24px;font-weight:800;color:var(--warning)">${assessment.duration_minutes}</div><div style="font-size:12px;color:var(--text-light)">Minutes</div></div>`;
-    antiCheatEnabled = assessment.anti_cheat;
-    initCameraGate();
-  } catch(e) {
-    console.error('[loadAssessment] failed:', e);
-    document.getElementById('assessTitle').textContent = 'Error Loading Assessment';
-    document.getElementById('assessDesc').textContent = e?.message || 'Unknown error — open browser console (F12) for details.';
+    verifiedApplication = data;
+    startAssessment();
+  } catch (e) {
+    showCodeError('Network error. Please try again.');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-check"></i> Verify &amp; Start Assessment';
   }
 }
 
-function initCameraGate() {
-  if (antiCheatEnabled) {
-    // Show camera-specific rules and require a verified camera before Start is enabled
-    ['ruleCameraOn','ruleAlone','ruleNoDevices','ruleGaze','ruleNoSpeaking','ruleCameraAutoSubmit'].forEach(id => {
-      document.getElementById(id).style.display = 'list-item';
-    });
-    document.getElementById('cameraCheckSection').style.display = 'block';
-    document.getElementById('startAssessBtn').disabled = true;
-    document.getElementById('startAssessBtn').style.opacity = '0.5';
-  }
+function showCodeError(msg) {
+  const el = document.getElementById('codeError');
+  el.textContent = msg;
+  el.style.display = 'block';
 }
 
-function startAssessment() {
-  const name = document.getElementById('candName').value.trim();
-  const email = document.getElementById('candEmail').value.trim();
-  if (!name || !email) { alert('Please enter your name and email'); return; }
-  if (!assessment) { alert('Assessment not loaded'); return; }
-  if (antiCheatEnabled && (!cameraConfirmed || !micConfirmed)) { alert('Please complete the camera and microphone verification before starting.'); return; }
+async function startAssessment() {
+  document.getElementById('codeGate').style.display = 'none';
+  document.getElementById('assessmentArea').style.display = 'block';
+  document.getElementById('proctorBar').style.display = 'flex';
+  document.getElementById('cameraPreview').style.display = 'block';
 
-  document.getElementById('startScreen').style.display = 'none';
-  document.getElementById('assessmentScreen').style.display = 'block';
-  
-  startTime = new Date();
-  examEndAt = Date.now() + assessment.duration_minutes * 60 * 1000;
-  timeLeft = assessment.duration_minutes * 60;
-  
   renderQuestions();
   startTimer();
-  
-  if (antiCheatEnabled) {
-    setupAntiCheat();
-    startProctoringMonitor();
+  startTime = Date.now();
+
+  if (assessment.anti_cheat) {
+    await startProctoring();
   }
 }
 
 function renderQuestions() {
-  const questions = assessment.questions || [];
-  const total = questions.length;
-  
-  document.getElementById('progressText').textContent = `${total} Questions`;
-  document.getElementById('answeredCount').textContent = `0 / ${total}`;
-  
-  let html = '';
-  questions.forEach((q, idx) => {
-    const qType = q.type || 'mcq';
-    if (qType === 'practical' || qType === 'typing') {
-      const label = qType === 'typing' ? 'Your Answer:' : 'Your Answer (code / explanation):';
-      const placeholder = qType === 'typing' ? 'Type your answer here...' : 'Write your code or detailed explanation here...';
-      const typeLabel = qType === 'typing' ? 'Written Answer' : 'Practical';
-      html += `
-        <div class="question-card" id="qcard_${q.id}">
-          <div class="question-num">
-            <span>${typeLabel} Question ${idx + 1} of ${total}</span>
-            <span class="level-${q.level || 'hard'}">${q.marks} pts</span>
-          </div>
-          <div class="question-text">${q.question}</div>
-          <div class="form-group mt-4">
-            <label>${label}</label>
-            <textarea id="practical_${q.id}" rows="5" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:${qType==='typing'?'inherit':'monospace'}" placeholder="${placeholder}"></textarea>
-          </div>
-        </div>`;
-    } else if (qType === 'fill_blank') {
-      html += `
-        <div class="question-card" id="qcard_${q.id}">
-          <div class="question-num">
-            <span>Question ${idx + 1} of ${total}</span>
-            <span style="background:#ede9fe;color:#7c3aed;padding:2px 10px;border-radius:20px;font-size:12px">Fill in the Blank</span>
-            <span style="margin-left:auto;color:var(--text-light)">${q.marks} pts</span>
-          </div>
-          <div class="question-text">${q.question}</div>
-          <div class="form-group mt-4">
-            <input type="text" id="fill_${q.id}" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:8px;font-size:15px" placeholder="Type your answer here..." oninput="answers[${q.id}]=this.value;updateAnsweredCount()">
-          </div>
-        </div>`;
+  const qs = assessment.questions || [];
+  totalQuestions = qs.length;
+  document.getElementById('assessmentTitle').innerHTML =
+    `<h2 style="font-size:20px">${escapeHtml(assessment.title)}</h2>`;
+  document.getElementById('assessmentMeta').innerHTML =
+    `<i class="fas fa-list"></i> ${totalQuestions} questions &nbsp;|&nbsp;
+     <i class="fas fa-star"></i> ${assessment.total_marks} marks &nbsp;|&nbsp;
+     <i class="fas fa-clock"></i> ${assessment.duration_minutes} minutes`;
+
+  document.getElementById('questionsContainer').innerHTML = qs.map((q, idx) => {
+    let answerHtml = '';
+    if (q.type === 'mcq') {
+      answerHtml = (q.options || []).map((opt, i) => `
+        <label class="option-item" id="opt_${q.id}_${i}">
+          <input type="radio" name="q_${q.id}" value="${i}"
+                 onchange="selectOption(${q.id}, ${i})">
+          <span>${escapeHtml(opt)}</span>
+        </label>`).join('');
+    } else if (q.type === 'fill_blank') {
+      answerHtml = `<input type="text" placeholder="Your answer…"
+        oninput="saveAnswer(${q.id}, this.value)"
+        style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px">`;
     } else {
-      html += `
-        <div class="question-card" id="qcard_${q.id}">
-          <div class="question-num">
-            <span>Question ${idx + 1} of ${total}</span>
-            <span class="level-${q.level}">${q.level?.toUpperCase()}</span>
-            <span style="margin-left:auto;color:var(--text-light)">${q.marks} pts</span>
-          </div>
-          <div class="question-text">${q.question}</div>
-          <div class="options-list">
-            ${(q.options || []).map((opt, oi) => `
-              <label class="option-item" id="opt_${q.id}_${oi}" onclick="selectAnswer(${q.id},${oi},${idx + 1},${total})">
-                <input type="radio" name="q_${q.id}" value="${oi}">
-                <span style="font-weight:600;width:22px;height:22px;background:var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${String.fromCharCode(65+oi)}</span>
-                <span>${opt}</span>
-              </label>`).join('')}
-          </div>
-        </div>`;
+      answerHtml = `<textarea rows="6" placeholder="Write your answer…"
+        oninput="saveAnswer(${q.id}, this.value)"
+        style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit"></textarea>`;
     }
-  });
-  document.getElementById('questionsContainer').innerHTML = html;
-  
-  // Track practical / typing answers on input
-  questions.forEach(q => {
-    if (q.type === 'practical' || q.type === 'typing') {
-      const ta = document.getElementById(`practical_${q.id}`);
-      if (ta) {
-        ta.addEventListener('input', () => {
-          answers[q.id] = ta.value;
-          updateAnsweredCount();
-        });
-      }
-    }
-  });
+    return `
+      <div class="question-card" id="qcard_${q.id}">
+        <div class="question-num">
+          Question ${idx + 1} of ${totalQuestions}
+          <span class="level-${q.level}">${q.level}</span>
+          <span style="margin-left:auto;color:var(--text-light)">${q.marks} marks</span>
+        </div>
+        <div class="question-text">${escapeHtml(q.question)}</div>
+        <div>${answerHtml}</div>
+      </div>`;
+  }).join('');
 }
 
-function selectAnswer(questionId, optionIndex, qNum, total) {
-  document.querySelectorAll(`[id^="opt_${questionId}_"]`).forEach(el => el.classList.remove('selected'));
-  document.getElementById(`opt_${questionId}_${optionIndex}`).classList.add('selected');
-  answers[questionId] = optionIndex;
-  document.getElementById(`qcard_${questionId}`).classList.add('answered');
-  updateAnsweredCount();
+function selectOption(qid, optIdx) {
+  document.querySelectorAll(`[id^="opt_${qid}_"]`).forEach(el => el.classList.remove('selected'));
+  document.getElementById(`opt_${qid}_${optIdx}`).classList.add('selected');
+  saveAnswer(qid, optIdx);
 }
 
-function updateAnsweredCount() {
-  const total = assessment.questions.length;
-  const answered = Object.keys(answers).length;
-  document.getElementById('answeredCount').textContent = `${answered} / ${total}`;
+function saveAnswer(qid, value) {
+  answers[qid] = value;
+  document.getElementById(`qcard_${qid}`).classList.add('answered');
+  const done = Object.keys(answers).length;
+  document.getElementById('progressFill').style.width =
+    `${totalQuestions ? (done / totalQuestions) * 100 : 0}%`;
 }
 
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+/* ── Timer ─────────────────────────────────────────────────── */
 function startTimer() {
-  updateTimerDisplay();
   timerInterval = setInterval(() => {
-    timeLeft = Math.max(0, Math.round((examEndAt - Date.now()) / 1000));
-    updateTimerDisplay();
-    if (timeLeft <= 0) {
-      clearInterval(timerInterval);
-      submitAssessment(true);
-    }
-  }, 250); // checked 4x/sec so the displayed number catches up fast even after a delayed tick
-
-  // Belt-and-braces: instantly resync the displayed number the moment the tab/window
-  // regains focus, in case a tick was delayed by background throttling or heavy work.
-  document.addEventListener('visibilitychange', resyncTimerNow);
-  window.addEventListener('focus', resyncTimerNow);
+    if (submitted) return;
+    timeLeftSeconds--;
+    const m = Math.max(0, Math.floor(timeLeftSeconds / 60));
+    const s = Math.max(0, timeLeftSeconds % 60);
+    document.getElementById('timer').textContent = `${m}:${String(s).padStart(2, '0')}`;
+    if (timeLeftSeconds <= 0) submitAssessment('auto', 'Time expired');
+  }, 1000);
 }
 
-function resyncTimerNow() {
-  if (!examEndAt || submitted) return;
-  timeLeft = Math.max(0, Math.round((examEndAt - Date.now()) / 1000));
-  updateTimerDisplay();
-}
-
-function updateTimerDisplay() {
-  const m = Math.floor(timeLeft / 60);
-  const s = timeLeft % 60;
-  const display = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  document.getElementById('timerDisplay').textContent = display;
-  const timerEl = document.getElementById('timer');
-  timerEl.className = 'timer-box';
-  if (timeLeft <= 60) timerEl.classList.add('danger');
-  else if (timeLeft <= 300) timerEl.classList.add('warning');
-}
-
-function setupAntiCheat() {
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && !submitted) autoSubmit('Tab switch detected');
-  });
-  window.addEventListener('blur', () => {
-    if (!submitted) {
-      setTimeout(() => {
-        if (document.hidden || document.activeElement !== document.querySelector('input[type=radio],textarea')) {
-          autoSubmit('Window switch detected');
-        }
-      }, 1000);
-    }
-  });
-  document.addEventListener('contextmenu', e => e.preventDefault());
-  document.addEventListener('copy', e => e.preventDefault());
-  document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && ['c','v','a','s','p'].includes(e.key.toLowerCase())) e.preventDefault();
-    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I')) e.preventDefault();
-    if (e.altKey && e.key === 'Tab') { e.preventDefault(); autoSubmit('Alt+Tab detected'); }
-  });
-}
-
-function autoSubmit(reason, isCameraViolation = false) {
-  if (submitted) return;
-  if (isCameraViolation) proctorViolationReason = reason;
-  lastAutoSubmitReason = reason;
-  stopProctoring();
-  alert(`⚠️ Anti-cheat: ${reason}. Your assessment will be submitted automatically.`);
-  submitAssessment(true);
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  Camera-based Proctoring (face count + gadget detection)
-// ════════════════════════════════════════════════════════════════════
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Failed to load script: ' + src));
-    document.head.appendChild(s);
-  });
-}
-
-// If your network/region can't reach Google's model hosting (storage.googleapis.com —
-// this is a known issue in some countries), download the coco-ssd "lite_mobilenet_v2"
-// model files yourself and host them on your own domain (e.g. Vercel /public/models/coco-ssd/),
-// then set this to the path of your model.json, e.g. '/models/coco-ssd/model.json'.
-// Leave blank to use the default Google-hosted model.
-const COCO_SSD_MODEL_URL = '';
-
-// Loads TensorFlow.js + COCO-SSD (used both to spot phones AND to count people in frame).
-// We intentionally use a single model here — fewer external dependencies, and unlike
-// BlazeFace, coco-ssd officially supports a self-hosted modelUrl override (see above).
-async function loadProctorLibs() {
-  if (proctorLibsLoaded) return;
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js');
-  proctorLibsLoaded = true;
-}
-
-// Loads TF.js face-landmarks-detection (MediaPipe FaceMesh runtime) used purely for the
-// gaze-direction check that pauses/resumes the timer. Kept separate from coco-ssd so a
-// failure here doesn't block the (more important) face-count/device proctoring above.
-async function loadFaceLib() {
-  if (faceLibLoaded) return;
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.22.0/dist/tf-core.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.22.0/dist/tf-converter.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.22.0/dist/tf-backend-webgl.min.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.5/dist/face-landmarks-detection.min.js');
-  faceLibLoaded = true;
-}
-
-async function loadFaceModelWithRetry(attempts = 2) {
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      await loadFaceLib();
-      return await faceLandmarksDetection.createDetector(
-        faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-        { runtime: 'mediapipe', solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh', maxFaces: 1 }
-      );
-    } catch (e) {
-      console.error(`[proctoring] face model load attempt ${i}/${attempts} failed:`, e);
-      if (i < attempts) await new Promise(r => setTimeout(r, 1200));
-    }
-  }
-  return null;
-}
-
-async function loadCocoModelWithRetry(attempts = 3) {
-  for (let i = 1; i <= attempts; i++) {
-    try {
-      await loadProctorLibs();
-      const config = COCO_SSD_MODEL_URL ? { modelUrl: COCO_SSD_MODEL_URL } : { base: 'lite_mobilenet_v2' };
-      return await cocoSsd.load(config);
-    } catch (e) {
-      console.error(`[proctoring] model load attempt ${i}/${attempts} failed:`, e);
-      if (i < attempts) await new Promise(r => setTimeout(r, 1500));
-    }
-  }
-  return null; // every attempt failed
-}
-
-// Step run from the "Enable Camera & Mic" button on the start screen.
-async function setupCamera() {
-  const btn = document.getElementById('enableCameraBtn');
-  const statusEl = document.getElementById('cameraStatus');
-  const wrap = document.getElementById('proctorPreviewWrap');
-  btn.disabled = true;
-
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting camera and microphone access...';
+/* ── Proctoring ────────────────────────────────────────────── */
+async function startProctoring() {
   try {
-    proctorStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
-      audio: false
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 320, height: 240, facingMode: 'user' }, audio: false,
     });
+    const video = document.getElementById('camera');
+    video.srcObject = cameraStream;
+    await new Promise(r => (video.onloadedmetadata = r));
+
+    const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
+    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath);
+
+    faceDetectInterval = setInterval(checkFace, 600);
+    await startVoiceDetection();
   } catch (e) {
-    console.error('[proctoring] camera getUserMedia failed:', e);
-    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Camera access is required for this proctored assessment. Please allow camera permission in your browser and try again.</span>';
-    btn.disabled = false;
-    return;
+    console.error('Proctoring setup failed:', e);
+    // Warning counters simply won't fire; candidate can still finish manually.
   }
+}
 
+async function checkFace() {
+  if (submitted) return;
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    micConfirmed = true;
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    audioSource = audioCtx.createMediaStreamSource(micStream);
-    audioAnalyser = audioCtx.createAnalyser();
-    audioAnalyser.fftSize = 1024;
-    audioSource.connect(audioAnalyser);
-  } catch (e) {
-    console.error('[proctoring] microphone getUserMedia failed:', e);
-    statusEl.innerHTML = '<span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Microphone access is required for this proctored assessment (used to detect talking). Please allow microphone permission and try again.</span>';
-    btn.disabled = false;
-    proctorStream.getTracks().forEach(t => t.stop());
-    proctorStream = null;
-    return;
-  }
+    const det = await faceapi
+      .detectSingleFace(document.getElementById('camera'),
+        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+      .withFaceLandmarks(true);
 
-  const video = document.getElementById('proctorVideo');
-  video.srcObject = proctorStream;
-  wrap.style.display = 'block';
+    const now = Date.now();
 
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading AI verification models (one-time, a few seconds)...';
-  // Load both models in parallel — this is the single biggest lever on how long the
-  // candidate waits before Start is enabled.
-  const [objModel, faceModel] = await Promise.all([
-    loadCocoModelWithRetry(),
-    loadFaceModelWithRetry()
-  ]);
-  proctorModels.object = objModel;
-  proctorModels.face = faceModel;
-  gazeDetectionAvailable = !!faceModel;
+    if (!det) {
+      if (headAwayStart === null) headAwayStart = now;
+      if (now - headAwayStart > HEAD_SUSTAIN_MS && now - lastCamWarnAt > WARNING_COOLDOWN_MS) {
+        issueCamWarning('Face not detected');
+        headAwayStart = null;
+      }
+      return;
+    }
 
-  if (!proctorModels.object) {
-    aiDetectionAvailable = false;
-    statusEl.innerHTML = `
-      <span style="color:var(--danger)"><i class="fas fa-exclamation-circle"></i> Couldn't reach the AI verification service (this is usually a network/firewall issue, not your camera).</span>
-      <div style="margin-top:10px"><button class="btn btn-sm btn-secondary" type="button" onclick="continueWithBasicMonitoring()">Continue with basic monitoring instead</button></div>`;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-video"></i> Retry AI Verification';
-    return;
-  }
+    const p = det.landmarks.positions;
+    const noseTip   = p[30];
+    const leftFace  = p[16];
+    const rightFace = p[0];
+    const centerX   = (leftFace.x + rightFace.x) / 2;
+    const halfW     = Math.abs(leftFace.x - rightFace.x) / 2;
+    const offset    = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
 
-  statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Calibrating — please look at the screen and stay quiet for a moment...';
-  await calibrateBaselines(video);
-  const numPeople = await countPeopleInFrame(video);
-
-  if (numPeople === 1) {
-    wrap.className = 'face-ok';
-    statusEl.innerHTML = '<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Camera &amp; microphone verified — you\'re ready to begin.</span><div class="text-xs text-light mt-2">Tip: sit at a normal arm\'s-length distance so your hands and surroundings stay visible.</div>';
-    confirmCameraReady();
-  } else if (numPeople === 0) {
-    wrap.className = 'face-warn';
-    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> We couldn\'t see you clearly. Make sure your head and shoulders are in frame, then click Enable Camera again.</span>';
-    btn.disabled = false;
-  } else {
-    wrap.className = 'face-warn';
-    statusEl.innerHTML = '<span style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> More than one person detected. Make sure you\'re alone, then try again.</span>';
-    btn.disabled = false;
-  }
+    if (Math.abs(offset) > HEAD_OFFSET_THRESHOLD) {
+      if (headAwayStart === null) headAwayStart = now;
+      if (now - headAwayStart > HEAD_SUSTAIN_MS && now - lastCamWarnAt > WARNING_COOLDOWN_MS) {
+        issueCamWarning('Head turned away');
+        headAwayStart = null;
+      }
+    } else {
+      headAwayStart = null;   // slight glance → completely resets, no warning
+    }
+  } catch (_) { /* ignore transient detection errors */ }
 }
 
-// Candidate opts to proceed without AI detection because the model couldn't load.
-// Camera preview + tab-switch detection still apply; just no automated face/device checks.
-function continueWithBasicMonitoring() {
-  const statusEl = document.getElementById('cameraStatus');
-  statusEl.innerHTML = '<span style="color:var(--text-light)"><i class="fas fa-info-circle"></i> Continuing with basic monitoring (camera visible, AI checks disabled).</span>';
-  confirmCameraReady();
-}
-
-function confirmCameraReady() {
-  cameraConfirmed = true;
-  const startBtn = document.getElementById('startAssessBtn');
-  startBtn.disabled = false;
-  startBtn.style.opacity = '1';
-}
-
-// Returns how many people we can see — combines coco-ssd's general person detector
-// with the face-mesh face count. Face-mesh is what actually saves us here: the general
-// object detector loses track of a person when they lean in close to the camera and get
-// cropped by the frame edges, which was previously causing false "no person" auto-submits
-// the moment someone leaned closer mid-exam. Trusting whichever model sees someone fixes that.
-async function countPeopleInFrame(video) {
-  let personCount = 0, faceCount = 0;
+async function startVoiceDetection() {
   try {
-    if (proctorModels.object) {
-      const objects = await proctorModels.object.detect(video, 20, 0.25);
-      personCount = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
-    }
-  } catch (e) { console.error('[proctoring] detection failed:', e); }
-  try {
-    if (proctorModels.face) {
-      const faces = await proctorModels.face.estimateFaces(video);
-      faceCount = faces.length;
-    }
-  } catch (e) {}
-  return Math.max(personCount, faceCount);
-}
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const src = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
 
-function getCurrentRms() {
-  const data = new Uint8Array(audioAnalyser.fftSize);
-  audioAnalyser.getByteTimeDomainData(data);
-  let sumSquares = 0;
-  for (let i = 0; i < data.length; i++) { const n = (data[i] - 128) / 128; sumSquares += n * n; }
-  return Math.sqrt(sumSquares / data.length);
-}
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    const timeData = new Uint8Array(analyser.fftSize);
+    const binHz       = audioContext.sampleRate / analyser.fftSize;
+    const voiceStart  = Math.floor(300 / binHz);
+    const voiceEnd    = Math.ceil(3400 / binHz);
 
-// Frequency-domain check used to tell an actual voice apart from environmental noise that
-// happens to be loud. Returns how much of the spectrum sits in the speech band (voiceRatio)
-// and how "peaky"/tonal that band looks (peakiness) — see the tuning comment above for why
-// both are needed.
-function computeVoiceFeatures() {
-  if (!cachedFreqData || cachedFreqData.length !== audioAnalyser.frequencyBinCount) {
-    cachedFreqData = new Uint8Array(audioAnalyser.frequencyBinCount);
-  }
-  audioAnalyser.getByteFrequencyData(cachedFreqData);
+    voiceDetectInterval = setInterval(() => {
+      if (submitted) return;
+      analyser.getByteFrequencyData(freqData);
+      analyser.getByteTimeDomainData(timeData);
 
-  const binHz = audioCtx.sampleRate / audioAnalyser.fftSize;
-  const lowBin = Math.max(0, Math.floor(VOICE_BAND_LOW_HZ / binHz));
-  const highBin = Math.min(cachedFreqData.length - 1, Math.ceil(VOICE_BAND_HIGH_HZ / binHz));
+      let energy = 0;
+      for (let i = voiceStart; i < voiceEnd; i++) energy += freqData[i];
+      energy /= (voiceEnd - voiceStart);
 
-  let totalEnergy = 0, voiceEnergy = 0, peak = 0;
-  for (let i = 0; i < cachedFreqData.length; i++) {
-    const v = cachedFreqData[i];
-    totalEnergy += v;
-    if (i >= lowBin && i <= highBin) {
-      voiceEnergy += v;
-      if (v > peak) peak = v;
-    }
-  }
-  const bandWidth = Math.max(1, highBin - lowBin + 1);
-  const voiceMean = voiceEnergy / bandWidth;
-  const voiceRatio = totalEnergy > 0 ? voiceEnergy / totalEnergy : 0;
-  const peakiness = voiceMean > 0.5 ? peak / voiceMean : 0; // guard against near-silence divide-by-tiny-number
+      let rms = 0;
+      for (let i = 0; i < timeData.length; i++) {
+        const v = (timeData[i] - 128) / 128;
+        rms += v * v;
+      }
+      rms = Math.sqrt(rms / timeData.length);
 
-  return { voiceRatio, peakiness };
-}
+      // Human speech band + near-field loudness — filters birds, traffic, distant chatter.
+      const voiceNear = energy > VOICE_ENERGY_MIN && rms > VOICE_RMS_MIN;
+      const now = Date.now();
 
-// MediaPipe FaceMesh indices: 1 ≈ nose tip, 33 = right eye outer, 263 = left eye outer.
-// Returns normalized horizontal (yaw) and vertical (pitch) offset of the eye-midpoint from
-// the nose, scaled by face width — this stays meaningful regardless of distance from camera.
-function computeGazeOffsets(face) {
-  const kp = face.keypoints;
-  const nose = kp.find(p => p.name === 'noseTip') || kp[1];
-  const rightEye = kp.find(p => p.name === 'rightEyeUpper0' || p.name === 'rightEye') || kp[33];
-  const leftEye = kp.find(p => p.name === 'leftEyeUpper0' || p.name === 'leftEye') || kp[263];
-  if (!nose || !rightEye || !leftEye) return null;
-  const eyeMidX = (rightEye.x + leftEye.x) / 2;
-  const eyeMidY = (rightEye.y + leftEye.y) / 2;
-  const faceWidth = Math.abs(leftEye.x - rightEye.x) || 1;
-  return { yaw: (eyeMidX - nose.x) / faceWidth, pitch: (eyeMidY - nose.y) / faceWidth };
-}
-
-// Samples a brief window right after setup (candidate told to look at the screen and stay
-// quiet) to build a PERSONAL baseline for "looking at the screen" pose and "room is silent"
-// mic level. Every later comparison is relative to these, not a fixed global number — that's
-// what lets us reliably catch slight head turns and soft speech regardless of camera angle,
-// mic quality, or room noise, none of which are the same from one candidate to the next.
-async function calibrateBaselines(video) {
-  const yawSamples = [], pitchSamples = [], rmsSamples = [];
-  for (let i = 0; i < 5; i++) {
-    if (proctorModels.face) {
-      try {
-        const faces = await proctorModels.face.estimateFaces(video);
-        if (faces.length) {
-          const g = computeGazeOffsets(faces[0]);
-          if (g) { yawSamples.push(g.yaw); pitchSamples.push(g.pitch); }
+      if (voiceNear) {
+        if (voiceStart === null) voiceStart = now;
+        if (now - voiceStart > VOICE_SUSTAIN_MS && now - lastVoiceWarnAt > WARNING_COOLDOWN_MS) {
+          issueVoiceWarning('Loud voice near you');
+          voiceStart = null;
         }
-      } catch (e) {}
-    }
-    if (audioAnalyser) { try { rmsSamples.push(getCurrentRms()); } catch (e) {} }
-    await new Promise(r => setTimeout(r, 150));
-  }
-  if (yawSamples.length) {
-    gazeBaselineYaw = yawSamples.reduce((a, b) => a + b, 0) / yawSamples.length;
-    gazeBaselinePitch = pitchSamples.reduce((a, b) => a + b, 0) / pitchSamples.length;
-    gazeCalibrated = true;
-  }
-  if (rmsSamples.length) {
-    micBaselineRms = Math.max(0.004, rmsSamples.reduce((a, b) => a + b, 0) / rmsSamples.length);
+      } else {
+        voiceStart = null;
+      }
+    }, 300);
+  } catch (e) {
+    console.error('Voice detection setup failed:', e);
   }
 }
 
-// Moves the live video feed into the floating widget and starts periodic checks
-// (skipped if the AI model never loaded — camera stays visible either way).
-function startProctoringMonitor() {
-  const widget = document.getElementById('proctorWidget');
-  const video = document.getElementById('proctorVideo');
-  widget.querySelector('.proctor-video-slot').appendChild(video);
-  widget.style.display = 'flex';
-
-  startMicMonitor(); // independent of camera AI — runs as long as we got mic permission
-
-  if (!aiDetectionAvailable) {
-    document.getElementById('proctorStatusText').innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Camera visible (basic monitoring)';
-    return;
-  }
-  proctorInterval = setInterval(runProctorCheck, PROCTOR_CHECK_MS);
-  if (gazeDetectionAvailable) {
-    gazeInterval = setInterval(runGazeCheck, GAZE_CHECK_MS);
-  }
+function issueCamWarning(reason) {
+  camWarnings++;
+  lastCamWarnAt = Date.now();
+  updateWarnUI();
+  showWarningToast(`⚠️ Camera Warning ${camWarnings}/${MAX_WARNINGS}: ${reason}`);
+  if (camWarnings >= MAX_WARNINGS) submitAssessment('auto', `Excessive camera warnings (${reason})`);
 }
 
-// Dedicated, lightweight, FAST loop that does only the gaze check (face-mesh, no coco-ssd).
-// Runs independently of runProctorCheck's heavier object-detection cycle so a quick left/right
-// glance is caught even if it happens and recovers between the slower object-detection ticks.
-async function runGazeCheck() {
-  if (submitted || gazeCheckInFlight || !proctorModels.face || !gazeCalibrated) return;
-  const video = document.getElementById('proctorVideo');
-  if (!video || video.readyState < 2) return;
-
-  gazeCheckInFlight = true;
-  let faces = [];
-  try { faces = await proctorModels.face.estimateFaces(video); } catch (e) {}
-  gazeCheckInFlight = false;
-
-  if (faces.length !== 1) { gazeAwayStreak = 0; return; } // face-count/no-face handled by runProctorCheck
-  const g = computeGazeOffsets(faces[0]);
-  if (!g) return;
-  const deviation = Math.hypot(g.yaw - gazeBaselineYaw, g.pitch - gazeBaselinePitch);
-  if (deviation > GAZE_THRESHOLD) {
-    gazeAwayStreak++;
-    if (gazeAwayStreak >= GAZE_AWAY_STREAK_NEEDED) {
-      autoSubmit('Looking away from the screen was detected', true);
-    }
-  } else {
-    gazeAwayStreak = 0;
-  }
+function issueVoiceWarning(reason) {
+  voiceWarnings++;
+  lastVoiceWarnAt = Date.now();
+  updateWarnUI();
+  showWarningToast(`⚠️ Voice Warning ${voiceWarnings}/${MAX_WARNINGS}: ${reason}`);
+  if (voiceWarnings >= MAX_WARNINGS) submitAssessment('auto', `Excessive voice warnings (${reason})`);
 }
 
-// One merged cycle: object detection (phones/people) + face-mesh (face count + gaze) share
-// a single inference pass each, instead of two separate intervals duplicating work — that
-// duplication was a big part of what was starving the page's own 1-second timer tick before.
-async function runProctorCheck() {
-  if (submitted || proctorCheckInFlight) return;
-  const video = document.getElementById('proctorVideo');
-  if (!video || video.readyState < 2) return;
-
-  proctorCheckInFlight = true;
-  let objects = [], faces = [];
-  if (proctorModels.object) {
-    try { objects = await proctorModels.object.detect(video, 20, 0.25); } catch (e) { console.error('[proctoring] object check failed:', e); }
-  }
-  // Yield one tick back to the browser between the two model passes — lets the timer's
-  // own setInterval (and any pending paint) run in between instead of being stuck behind
-  // back-to-back synchronous inference calls.
-  await new Promise(r => setTimeout(r, 0));
-  if (proctorModels.face) {
-    try { faces = await proctorModels.face.estimateFaces(video); } catch (e) { console.error('[proctoring] face check failed:', e); }
-  }
-  proctorCheckInFlight = false;
-
-  const personCount = objects.filter(o => o.class === 'person' && o.score >= 0.5).length;
-  const numPeople = Math.max(personCount, faces.length);
-  const devicesFound = objects.filter(o => FLAGGED_OBJECTS.includes(o.class) && o.score >= DEVICE_SCORE_THRESHOLD);
-
-  violationCounts.noFace = numPeople === 0 ? violationCounts.noFace + 1 : 0;
-  violationCounts.multiFace = numPeople > 1 ? violationCounts.multiFace + 1 : 0;
-  violationCounts.device = devicesFound.length > 0 ? violationCounts.device + 1 : 0;
-
-  updateProctorStatus(numPeople, devicesFound.length > 0);
-
-  if (violationCounts.device >= DEVICE_VIOLATION_LIMIT) {
-    const deviceLabel = devicesFound[0]?.class || 'a device';
-    autoSubmit(`A ${deviceLabel} was detected in your camera view`, true);
-    return;
-  } else if (violationCounts.multiFace >= VIOLATION_LIMIT) {
-    autoSubmit('Multiple people were detected in front of the camera', true);
-    return;
-  } else if (violationCounts.noFace >= VIOLATION_LIMIT) {
-    autoSubmit('You moved out of the camera frame', true);
-    return;
-  }
+function updateWarnUI() {
+  document.getElementById('camWarnCount').textContent   = camWarnings;
+  document.getElementById('voiceWarnCount').textContent = voiceWarnings;
+  document.getElementById('totalWarnings').textContent  = camWarnings + voiceWarnings;
+  document.getElementById('warningsBanner').style.display = 'block';
+  if (camWarnings   > 0) document.getElementById('camWarnItem').classList.add('warned');
+  if (voiceWarnings > 0) document.getElementById('voiceWarnItem').classList.add('warned');
 }
 
-// ════════════════════════════════════════════════════════════════════
-//  Microphone / voice detection — auto-submits if sustained talking is heard,
-//  covering the case of someone sitting nearby reading out the question and
-//  feeding the candidate an answer.
-// ════════════════════════════════════════════════════════════════════
-function startMicMonitor() {
-  if (!audioAnalyser) {
-    const micText = document.getElementById('proctorMicText');
-    if (micText) micText.innerHTML = '<i class="fas fa-microphone-slash" style="font-size:9px"></i> Mic unavailable';
-    return;
-  }
-  pollMicVolume();
+function showWarningToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'warning-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
 }
 
-function pollMicVolume() {
-  if (submitted || !audioAnalyser) return;
-  const rms = getCurrentRms();
-  const micText = document.getElementById('proctorMicText');
-  const isLoud = rms >= (micBaselineRms + VOICE_DELTA);
-
-  // Only bother with the (slightly pricier) frequency analysis when something is loud
-  // enough to matter — silence/ambient-floor samples are cheaply rejected by isLoud first.
-  let isVoiceLike = false;
-  if (isLoud) {
-    const { voiceRatio, peakiness } = computeVoiceFeatures();
-    isVoiceLike = voiceRatio >= VOICE_RATIO_MIN && peakiness >= VOICE_PEAKINESS_MIN;
-  }
-
-  // Rolling window of recent samples — real speech has brief silent gaps between
-  // words/syllables that would otherwise keep resetting a strict continuous timer
-  // and never trigger. Instead we ask: "was a chunk of the last VOICE_WINDOW_MS
-  // voice-like, not necessarily all of it?"
-  const maxSamples = Math.ceil(VOICE_WINDOW_MS / MIC_CHECK_MS);
-  voiceSampleWindow.push(isVoiceLike);
-  if (voiceSampleWindow.length > maxSamples) voiceSampleWindow.shift();
-
-  const activeCount = voiceSampleWindow.filter(Boolean).length;
-  const activeRatio = activeCount / voiceSampleWindow.length;
-  const windowLooksLikeSpeech = voiceSampleWindow.length >= maxSamples && activeRatio >= VOICE_ACTIVE_RATIO;
-
-  if (isVoiceLike && micText) {
-    micText.className = 'proctor-status-text issue';
-    micText.innerHTML = '<i class="fas fa-microphone" style="font-size:9px"></i> Voice detected...';
-  } else if (isLoud && micText) {
-    // Loud but didn't pass the voice-band/peakiness check — almost certainly environmental
-    // noise rather than someone talking, so we don't scare the candidate with "voice detected".
-    micText.className = 'proctor-status-text ok';
-    micText.innerHTML = '<i class="fas fa-volume-up" style="font-size:9px"></i> Mic monitoring';
-  } else if (micText) {
-    micText.className = 'proctor-status-text ok';
-    micText.innerHTML = '<i class="fas fa-microphone" style="font-size:9px"></i> Mic monitoring';
-  }
-
-  // Second debounce layer: the window has to keep looking like sustained speech for several
-  // consecutive cycles in a row (not just the instant it first fills up) before we act on it.
-  // This is what stops a quick door-slam, cough, or chair creak — which can momentarily pass
-  // the voice-band check too — from instantly auto-submitting.
-  voiceConditionStreak = windowLooksLikeSpeech ? voiceConditionStreak + 1 : 0;
-
-  if (voiceConditionStreak >= VOICE_STREAK_NEEDED) {
-    autoSubmit('Talking/voice was detected near the microphone during the assessment', true);
-    return;
-  }
-
-  micMonitorRAF = setTimeout(pollMicVolume, MIC_CHECK_MS);
-}
-
-function updateProctorStatus(numPeople, deviceFlag) {
-  const statusEl = document.getElementById('proctorStatusText');
-  const issue = deviceFlag || numPeople > 1 || numPeople === 0;
-  if (issue) {
-    statusEl.className = 'proctor-status-text issue';
-    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Issue detected';
-  } else {
-    statusEl.className = 'proctor-status-text ok';
-    statusEl.innerHTML = '<i class="fas fa-circle" style="font-size:7px"></i> Monitoring active';
-  }
-}
-
-function stopProctoring() {
-  if (proctorInterval) { clearInterval(proctorInterval); proctorInterval = null; }
-  if (gazeInterval) { clearInterval(gazeInterval); gazeInterval = null; }
-  if (micMonitorRAF) { clearTimeout(micMonitorRAF); micMonitorRAF = null; }
-  voiceSampleWindow = [];
-  voiceConditionStreak = 0;
-  if (proctorStream) { proctorStream.getTracks().forEach(t => t.stop()); proctorStream = null; }
-  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-  if (audioSource) { try { audioSource.disconnect(); } catch(e) {} audioSource = null; }
-  if (audioAnalyser) { audioAnalyser = null; }
-  if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
-  const widget = document.getElementById('proctorWidget');
-  if (widget) widget.style.display = 'none';
-  const banner = document.getElementById('proctorAlertBanner');
-  if (banner) banner.style.display = 'none';
-}
-
-async function submitAssessment(auto = false) {
+/* ── Submit ────────────────────────────────────────────────── */
+async function submitAssessment(type = 'manual', reason = null) {
   if (submitted) return;
   submitted = true;
-  clearInterval(timerInterval);
-  stopProctoring();
-  
-  // Collect all text-based answers at submission time
-  const questions = assessment.questions || [];
-  for (const q of questions) {
-    if (q.type === 'practical' || q.type === 'typing') {
-      const ta = document.getElementById(`practical_${q.id}`);
-      if (ta) answers[q.id] = ta.value;
-    } else if (q.type === 'fill_blank') {
-      const inp = document.getElementById(`fill_${q.id}`);
-      if (inp) answers[q.id] = inp.value;
-    }
-  }
 
-  // Determine why this submission happened, for the HR admin dashboard.
-  // - Candidate clicked Submit  -> "manual"
-  // - Timer ran out             -> "auto" / "Time limit reached"
-  // - Anti-cheat / camera flag  -> "auto" / specific reason from autoSubmit()
-  let submissionType = 'manual';
-  let submissionReason = null;
-  if (proctorViolationReason) {
-    submissionType = 'auto';
-    submissionReason = proctorViolationReason;
-  } else if (auto) {
-    submissionType = 'auto';
-    submissionReason = lastAutoSubmitReason || (timeLeft <= 0 ? 'Time limit reached' : 'Auto-submitted');
-  }
-  
-  const name = document.getElementById('candName')?.value || '';
-  const email = document.getElementById('candEmail')?.value || '';
-  const appId = document.getElementById('candAppId')?.value;
-  const timeTaken = startTime ? (new Date() - startTime) / 60000 : 0;
-  
+  clearInterval(timerInterval);
+  clearInterval(faceDetectInterval);
+  clearInterval(voiceDetectInterval);
+  if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
+  if (audioContext) audioContext.close();
+
   const btn = document.getElementById('submitBtn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...'; }
-  
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting…'; }
+  document.getElementById('submitStatus').textContent = 'Submitting…';
+
+  const minutes = (Date.now() - startTime) / 60000;
+
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/submit`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        applicant_name: name,
-        applicant_email: email,
-        application_id: appId ? parseInt(appId, 10) : null,
-        answers: answers,
-        time_taken_minutes: parseFloat(timeTaken.toFixed(2)),
-        submission_type: submissionType,
-        submission_reason: submissionReason
-      })
+        applicant_name:    verifiedApplication?.applicant_name || '',
+        applicant_email:   verifiedApplication?.applicant_email || '',
+        application_id:    verifiedApplication?.application_id || null,
+        answers,
+        time_taken_minutes: minutes,
+        submission_type:   type,
+        submission_reason: reason,
+      }),
     });
-    const result = await res.json();
-    showResult(result);
-  } catch(e) {
-    document.getElementById('resultScreen').innerHTML = `<div class="alert alert-error">Submission failed. Please contact HR.</div>`;
-    document.getElementById('assessmentScreen').style.display = 'none';
-    document.getElementById('resultScreen').style.display = 'block';
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Submission failed');
+
+    document.getElementById('assessmentArea').innerHTML = `
+      <div class="apply-page">
+        <div class="card" style="text-align:center;padding:48px">
+          <div style="font-size:64px;margin-bottom:16px">🎉</div>
+          <h2 style="font-size:24px;margin-bottom:8px">Assessment Submitted</h2>
+          <p class="text-light">${type === 'auto'
+            ? `Auto-submitted: ${escapeHtml(reason || '')}`
+            : 'Thank you for completing the assessment.'}</p>
+          <div style="margin-top:24px;padding:20px;background:#f8fafc;border-radius:12px;display:inline-block">
+            <div style="font-size:36px;font-weight:800;color:var(--primary)">${data.percentage}%</div>
+            <div class="text-light">Grade ${data.grade} — ${data.score}/${data.total}</div>
+          </div>
+          <p class="text-sm text-light mt-4">
+            A confirmation and marksheet have been sent to your email.
+          </p>
+        </div>
+      </div>`;
+  } catch (e) {
+    document.getElementById('submitStatus').textContent = 'Submit failed';
+    showWarningToast('Submission failed: ' + e.message);
   }
-}
-
-function showResult(result) {
-  document.getElementById('assessmentScreen').style.display = 'none';
-  document.getElementById('resultScreen').style.display = 'block';
-  const passed = result.passed;
-  const displayReason = proctorViolationReason || lastAutoSubmitReason;
-
-  if (displayReason) {
-    document.getElementById('resultIcon').textContent = '🚫';
-    document.getElementById('resultTitle').textContent = 'Assessment Auto-Submitted';
-    document.getElementById('resultTitle').style.color = 'var(--danger)';
-    const violationNotice = document.createElement('div');
-    violationNotice.className = 'alert alert-error';
-    violationNotice.style.textAlign = 'left';
-    violationNotice.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Your assessment was automatically submitted because: <b>${displayReason}</b>`;
-    document.getElementById('resultTitle').insertAdjacentElement('afterend', violationNotice);
-  } else {
-    document.getElementById('resultIcon').textContent = passed ? '🎉' : '📊';
-    document.getElementById('resultTitle').textContent = passed ? 'Congratulations! You Passed!' : 'Assessment Completed';
-    document.getElementById('resultTitle').style.color = passed ? 'var(--success)' : 'var(--warning)';
-  }
-
-  document.getElementById('resultScore').textContent = `${result.score}/${result.total}`;
-  document.getElementById('resultGrade').textContent = `Grade: ${result.grade} | ${result.percentage}%`;
-  document.getElementById('resultFeedback').textContent = result.feedback || '';
 }
 
 loadAssessment();
