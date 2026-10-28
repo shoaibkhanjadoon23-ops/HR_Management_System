@@ -5,6 +5,20 @@
 <title>Assessments - HRPro</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+/* Small helpers specific to this page */
+.mode-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.mode-badge.locked { background: #e0e7ff; color: #4338ca; }
+.mode-badge.open   { background: #fef3c7; color: #d97706; }
+.toggle-row {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; font-size: 13px; user-select: none;
+}
+</style>
 </head>
 <body>
 <div class="sidebar" id="sidebar">
@@ -88,11 +102,27 @@
         <div class="form-group"><label>Title</label><input type="text" id="aTitle" placeholder="Assessment title"></div>
         <div class="form-group"><label>Job *</label><select id="aJob" onchange="prefillFromJob()"><option value="">Select job...</option></select></div>
         <div class="form-group"><label>Duration (minutes) *</label><input type="number" id="aDuration" value="30" min="5" max="180"></div>
-        <div class="form-group" style="display:flex;align-items:center;padding-top:24px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="aAntiCheat" checked style="width:auto"> Enable Anti-Cheat</label>
+        <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding-bottom:6px">
+          <label class="toggle-row">
+            <input type="checkbox" id="aAntiCheat" checked style="width:auto">
+            <span><i class="fas fa-shield-alt"></i> Enable Anti-Cheat</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" id="aRequireCode" checked style="width:auto">
+            <span><i class="fas fa-lock"></i> Require Application Code</span>
+          </label>
         </div>
       </div>
+
       <div class="form-group"><label>Description</label><textarea id="aDesc" rows="2"></textarea></div>
+
+      <!-- Code requirement explanation -->
+      <div class="alert alert-info" style="font-size:13px">
+        <i class="fas fa-info-circle"></i>
+        <b>Require Application Code</b> — candidates must enter the code that was emailed to them when they applied.
+        Each code can be used <b>only once</b>, so submissions are tied to real applicants.
+        Uncheck to allow anyone with the link to take the assessment.
+      </div>
 
       <!-- AI Panel -->
       <div id="aiPanel">
@@ -177,7 +207,6 @@
   </div>
 </div>
 
-
 <!-- Delete Assessment Confirmation Modal -->
 <div id="deleteAssessmentModal" class="modal-overlay" style="display:none">
   <div class="modal" style="max-width:440px">
@@ -198,99 +227,139 @@
     </div>
   </div>
 </div>
+
 <script src="/static/app.js"></script>
 <script>
-// ⚠️ Must match the Hugging Face backend URL defined in app.js
-const ASSESS_BACKEND_URL = typeof BACKEND_URL !== 'undefined' ? BACKEND_URL : 'https://hrhiringpro-hrpro.hf.space';
+// Must match the Hugging Face backend URL defined in app.js
+const ASSESS_BACKEND_URL = typeof BACKEND_URL !== 'undefined'
+  ? BACKEND_URL
+  : 'https://hrhiringpro-hrpro.hf.space';
 
 requireAuth();
 renderSidebarUser();
 setActiveNav();
+
 let assessments = [];
 let jobs = [];
+let currentMode = 'ai';
+let pendingDeleteAssessmentId = null;
 
 async function loadData() {
   try {
-    [assessments, jobs] = await Promise.all([API.get('/api/assessments'), API.get('/api/jobs')]);
+    [assessments, jobs] = await Promise.all([
+      API.get('/api/assessments'),
+      API.get('/api/jobs'),
+    ]);
     const sel = document.getElementById('aJob');
-    sel.innerHTML = '<option value="">Select job...</option>' + jobs.map(j => `<option value="${j.id}" data-title="${j.title}">${j.title}</option>`).join('');
+    sel.innerHTML = '<option value="">Select job...</option>' +
+      jobs.map(j => `<option value="${j.id}" data-title="${j.title}">${j.title}</option>`).join('');
     renderAssessments();
-  } catch(e) { showToast('Error loading', 'error'); }
+  } catch (e) {
+    showToast('Error loading data: ' + e.message, 'error');
+  }
 }
 
-// Rewrite backend URL in assessment links to point to the Vercel frontend
+// Replace HF backend origin with Vercel frontend origin so links are clickable
 function fixAssessmentLink(link) {
   if (!link) return link;
-  // Replace HF backend origin with Vercel frontend origin
   return link.replace(ASSESS_BACKEND_URL, window.location.origin)
              .replace('https://hrhiringpro-hrpro.hf.space', window.location.origin);
 }
 
 function renderAssessments() {
   if (!assessments.length) {
-    document.getElementById('assessmentsList').innerHTML = `<div class="empty-state"><i class="fas fa-clipboard-check"></i><h3>No Assessments Yet</h3><p>Create your first AI-powered assessment</p></div>`;
+    document.getElementById('assessmentsList').innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-clipboard-check"></i>
+        <h3>No Assessments Yet</h3>
+        <p>Create your first AI-powered assessment</p>
+      </div>`;
     return;
   }
+
   document.getElementById('assessmentsList').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
       ${assessments.map(a => {
         const fixedLink = fixAssessmentLink(a.link);
+        const requireCode = a.require_application_code !== false;   // default true
         return `
         <div class="card">
           <div class="card-body">
             <div class="flex justify-between items-center mb-4">
-              <h3 style="font-size:15px;font-weight:700">${a.title}</h3>
+              <h3 style="font-size:15px;font-weight:700">${escapeHtml(a.title)}</h3>
               <span class="badge ${a.is_active ? 'badge-active' : 'badge-rejected'}">${a.is_active ? 'Active' : 'Inactive'}</span>
             </div>
-            <div class="text-sm text-light mb-4"><i class="fas fa-briefcase"></i> ${a.job_title}</div>
+            <div class="text-sm text-light mb-4"><i class="fas fa-briefcase"></i> ${escapeHtml(a.job_title)}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px;text-align:center">
               <div style="background:#d1fae5;border-radius:8px;padding:8px"><div style="font-size:18px;font-weight:800;color:#059669">${a.easy_count}</div><div style="font-size:11px;color:#059669">Easy</div></div>
               <div style="background:#fef3c7;border-radius:8px;padding:8px"><div style="font-size:18px;font-weight:800;color:#d97706">${a.moderate_count}</div><div style="font-size:11px;color:#d97706">Moderate</div></div>
               <div style="background:#fee2e2;border-radius:8px;padding:8px"><div style="font-size:18px;font-weight:800;color:#dc2626">${a.hard_count}</div><div style="font-size:11px;color:#dc2626">Hard</div></div>
               <div style="background:#dbeafe;border-radius:8px;padding:8px"><div style="font-size:18px;font-weight:800;color:#2563eb">${a.practical_count || 0}</div><div style="font-size:11px;color:#2563eb">Practical</div></div>
             </div>
-            <div class="flex gap-2 text-sm text-light mb-4">
+            <div class="flex gap-2 text-sm text-light mb-4" style="flex-wrap:wrap">
               <span><i class="fas fa-clock"></i> ${a.duration_minutes} min</span>
               <span><i class="fas fa-star"></i> ${a.total_marks} marks</span>
               <span><i class="fas fa-users"></i> ${a.result_count} attempts</span>
               ${a.anti_cheat ? '<span><i class="fas fa-shield-alt" style="color:var(--success)"></i> Anti-cheat</span>' : ''}
+              ${requireCode
+                ? '<span class="mode-badge locked"><i class="fas fa-lock"></i> Code Required</span>'
+                : '<span class="mode-badge open"><i class="fas fa-lock-open"></i> Open Access</span>'}
             </div>
             <div class="flex gap-2 justify-between">
               <div>
                 <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${fixedLink}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
-                <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},'${a.title}')"><i class="fas fa-chart-bar"></i> Results</button>
+                <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},'${escapeAttr(a.title)}')"><i class="fas fa-chart-bar"></i> Results</button>
               </div>
               <div style="display:flex;gap:6px">
-                <button class="btn btn-sm btn-secondary" onclick="toggleActive(${a.id},${!a.is_active})" title="${a.is_active ? 'Deactivate' : 'Activate'}">${a.is_active ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}</button>
+                <button class="btn btn-sm btn-secondary"
+                        onclick="toggleActive(${a.id},${!a.is_active})"
+                        title="${a.is_active ? 'Deactivate' : 'Activate'}">
+                  ${a.is_active ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>'}
+                </button>
+                <button class="btn btn-sm btn-secondary"
+                        onclick="toggleRequireCode(${a.id},${!requireCode})"
+                        title="${requireCode ? 'Switch to open access (no code)' : 'Require application code'}">
+                  <i class="fas ${requireCode ? 'fa-lock-open' : 'fa-lock'}"></i>
+                </button>
                 <button class="btn btn-sm btn-danger" onclick="confirmDeleteAssessment(${a.id})" title="Delete Assessment"><i class="fas fa-trash"></i></button>
               </div>
             </div>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px"><i class="fas fa-link"></i> <span style="color:var(--text-light)">${fixedLink}</span></div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px">
+              <i class="fas fa-link"></i> <span style="color:var(--text-light)">${fixedLink}</span>
+            </div>
           </div>
         </div>`;
       }).join('')}
     </div>`;
 }
 
-// ─── Mode switching ───────────────────────────────────────────────
-let currentMode = 'ai';
-
+/* ─── Mode switching ──────────────────────────────────────────── */
 function switchMode(mode) {
   currentMode = mode;
-  document.getElementById('aiPanel').style.display = mode === 'ai' ? '' : 'none';
+  document.getElementById('aiPanel').style.display     = mode === 'ai'     ? '' : 'none';
   document.getElementById('customPanel').style.display = mode === 'custom' ? '' : 'none';
-  document.getElementById('tabAI').style.background = mode === 'ai' ? 'var(--primary)' : 'var(--bg-card)';
-  document.getElementById('tabAI').style.color = mode === 'ai' ? '#fff' : 'var(--text)';
+  document.getElementById('tabAI').style.background     = mode === 'ai'     ? 'var(--primary)' : 'var(--bg-card)';
+  document.getElementById('tabAI').style.color          = mode === 'ai'     ? '#fff' : 'var(--text)';
   document.getElementById('tabCustom').style.background = mode === 'custom' ? 'var(--primary)' : 'var(--bg-card)';
-  document.getElementById('tabCustom').style.color = mode === 'custom' ? '#fff' : 'var(--text)';
-  document.getElementById('createBtnLabel').textContent = mode === 'ai' ? 'Generate with AI' : 'Save Assessment';
-  document.getElementById('createBtn').querySelector('i').className = mode === 'ai' ? 'fas fa-magic' : 'fas fa-save';
+  document.getElementById('tabCustom').style.color      = mode === 'custom' ? '#fff' : 'var(--text)';
+  document.getElementById('createBtnLabel').textContent =
+    mode === 'ai' ? 'Generate with AI' : 'Save Assessment';
+  document.getElementById('createBtn').querySelector('i').className =
+    mode === 'ai' ? 'fas fa-magic' : 'fas fa-save';
 }
 
 function openCreateModal() {
   switchMode('ai');
   customQuestions = [];
+  customQIdCounter = 1;
   renderCustomQuestions();
+  // Reset form fields
+  document.getElementById('aTitle').value = '';
+  document.getElementById('aJob').value = '';
+  document.getElementById('aDuration').value = 30;
+  document.getElementById('aDesc').value = '';
+  document.getElementById('aAntiCheat').checked = true;
+  document.getElementById('aRequireCode').checked = true;
   openModal('createModal');
 }
 
@@ -300,15 +369,17 @@ function prefillFromJob() {
   if (opt.value) document.getElementById('aTitle').value = `Assessment for ${opt.dataset.title}`;
 }
 
-// ─── Custom question builder ───────────────────────────────────────
+/* ─── Custom question builder ─────────────────────────────────── */
 let customQuestions = [];
 let customQIdCounter = 1;
 
 function addCustomQuestion() {
   const id = customQIdCounter++;
-  customQuestions.push({ id, type: 'mcq', question: '', marks: 2, options: ['', '', '', ''], correct_answer: 0, correct_text: '', level: 'moderate' });
+  customQuestions.push({
+    id, type: 'mcq', question: '', marks: 2,
+    options: ['', '', '', ''], correct_answer: 0, correct_text: '', level: 'moderate',
+  });
   renderCustomQuestions();
-  // Scroll to bottom
   setTimeout(() => {
     const list = document.getElementById('customQList');
     list.scrollTop = list.scrollHeight;
@@ -324,7 +395,7 @@ function updateCustomQ(id, field, value) {
   const q = customQuestions.find(x => x.id === id);
   if (!q) return;
   q[field] = value;
-  if (field === 'type') renderCustomQuestions(); // re-render on type change
+  if (field === 'type') renderCustomQuestions();
 }
 
 function updateCustomOption(qId, optIdx, value) {
@@ -344,10 +415,10 @@ function renderCustomQuestions() {
   empty.style.display = 'none';
   list.innerHTML = customQuestions.map((q, idx) => {
     const typeOpts = [
-      { v: 'mcq', l: 'MCQ' },
+      { v: 'mcq',        l: 'MCQ' },
       { v: 'fill_blank', l: 'Fill in the Blank' },
-      { v: 'typing', l: 'Written / Typing' }
-    ].map(o => `<option value="${o.v}" ${q.type===o.v?'selected':''}>${o.l}</option>`).join('');
+      { v: 'typing',     l: 'Written / Typing' },
+    ].map(o => `<option value="${o.v}" ${q.type === o.v ? 'selected' : ''}>${o.l}</option>`).join('');
 
     let answerHtml = '';
     if (q.type === 'mcq') {
@@ -356,17 +427,24 @@ function renderCustomQuestions() {
           <label style="font-size:12px;font-weight:600;color:var(--text-light)">OPTIONS — tick the correct one</label>
           ${[0,1,2,3].map(i => `
             <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
-              <input type="radio" name="correct_${q.id}" value="${i}" ${q.correct_answer===i?'checked':''} onchange="updateCustomQ(${q.id},'correct_answer',${i})" title="Mark as correct">
-              <input type="text" placeholder="Option ${String.fromCharCode(65+i)}" value="${q.options[i]||''}" oninput="updateCustomOption(${q.id},${i},this.value)"
-                style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px">
+              <input type="radio" name="correct_${q.id}" value="${i}"
+                     ${q.correct_answer === i ? 'checked' : ''}
+                     onchange="updateCustomQ(${q.id},'correct_answer',${i})"
+                     title="Mark as correct">
+              <input type="text" placeholder="Option ${String.fromCharCode(65+i)}"
+                     value="${escapeAttr(q.options[i] || '')}"
+                     oninput="updateCustomOption(${q.id},${i},this.value)"
+                     style="flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px">
             </div>`).join('')}
         </div>`;
     } else if (q.type === 'fill_blank') {
       answerHtml = `
         <div style="margin-top:10px">
           <label style="font-size:12px;font-weight:600;color:var(--text-light)">CORRECT ANSWER (used for auto-grading)</label>
-          <input type="text" placeholder="Expected answer..." value="${q.correct_text||''}" oninput="updateCustomQ(${q.id},'correct_text',this.value);updateCustomQ(${q.id},'correct_answer',this.value)"
-            style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;margin-top:6px">
+          <input type="text" placeholder="Expected answer..."
+                 value="${escapeAttr(q.correct_text || '')}"
+                 oninput="updateCustomQ(${q.id},'correct_text',this.value);updateCustomQ(${q.id},'correct_answer',this.value)"
+                 style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;margin-top:6px">
         </div>`;
     } else {
       answerHtml = `<div style="margin-top:8px;font-size:12px;color:var(--text-light)"><i class="fas fa-robot"></i> AI will grade this answer automatically based on content quality.</div>`;
@@ -377,30 +455,36 @@ function renderCustomQuestions() {
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <span style="font-weight:700;font-size:13px;color:var(--text-light);min-width:24px">Q${idx+1}</span>
           <select onchange="updateCustomQ(${q.id},'type',this.value)"
-            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600">
+                  style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px;font-weight:600">
             ${typeOpts}
           </select>
           <select onchange="updateCustomQ(${q.id},'level',this.value)"
-            style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px">
-            <option value="easy" ${q.level==='easy'?'selected':''}>Easy</option>
-            <option value="moderate" ${q.level==='moderate'?'selected':''}>Moderate</option>
-            <option value="hard" ${q.level==='hard'?'selected':''}>Hard</option>
+                  style="padding:5px 8px;border:1.5px solid var(--border);border-radius:7px;font-size:12px">
+            <option value="easy"     ${q.level === 'easy'     ? 'selected' : ''}>Easy</option>
+            <option value="moderate" ${q.level === 'moderate' ? 'selected' : ''}>Moderate</option>
+            <option value="hard"     ${q.level === 'hard'     ? 'selected' : ''}>Hard</option>
           </select>
           <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
             <label style="font-size:12px;font-weight:600">Marks</label>
-            <input type="number" value="${q.marks}" min="1" max="20" onchange="updateCustomQ(${q.id},'marks',parseInt(this.value)||1)"
-              style="width:58px;padding:5px;border:1.5px solid var(--border);border-radius:7px;text-align:center;font-size:13px">
+            <input type="number" value="${q.marks}" min="1" max="20"
+                   onchange="updateCustomQ(${q.id},'marks',parseInt(this.value)||1)"
+                   style="width:58px;padding:5px;border:1.5px solid var(--border);border-radius:7px;text-align:center;font-size:13px">
           </div>
-          <button onclick="removeCustomQuestion(${q.id})" style="background:none;border:none;color:#dc2626;cursor:pointer;padding:4px;font-size:14px" title="Remove"><i class="fas fa-trash"></i></button>
+          <button onclick="removeCustomQuestion(${q.id})"
+                  style="background:none;border:none;color:#dc2626;cursor:pointer;padding:4px;font-size:14px"
+                  title="Remove">
+            <i class="fas fa-trash"></i>
+          </button>
         </div>
-        <textarea placeholder="Question text..." rows="2" oninput="updateCustomQ(${q.id},'question',this.value)"
-          style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:vertical">${q.question}</textarea>
+        <textarea placeholder="Question text..." rows="2"
+                  oninput="updateCustomQ(${q.id},'question',this.value)"
+                  style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;resize:vertical">${escapeHtml(q.question || '')}</textarea>
         ${answerHtml}
       </div>`;
   }).join('');
 }
 
-// ─── Submission dispatcher ─────────────────────────────────────────
+/* ─── Submission dispatcher ───────────────────────────────────── */
 async function submitCreateAssessment() {
   if (currentMode === 'ai') {
     await createAssessmentAI();
@@ -412,8 +496,11 @@ async function submitCreateAssessment() {
 async function createAssessmentAI() {
   const jobId = document.getElementById('aJob').value;
   if (!jobId) { showToast('Please select a job', 'warning'); return; }
+
   const btn = document.getElementById('createBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+
   try {
     const res = await API.post('/api/assessments', {
       job_id: parseInt(jobId),
@@ -424,20 +511,26 @@ async function createAssessmentAI() {
       hard_count: parseInt(document.getElementById('aHard').value) || 5,
       practical_count: parseInt(document.getElementById('aPractical').value) || 2,
       duration_minutes: parseInt(document.getElementById('aDuration').value) || 30,
-      anti_cheat: document.getElementById('aAntiCheat').checked
+      anti_cheat: document.getElementById('aAntiCheat').checked,
+      require_application_code: document.getElementById('aRequireCode').checked,
     });
     showToast(`Assessment created! ${res.question_count} questions. Link copied!`, 'success', 5000);
     copyToClipboard(res.link);
     closeModal('createModal');
     loadData();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> <span id="createBtnLabel">Generate with AI</span>'; }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-magic"></i> <span id="createBtnLabel">Generate with AI</span>';
+  }
 }
 
 async function createAssessmentCustom() {
   const jobId = document.getElementById('aJob').value;
   if (!jobId) { showToast('Please select a job', 'warning'); return; }
   if (!customQuestions.length) { showToast('Add at least one question', 'warning'); return; }
+
   // Validate
   for (let i = 0; i < customQuestions.length; i++) {
     const q = customQuestions[i];
@@ -446,27 +539,41 @@ async function createAssessmentCustom() {
       const filled = q.options.filter(o => o.trim()).length;
       if (filled < 2) { showToast(`Question ${i+1}: MCQ needs at least 2 options`, 'warning'); return; }
     }
+    if (q.type === 'fill_blank' && !(q.correct_answer || q.correct_text || '').trim()) {
+      showToast(`Question ${i+1}: please provide the correct answer`, 'warning'); return;
+    }
   }
+
   const btn = document.getElementById('createBtn');
-  btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
   try {
-    // Build questions in the format the backend/grader expects
     const questions = customQuestions.map((q, idx) => {
       const base = {
         id: idx + 1,
         question: q.question.trim(),
         type: q.type,
         marks: q.marks,
-        level: q.level
+        level: q.level,
       };
       if (q.type === 'mcq') {
-        return { ...base, options: q.options.filter(o => o.trim()), correct_answer: q.correct_answer, explanation: 'See correct option.' };
+        return {
+          ...base,
+          options: q.options.filter(o => o.trim()),
+          correct_answer: q.correct_answer,
+          explanation: 'See correct option.',
+        };
       } else if (q.type === 'fill_blank') {
-        return { ...base, correct_answer: q.correct_answer || q.correct_text || '' };
+        return {
+          ...base,
+          correct_answer: (q.correct_answer || q.correct_text || '').trim(),
+        };
       } else {
-        return base; // typing — AI grades
+        return base;
       }
     });
+
     const totalMarks = questions.reduce((s, q) => s + q.marks, 0);
     const res = await API.post('/api/assessments/custom', {
       job_id: parseInt(jobId),
@@ -475,55 +582,103 @@ async function createAssessmentCustom() {
       questions,
       total_marks: totalMarks,
       duration_minutes: parseInt(document.getElementById('aDuration').value) || 30,
-      anti_cheat: document.getElementById('aAntiCheat').checked
+      anti_cheat: document.getElementById('aAntiCheat').checked,
+      require_application_code: document.getElementById('aRequireCode').checked,
     });
     showToast(`Custom assessment saved! ${questions.length} questions. Link copied!`, 'success', 5000);
     copyToClipboard(res.link);
     closeModal('createModal');
     loadData();
-  } catch(e) { showToast('Error: ' + e.message, 'error'); }
-  finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> <span id="createBtnLabel">Save Assessment</span>'; }
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> <span id="createBtnLabel">Save Assessment</span>';
+  }
 }
 
+/* ─── Results & answers ───────────────────────────────────────── */
 async function viewResults(id, title) {
-  document.getElementById('resultTitle').innerHTML = `<i class="fas fa-chart-bar"></i> Results: ${title}`;
-  document.getElementById('resultsBody').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>';
+  document.getElementById('resultTitle').innerHTML =
+    `<i class="fas fa-chart-bar"></i> Results: ${escapeHtml(title || '')}`;
+  document.getElementById('resultsBody').innerHTML =
+    '<div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>';
   openModal('resultsModal');
+
   try {
     const results = await API.get(`/api/assessments/${id}/results`);
-    if (!results.length) { document.getElementById('resultsBody').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No submissions yet</h3></div>'; return; }
+    if (!results.length) {
+      document.getElementById('resultsBody').innerHTML =
+        '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No submissions yet</h3></div>';
+      return;
+    }
     document.getElementById('resultsBody').innerHTML = `
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>Candidate</th><th>Email</th><th>Score</th><th>%</th><th>Grade</th><th>Status</th><th>Submitted By</th><th>Time</th><th>Submitted</th><th>Actions</th></tr></thead>
-          <tbody>${results.map(r => `
+          <thead>
             <tr>
-              <td class="font-bold">${r.applicant_name}</td>
-              <td class="text-sm text-light">${r.applicant_email}</td>
-              <td>${r.score}/${r.total_marks}</td>
-              <td><div class="flex items-center gap-2"><div class="progress-bar" style="width:60px"><div class="progress-fill" style="width:${r.percentage}%"></div></div><span>${r.percentage}%</span></div></td>
-              <td><span class="badge badge-shortlisted">Grade ${r.grade}</span></td>
-              <td>${statusBadge(r.passed ? 'passed' : 'failed')}</td>
-              <td>${renderSubmissionBadge(r)}</td>
-              <td class="text-sm">${r.time_taken_minutes ? r.time_taken_minutes.toFixed(1) + ' min' : '-'}</td>
-              <td class="text-xs text-light">${fmtDate(r.submitted_at)}</td>
-              <td><div class="table-actions">
-                <button class="btn btn-sm btn-info" onclick="viewDetailedAnswers(${r.id}, '${r.applicant_name}')"><i class="fas fa-list"></i> Answers</button>
-                <button class="btn btn-sm ${r.mark_sheet_sent ? 'btn-secondary' : 'btn-info'}" onclick="sendMarksheet(${r.id})" title="${r.mark_sheet_sent ? 'Resend' : 'Send'} Marksheet"><i class="fas fa-paper-plane"></i></button>
-              </div></td>
-            </tr>`).join('')}
+              <th>Candidate</th>
+              <th>Email</th>
+              <th>Score</th>
+              <th>%</th>
+              <th>Grade</th>
+              <th>Status</th>
+              <th>Submitted By</th>
+              <th>Time</th>
+              <th>Submitted</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${results.map(r => `
+              <tr>
+                <td class="font-bold">${escapeHtml(r.applicant_name || '—')}</td>
+                <td class="text-sm text-light">${escapeHtml(r.applicant_email || '—')}</td>
+                <td>${r.score}/${r.total_marks}</td>
+                <td>
+                  <div class="flex items-center gap-2">
+                    <div class="progress-bar" style="width:60px">
+                      <div class="progress-fill" style="width:${r.percentage}%"></div>
+                    </div>
+                    <span>${r.percentage}%</span>
+                  </div>
+                </td>
+                <td><span class="badge badge-shortlisted">Grade ${r.grade}</span></td>
+                <td>${statusBadge(r.passed ? 'passed' : 'failed')}</td>
+                <td>${renderSubmissionBadge(r)}</td>
+                <td class="text-sm">${r.time_taken_minutes ? r.time_taken_minutes.toFixed(1) + ' min' : '-'}</td>
+                <td class="text-xs text-light">${fmtDate(r.submitted_at)}</td>
+                <td>
+                  <div class="table-actions">
+                    <button class="btn btn-sm btn-info" onclick="viewDetailedAnswers(${r.id}, '${escapeAttr(r.applicant_name || '')}')">
+                      <i class="fas fa-list"></i> Answers
+                    </button>
+                    <button class="btn btn-sm ${r.mark_sheet_sent ? 'btn-secondary' : 'btn-info'}"
+                            onclick="sendMarksheet(${r.id})"
+                            title="${r.mark_sheet_sent ? 'Resend' : 'Send'} Marksheet">
+                      <i class="fas fa-paper-plane"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
           </tbody>
         </table>
       </div>`;
-  } catch(e) { showToast('Error loading results', 'error'); }
+  } catch (e) {
+    showToast('Error loading results: ' + e.message, 'error');
+  }
 }
 
 function renderSubmissionBadge(r) {
   if (r.submission_type === 'auto') {
     const reason = r.submission_reason || 'Auto-submitted';
-    const safeReason = reason.replace(/"/g, '&quot;');
-    return `<span class="badge badge-rejected" title="${safeReason}"><i class="fas fa-robot"></i> Auto-Submitted</span>
-            <div class="text-xs text-light mt-1" style="max-width:180px">${reason}</div>`;
+    const safeReason = escapeAttr(reason);
+    return `
+      <span class="badge badge-rejected" title="${safeReason}">
+        <i class="fas fa-robot"></i> Auto-Submitted
+      </span>
+      <div class="text-xs text-light mt-1" style="max-width:180px">${escapeHtml(reason)}</div>`;
   }
   return `<span class="badge badge-active"><i class="fas fa-check"></i> Submit Button</span>`;
 }
@@ -531,7 +686,7 @@ function renderSubmissionBadge(r) {
 async function viewDetailedAnswers(resultId, candidateName) {
   try {
     const response = await fetch(`${ASSESS_BACKEND_URL}/api/assessment-results/${resultId}/detailed`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) {
       const contentType = response.headers.get('Content-Type') || '';
@@ -542,21 +697,41 @@ async function viewDetailedAnswers(resultId, candidateName) {
       throw new Error(`HTTP ${response.status}`);
     }
     const data = await response.json();
-    if (!data.questions || data.questions.length === 0) { showToast('No answers found', 'info'); return; }
-    document.getElementById('answersTitle').innerHTML = `<i class="fas fa-tasks"></i> Answers by ${candidateName}`;
+    if (!data.questions || data.questions.length === 0) {
+      showToast('No answers found', 'info');
+      return;
+    }
+    document.getElementById('answersTitle').innerHTML =
+      `<i class="fas fa-tasks"></i> Answers by ${escapeHtml(candidateName || '')}`;
+
     let html = '';
     for (const q of data.questions) {
-      const typeLabel = { mcq: 'MCQ', fill_blank: 'Fill in the Blank', typing: 'Written Answer', practical: 'Practical' }[q.type] || q.type;
-      const typeBg = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
+      const typeLabel = {
+        mcq: 'MCQ',
+        fill_blank: 'Fill in the Blank',
+        typing: 'Written Answer',
+        practical: 'Practical',
+      }[q.type] || q.type;
+
+      const typeBg    = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
       const typeColor = { mcq: '#2563eb', fill_blank: '#7c3aed', typing: '#059669', practical: '#d97706' }[q.type] || '#374151';
-      const editBtn = `<button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${q.id}', ${q.marks}, ${q.obtained_marks}, '${escapeHtml(q.feedback || '').replace(/'/g, "\\'")}')">Grade / Edit</button>`;
+
+      const editBtn = `<button class="btn btn-sm btn-primary"
+        onclick="openEditMarks(${resultId}, '${escapeAttr(q.id)}', ${q.marks}, ${q.obtained_marks}, '${escapeAttr(q.feedback || '').replace(/'/g, '&#39;')}')">
+        Grade / Edit
+      </button>`;
+
       const correct = q.is_correct
         ? '<span style="color:#059669;font-weight:700"><i class="fas fa-check-circle"></i> Correct</span>'
         : '<span style="color:#dc2626;font-weight:700"><i class="fas fa-times-circle"></i> Incorrect</span>';
 
       if (q.type === 'mcq') {
-        const userText = (q.user_answer !== undefined && q.user_answer !== -1 && q.options) ? (q.options[q.user_answer] || 'Invalid option') : 'Not answered';
-        const correctText = (q.options && q.correct_answer !== undefined) ? (q.options[q.correct_answer] || 'N/A') : 'N/A';
+        const userText = (q.user_answer !== undefined && q.user_answer !== -1 && q.options)
+          ? (q.options[q.user_answer] || 'Invalid option')
+          : 'Not answered';
+        const correctText = (q.options && q.correct_answer !== undefined)
+          ? (q.options[q.correct_answer] || 'N/A')
+          : 'N/A';
         html += `
           <div class="card mb-4">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -605,88 +780,131 @@ async function viewDetailedAnswers(resultId, candidateName) {
           </div>`;
       }
     }
+
     document.getElementById('answersBody').innerHTML = html;
     openModal('answersModal');
-  } catch(e) { console.error(e); showToast('Error loading answers: ' + e.message, 'error'); }
+  } catch (e) {
+    console.error(e);
+    showToast('Error loading answers: ' + e.message, 'error');
+  }
 }
 
-function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;'); }
-
-// Per-question editing
+/* ─── Per-question editing ─────────────────────────────────────── */
 let currentEditResultId = null, currentEditQuestionId = null, currentMaxMarks = 0;
+
 function openEditMarks(resultId, questionId, maxMarks, currentMarks, currentFeedback) {
-  currentEditResultId = resultId; currentEditQuestionId = questionId; currentMaxMarks = maxMarks;
+  currentEditResultId  = resultId;
+  currentEditQuestionId = questionId;
+  currentMaxMarks      = maxMarks;
   document.getElementById('editObtainedMarks').value = currentMarks;
   document.getElementById('editFeedback').value = currentFeedback;
   openModal('editMarksModal');
 }
+
 async function saveEditedMarks() {
   const obtainedMarks = parseFloat(document.getElementById('editObtainedMarks').value);
   const feedback = document.getElementById('editFeedback').value;
   if (isNaN(obtainedMarks) || obtainedMarks < 0 || obtainedMarks > currentMaxMarks) {
-    showToast(`Marks must be between 0 and ${currentMaxMarks}`, 'warning'); return;
+    showToast(`Marks must be between 0 and ${currentMaxMarks}`, 'warning');
+    return;
   }
   try {
     await API.put(`/api/assessment-results/${currentEditResultId}/update-question`, {
       question_id: currentEditQuestionId,
       obtained_marks: obtainedMarks,
-      feedback: feedback
+      feedback: feedback,
     });
     showToast('Question marks updated!', 'success');
     closeModal('editMarksModal');
+
     const answersModal = document.getElementById('answersModal');
     if (answersModal.style.display === 'flex') {
       const title = document.getElementById('answersTitle').innerText;
       const match = title.match(/Answers by (.+)/);
       if (match) await viewDetailedAnswers(currentEditResultId, match[1]);
     }
-    // Also refresh results table if open
+    // Refresh results table if open
     const resultsModal = document.getElementById('resultsModal');
     if (resultsModal.style.display === 'flex') {
       const titleElem = document.getElementById('resultTitle');
       const assessmentId = titleElem.innerHTML.match(/\d+/)?.[0];
       if (assessmentId) await viewResults(parseInt(assessmentId), '');
     }
-  } catch(e) { showToast('Error updating marks: ' + e.message, 'error'); }
+  } catch (e) {
+    showToast('Error updating marks: ' + e.message, 'error');
+  }
 }
 
 async function sendMarksheet(resultId) {
-  try { await API.post(`/api/assessment-results/${resultId}/send-marksheet`, {}); showToast('Marksheet sent!', 'success'); }
-  catch(e) { showToast('Error', 'error'); }
+  try {
+    await API.post(`/api/assessment-results/${resultId}/send-marksheet`, {});
+    showToast('Marksheet sent!', 'success');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
+/* ─── Card actions ─────────────────────────────────────────────── */
 async function toggleActive(id, active) {
-  try { await API.put(`/api/assessments/${id}`, { is_active: active }); showToast(`Assessment ${active ? 'activated' : 'deactivated'}`, 'success'); loadData(); }
-  catch(e) { showToast('Error', 'error'); }
+  try {
+    await API.put(`/api/assessments/${id}`, { is_active: active });
+    showToast(`Assessment ${active ? 'activated' : 'deactivated'}`, 'success');
+    loadData();
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
 }
 
-loadData();
+async function toggleRequireCode(id, require_code) {
+  try {
+    await API.put(`/api/assessments/${id}`, { require_application_code: require_code });
+    showToast(
+      require_code
+        ? 'Application code is now required to start this assessment'
+        : 'Assessment is now open access (no code required)',
+      'success',
+    );
+    loadData();
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
 
-let pendingDeleteAssessmentId = null;
 function confirmDeleteAssessment(id) {
   pendingDeleteAssessmentId = id;
   const a = assessments.find(x => x.id === id);
-  document.getElementById("deleteAssessmentName").textContent = a ? a.title : 'this assessment';
-  openModal("deleteAssessmentModal");
+  document.getElementById('deleteAssessmentName').textContent = a ? a.title : 'this assessment';
+  openModal('deleteAssessmentModal');
 }
+
 async function deleteAssessment() {
   if (!pendingDeleteAssessmentId) return;
-  const btn = document.getElementById("confirmDeleteAssessmentBtn");
+  const btn = document.getElementById('confirmDeleteAssessmentBtn');
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
   try {
     await API.delete(`/api/assessments/${pendingDeleteAssessmentId}`);
-    showToast("Assessment deleted successfully", "success");
-    closeModal("deleteAssessmentModal");
+    showToast('Assessment deleted successfully', 'success');
+    closeModal('deleteAssessmentModal');
     pendingDeleteAssessmentId = null;
     loadData();
-  } catch(e) {
-    showToast("Error deleting assessment: " + e.message, "error");
+  } catch (e) {
+    showToast('Error deleting assessment: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-trash"></i> Delete';
   }
 }
+
+/* ─── Utilities ────────────────────────────────────────────────── */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+function escapeAttr(str) { return escapeHtml(str); }
+
+loadData();
 </script>
 </body>
 </html>
