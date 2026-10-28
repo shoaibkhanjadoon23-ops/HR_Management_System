@@ -37,6 +37,9 @@
   max-width: 90vw;
 }
 @keyframes slideDown { from { top:-60px; opacity:0 } to { top:80px; opacity:1 } }
+.gate-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+.gate-badge.locked { background: #4338ca; color: #fff; }
+.gate-badge.open   { background: #d97706; color: #fff; }
 </style>
 </head>
 <body>
@@ -57,27 +60,56 @@
   </div>
 </div>
 
-<!-- Application-code gate -->
-<div id="codeGate" class="apply-page">
+<!-- Start gate — content switches between code input and name/email input -->
+<div id="startGate" class="apply-page">
   <div class="apply-header">
     <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-shield-alt"></i> Secure Assessment</div>
     <h1 id="jobTitle">Loading…</h1>
-    <p>Enter your application code to begin</p>
+    <p id="gateSubtitle">Enter your application code to begin</p>
+    <span id="gateBadge" class="gate-badge locked" style="margin-top:10px">
+      <i class="fas fa-lock"></i> Code Required
+    </span>
   </div>
   <div class="card">
     <div class="card-body">
-      <div class="form-group">
-        <label>Application Code *</label>
-        <input type="text" id="appCodeInput" maxlength="12"
-               placeholder="e.g. A3B5K9XZ"
-               style="font-size:20px;text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
-        <div class="text-xs text-light mt-2">
-          You received this code in your application confirmation email.
+
+      <!-- Code gate (shown when require_application_code = true) -->
+      <div id="codeGateFields">
+        <div class="form-group">
+          <label>Application Code *</label>
+          <input type="text" id="appCodeInput" maxlength="12"
+                 placeholder="e.g. A3B5K9XZ"
+                 style="font-size:20px;text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
+          <div class="text-xs text-light mt-2">
+            You received this code in your application confirmation email.
+          </div>
         </div>
       </div>
+
+      <!-- Name/email gate (shown when require_application_code = false) -->
+      <div id="identityGateFields" style="display:none">
+        <div class="alert alert-warning" style="margin-bottom:16px">
+          <i class="fas fa-exclamation-triangle"></i>
+          <b>Note:</b> This assessment is open-access — no application code is required.
+          Please enter your name so we know who submitted it. Each submission will
+          appear as an independent result.
+        </div>
+        <div class="form-group">
+          <label>Your Full Name *</label>
+          <input type="text" id="applicantNameInput" placeholder="e.g. Jane Doe">
+        </div>
+        <div class="form-group">
+          <label>Your Email (optional)</label>
+          <input type="email" id="applicantEmailInput" placeholder="you@example.com">
+          <div class="text-xs text-light mt-1">
+            If provided, we'll email you the marksheet when you submit.
+          </div>
+        </div>
+      </div>
+
       <div id="codeError" class="alert alert-error" style="display:none"></div>
-      <button class="btn btn-primary btn-full" id="verifyBtn" onclick="verifyCode()">
-        <i class="fas fa-check"></i> Verify &amp; Start Assessment
+      <button class="btn btn-primary btn-full" id="startBtn" onclick="handleStart()">
+        <i class="fas fa-play"></i> <span id="startBtnText">Verify &amp; Start Assessment</span>
       </button>
     </div>
   </div>
@@ -129,12 +161,12 @@ let submitted = false;
 
 /* ── Proctoring state ─────────────────────────────────────── */
 const MAX_WARNINGS          = 3;
-const HEAD_OFFSET_THRESHOLD = 0.34;   // nose off-centre ratio — ignore slight turns
-const HEAD_SUSTAIN_MS       = 1800;   // must be sustained this long to warn
+const HEAD_OFFSET_THRESHOLD = 0.34;
+const HEAD_SUSTAIN_MS       = 1800;
 const VOICE_SUSTAIN_MS      = 1800;
-const WARNING_COOLDOWN_MS   = 5000;   // gap between warnings, so 3s head turn ≠ 3 warnings
-const VOICE_ENERGY_MIN      = 95;     // avg 300–3400 Hz energy (0–255)
-const VOICE_RMS_MIN         = 0.09;   // loudness (near-mic voice); filters distant/quiet noise
+const WARNING_COOLDOWN_MS   = 5000;
+const VOICE_ENERGY_MIN      = 95;
+const VOICE_RMS_MIN         = 0.09;
 
 let camWarnings = 0, voiceWarnings = 0;
 let headAwayStart = null, voiceStart = null;
@@ -144,7 +176,10 @@ let faceDetectInterval = null, voiceDetectInterval = null;
 
 let startTime = null, timeLeftSeconds = 0, timerInterval = null;
 
-if (prefilledCode) document.getElementById('appCodeInput').value = prefilledCode.toUpperCase();
+if (prefilledCode) {
+  const codeInput = document.getElementById('appCodeInput');
+  if (codeInput) codeInput.value = prefilledCode.toUpperCase();
+}
 
 async function loadAssessment() {
   try {
@@ -153,19 +188,57 @@ async function loadAssessment() {
     assessment = await res.json();
     document.getElementById('jobTitle').textContent = assessment.title;
     timeLeftSeconds = assessment.duration_minutes * 60;
+    applyGateMode();
   } catch (e) {
-    document.getElementById('codeGate').innerHTML =
+    document.getElementById('startGate').innerHTML =
       '<div class="alert alert-error">Assessment not found or inactive.</div>';
   }
+}
+
+/**
+ * Switch the gate UI between code-input mode and name/email mode,
+ * based on the assessment's require_application_code flag.
+ */
+function applyGateMode() {
+  const requireCode = assessment.require_application_code !== false; // default: true
+  const codeFields     = document.getElementById('codeGateFields');
+  const identityFields = document.getElementById('identityGateFields');
+  const subtitle       = document.getElementById('gateSubtitle');
+  const badge          = document.getElementById('gateBadge');
+  const btnText        = document.getElementById('startBtnText');
+
+  if (requireCode) {
+    codeFields.style.display = '';
+    identityFields.style.display = 'none';
+    subtitle.textContent = 'Enter your application code to begin';
+    badge.className = 'gate-badge locked';
+    badge.innerHTML = '<i class="fas fa-lock"></i> Code Required';
+    btnText.textContent = 'Verify & Start Assessment';
+  } else {
+    codeFields.style.display = 'none';
+    identityFields.style.display = '';
+    subtitle.textContent = 'Enter your name to begin (no code needed)';
+    badge.className = 'gate-badge open';
+    badge.innerHTML = '<i class="fas fa-lock-open"></i> Open Access';
+    btnText.textContent = 'Start Assessment';
+  }
+}
+
+async function handleStart() {
+  if (assessment.require_application_code !== false) {
+    return await verifyCode();
+  }
+  return await startWithoutCode();
 }
 
 async function verifyCode() {
   const code = document.getElementById('appCodeInput').value.trim().toUpperCase();
   if (!code) return showCodeError('Please enter your application code');
 
-  const btn = document.getElementById('verifyBtn');
+  const btn = document.getElementById('startBtn');
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying…';
+  document.getElementById('codeError').style.display = 'none';
 
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/verify-application`, {
@@ -177,7 +250,7 @@ async function verifyCode() {
     if (!res.ok) {
       showCodeError(data.detail || 'Invalid application code');
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-check"></i> Verify &amp; Start Assessment';
+      btn.innerHTML = '<i class="fas fa-play"></i> <span id="startBtnText">Verify &amp; Start Assessment</span>';
       return;
     }
     verifiedApplication = data;
@@ -185,8 +258,28 @@ async function verifyCode() {
   } catch (e) {
     showCodeError('Network error. Please try again.');
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-check"></i> Verify &amp; Start Assessment';
+    btn.innerHTML = '<i class="fas fa-play"></i> <span id="startBtnText">Verify &amp; Start Assessment</span>';
   }
+}
+
+function startWithoutCode() {
+  const name  = (document.getElementById('applicantNameInput').value || '').trim();
+  const email = (document.getElementById('applicantEmailInput').value || '').trim();
+  if (!name) {
+    showCodeError('Please enter your name to begin');
+    return;
+  }
+  // Lightweight validation — optional email must look like an email if provided
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showCodeError('Please enter a valid email address, or leave it blank');
+    return;
+  }
+  verifiedApplication = {
+    application_id: null,
+    applicant_name: name,
+    applicant_email: email,
+  };
+  startAssessment();
 }
 
 function showCodeError(msg) {
@@ -196,7 +289,7 @@ function showCodeError(msg) {
 }
 
 async function startAssessment() {
-  document.getElementById('codeGate').style.display = 'none';
+  document.getElementById('startGate').style.display = 'none';
   document.getElementById('assessmentArea').style.display = 'block';
   document.getElementById('proctorBar').style.display = 'flex';
   document.getElementById('cameraPreview').style.display = 'block';
@@ -270,7 +363,6 @@ function escapeHtml(s) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 
-/* ── Timer ─────────────────────────────────────────────────── */
 function startTimer() {
   timerInterval = setInterval(() => {
     if (submitted) return;
@@ -300,7 +392,6 @@ async function startProctoring() {
     await startVoiceDetection();
   } catch (e) {
     console.error('Proctoring setup failed:', e);
-    // Warning counters simply won't fire; candidate can still finish manually.
   }
 }
 
@@ -338,9 +429,9 @@ async function checkFace() {
         headAwayStart = null;
       }
     } else {
-      headAwayStart = null;   // slight glance → completely resets, no warning
+      headAwayStart = null;
     }
-  } catch (_) { /* ignore transient detection errors */ }
+  } catch (_) { /* ignore transient errors */ }
 }
 
 async function startVoiceDetection() {
@@ -374,7 +465,6 @@ async function startVoiceDetection() {
       }
       rms = Math.sqrt(rms / timeData.length);
 
-      // Human speech band + near-field loudness — filters birds, traffic, distant chatter.
       const voiceNear = energy > VOICE_ENERGY_MIN && rms > VOICE_RMS_MIN;
       const now = Date.now();
 
@@ -443,19 +533,21 @@ async function submitAssessment(type = 'manual', reason = null) {
 
   const minutes = (Date.now() - startTime) / 60000;
 
+  const payload = {
+    applicant_name:     verifiedApplication?.applicant_name  || '',
+    applicant_email:    verifiedApplication?.applicant_email || '',
+    application_id:     verifiedApplication?.application_id  || null,
+    answers,
+    time_taken_minutes: minutes,
+    submission_type:    type,
+    submission_reason:  reason,
+  };
+
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        applicant_name:    verifiedApplication?.applicant_name || '',
-        applicant_email:   verifiedApplication?.applicant_email || '',
-        application_id:    verifiedApplication?.application_id || null,
-        answers,
-        time_taken_minutes: minutes,
-        submission_type:   type,
-        submission_reason: reason,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Submission failed');
@@ -473,7 +565,9 @@ async function submitAssessment(type = 'manual', reason = null) {
             <div class="text-light">Grade ${data.grade} — ${data.score}/${data.total}</div>
           </div>
           <p class="text-sm text-light mt-4">
-            A confirmation and marksheet have been sent to your email.
+            ${verifiedApplication?.applicant_email
+              ? 'A confirmation and marksheet have been sent to your email.'
+              : 'Your submission has been recorded.'}
           </p>
         </div>
       </div>`;
