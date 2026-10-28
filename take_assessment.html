@@ -7,92 +7,153 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 <style>
+/* ── Proctor bar ─────────────────────────────────────── */
 .proctor-bar {
   position: sticky; top: 0; z-index: 100;
-  background: #1e1b4b; color: #fff; padding: 12px 20px;
+  background: #1e1b4b; color: #fff; padding: 10px 16px;
   display: flex; justify-content: space-between; align-items: center;
-  gap: 20px; flex-wrap: wrap;
+  gap: 16px; flex-wrap: wrap;
 }
-.warn-counter { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.warn-counter { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .warn-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 14px; background: rgba(255,255,255,.1);
-  border-radius: 8px; font-size: 14px; transition: background .3s;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: rgba(255,255,255,.1);
+  border-radius: 8px; font-size: 13px;
+  transition: background .25s, transform .25s;
+  white-space: nowrap;
 }
-.warn-item.warned { background: #dc2626; animation: pulse-warn 1s infinite; }
-@keyframes pulse-warn { 0%,100% { opacity:1 } 50% { opacity:.65 } }
+.warn-item i { font-size: 12px; opacity: .8; }
+.warn-item.warned { background: #dc2626; }
+.warn-item.flash { animation: flash-pop .5s ease; }
+@keyframes flash-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); background: #ef4444; }
+  100% { transform: scale(1); }
+}
+
+/* ── Camera preview ──────────────────────────────────── */
 .camera-preview {
   position: fixed; bottom: 20px; right: 20px;
-  width: 190px; height: 143px; border-radius: 12px;
+  width: 180px; height: 135px; border-radius: 12px;
   border: 3px solid #6366f1; overflow: hidden; z-index: 1000;
   background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
 .camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+@media (max-width: 640px) {
+  .camera-preview { width: 110px; height: 82px; bottom: 12px; right: 12px; }
+}
+
+/* ── Warning toast ──────────────────────────────────── */
 .warning-toast {
   position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-  background: #dc2626; color: #fff; padding: 16px 32px; border-radius: 12px;
-  font-weight: 700; font-size: 16px; z-index: 2000;
+  background: #dc2626; color: #fff; padding: 16px 28px; border-radius: 12px;
+  font-weight: 700; font-size: 15px; z-index: 2000;
   animation: slideDown .3s ease; box-shadow: 0 10px 30px rgba(220,38,38,.5);
-  max-width: 90vw;
+  max-width: 90vw; text-align: center; line-height: 1.4;
 }
+.warning-toast.voice { background: #ea580c; }
+.warning-toast.tab   { background: #7c3aed; }
 @keyframes slideDown { from { top:-60px; opacity:0 } to { top:80px; opacity:1 } }
-.gate-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-.gate-badge.locked { background: #4338ca; color: #fff; }
-.gate-badge.open   { background: #d97706; color: #fff; }
+
+/* ── Permission gate ────────────────────────────────── */
+.perm-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px; background: #f8fafc;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
+.perm-row.granted {
+  background: #ecfdf5;
+  border-color: #10b981;
+}
+.perm-icon {
+  width: 48px; height: 48px; flex-shrink: 0;
+  border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  background: #e0e7ff; color: #4f46e5;
+}
+.perm-row.granted .perm-icon { background: #10b981; color: white; }
+.perm-text { flex: 1; min-width: 180px; }
+.perm-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.perm-text p  { font-size: 13px; color: #6b7280; }
+.perm-btn-wrap { flex-shrink: 0; }
+.perm-btn-wrap .btn.granted {
+  background: #10b981; color: white; border-color: #10b981;
+}
+#startAssessmentBtn:disabled { opacity: .5; cursor: not-allowed; }
+#startAssessmentBtn:not(:disabled) {
+  background: linear-gradient(135deg, #10b981, #059669);
+  animation: pulse-start 1.6s infinite;
+}
+@keyframes pulse-start {
+  0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,.6); }
+  50%     { box-shadow: 0 0 0 12px rgba(16,185,129,0); }
+}
+
+/* ── Mic level bar ──────────────────────────────────── */
+.mic-level-wrap {
+  height: 8px; background: #e5e7eb; border-radius: 4px;
+  overflow: hidden; margin-top: 8px;
+}
+.mic-level-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+  transition: width .06s linear;
+}
 </style>
 </head>
 <body>
 
-<!-- Proctoring bar with warning counters -->
+<!-- ══ Proctoring bar ══ -->
 <div id="proctorBar" class="proctor-bar" style="display:none">
   <div class="warn-counter">
     <div class="warn-item" id="camWarnItem">
-      <i class="fas fa-video"></i> Camera: <b><span id="camWarnCount">0</span>/3</b>
+      <i class="fas fa-video"></i>
+      Camera <b><span id="camWarnCount">0</span>/3</b>
     </div>
     <div class="warn-item" id="voiceWarnItem">
-      <i class="fas fa-microphone"></i> Voice: <b><span id="voiceWarnCount">0</span>/3</b>
+      <i class="fas fa-microphone"></i>
+      Voice <b><span id="voiceWarnCount">0</span>/3</b>
+    </div>
+    <div class="warn-item" id="tabWarnItem">
+      <i class="fas fa-window-restore"></i>
+      Tab <b><span id="tabWarnCount">0</span>/3</b>
     </div>
   </div>
-  <div style="display:flex;gap:20px;align-items:center">
+  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
     <div style="font-size:14px"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
-    <div id="submitStatus" style="font-size:13px;color:#a5b4fc"></div>
+    <div id="submitStatus" style="font-size:12px;color:#a5b4fc"></div>
   </div>
 </div>
 
-<!-- Start gate — content switches between code input and name/email input -->
+<!-- ══ Gate 1 — code / identity ══ -->
 <div id="startGate" class="apply-page">
   <div class="apply-header">
     <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-shield-alt"></i> Secure Assessment</div>
     <h1 id="jobTitle">Loading…</h1>
     <p id="gateSubtitle">Enter your application code to begin</p>
-    <span id="gateBadge" class="gate-badge locked" style="margin-top:10px">
+    <span id="gateBadge" class="gate-badge" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#4338ca;color:#fff">
       <i class="fas fa-lock"></i> Code Required
     </span>
   </div>
   <div class="card">
     <div class="card-body">
-
-      <!-- Code gate (shown when require_application_code = true) -->
       <div id="codeGateFields">
         <div class="form-group">
           <label>Application Code *</label>
-          <input type="text" id="appCodeInput" maxlength="12"
-                 placeholder="e.g. A3B5K9XZ"
+          <input type="text" id="appCodeInput" maxlength="12" placeholder="e.g. A3B5K9XZ"
                  style="font-size:20px;text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
-          <div class="text-xs text-light mt-2">
-            You received this code in your application confirmation email.
-          </div>
+          <div class="text-xs text-light mt-2">You received this code in your application confirmation email.</div>
         </div>
       </div>
 
-      <!-- Name/email gate (shown when require_application_code = false) -->
       <div id="identityGateFields" style="display:none">
         <div class="alert alert-warning" style="margin-bottom:16px">
           <i class="fas fa-exclamation-triangle"></i>
-          <b>Note:</b> This assessment is open-access — no application code is required.
-          Please enter your name so we know who submitted it. Each submission will
-          appear as an independent result.
+          This assessment is open-access — no application code is required. Please enter your name.
         </div>
         <div class="form-group">
           <label>Your Full Name *</label>
@@ -101,26 +162,94 @@
         <div class="form-group">
           <label>Your Email (optional)</label>
           <input type="email" id="applicantEmailInput" placeholder="you@example.com">
-          <div class="text-xs text-light mt-1">
-            If provided, we'll email you the marksheet when you submit.
-          </div>
         </div>
       </div>
 
       <div id="codeError" class="alert alert-error" style="display:none"></div>
-      <button class="btn btn-primary btn-full" id="startBtn" onclick="handleStart()">
-        <i class="fas fa-play"></i> <span id="startBtnText">Verify &amp; Start Assessment</span>
+      <button class="btn btn-primary btn-full" id="verifyBtn" onclick="handleStart()">
+        <i class="fas fa-play"></i> <span id="verifyBtnText">Verify &amp; Continue</span>
       </button>
     </div>
   </div>
 </div>
 
-<!-- Assessment -->
+<!-- ══ Gate 2 — permissions ══ -->
+<div id="permissionGate" class="apply-page" style="display:none">
+  <div class="apply-header">
+    <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-cog"></i> Assessment Setup</div>
+    <h1>Almost there!</h1>
+    <p>Enable your camera and microphone to continue. Both are required.</p>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="alert alert-info" style="margin-bottom:20px">
+        <i class="fas fa-info-circle"></i>
+        This assessment is proctored. Your camera and microphone will be monitored
+        throughout to ensure fairness. You may receive warnings if:
+        <ul style="margin:8px 0 0 20px;padding:0;line-height:1.7;font-size:13px">
+          <li>You look away from the screen for too long</li>
+          <li>Another person appears in the camera</li>
+          <li>A phone or other device is visible in the camera</li>
+          <li>Loud voices are heard near you</li>
+          <li>You switch to another tab or app</li>
+        </ul>
+        <div style="margin-top:8px;font-size:13px">
+          <b>3 warnings in any category = automatic submission.</b>
+        </div>
+      </div>
+
+      <!-- Camera row -->
+      <div class="perm-row" id="camPermRow">
+        <div class="perm-icon"><i class="fas fa-video"></i></div>
+        <div class="perm-text">
+          <h3>Camera</h3>
+          <p>Verify you are visible and alone</p>
+        </div>
+        <div class="perm-btn-wrap">
+          <button class="btn btn-primary" id="camBtn" onclick="enableCamera()">
+            <i class="fas fa-video"></i> Enable Camera
+          </button>
+        </div>
+      </div>
+
+      <!-- Microphone row -->
+      <div class="perm-row" id="micPermRow">
+        <div class="perm-icon"><i class="fas fa-microphone"></i></div>
+        <div class="perm-text">
+          <h3>Microphone</h3>
+          <p>Ensure no one is helping you</p>
+          <div class="mic-level-wrap" id="micLevelWrap" style="display:none">
+            <div class="mic-level-bar" id="micLevelBar"></div>
+          </div>
+        </div>
+        <div class="perm-btn-wrap">
+          <button class="btn btn-primary" id="micBtn" onclick="enableMic()">
+            <i class="fas fa-microphone"></i> Enable Microphone
+          </button>
+        </div>
+      </div>
+
+      <div id="permError" class="alert alert-error" style="display:none;margin-top:8px"></div>
+
+      <button class="btn btn-primary btn-full" id="startAssessmentBtn"
+              style="margin-top:16px;font-size:16px;padding:14px"
+              disabled onclick="beginAssessment()">
+        <i class="fas fa-play-circle"></i> Start Assessment
+      </button>
+      <p class="text-xs text-light mt-2" style="text-align:center">
+        By starting, you consent to camera and microphone monitoring.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Assessment ══ -->
 <div id="assessmentArea" style="display:none">
   <div class="apply-page">
     <div id="warningsBanner" class="alert alert-warning" style="display:none">
-      <b><i class="fas fa-exclamation-triangle"></i> Total warnings: <span id="totalWarnings">0</span>/3</b>
-      — The assessment auto-submits once either counter reaches 3.
+      <b><i class="fas fa-exclamation-triangle"></i> Total warnings: <span id="totalWarnings">0</span>/9</b>
+      — Reaching 3 warnings in any category auto-submits the assessment.
     </div>
 
     <div class="card mb-4">
@@ -142,7 +271,7 @@
   </div>
 </div>
 
-<!-- Camera preview -->
+<!-- ══ Camera preview ══ -->
 <div class="camera-preview" id="cameraPreview" style="display:none">
   <video id="camera" autoplay muted playsinline></video>
 </div>
@@ -153,41 +282,92 @@ const pathSegments = window.location.pathname.split('/').filter(Boolean);
 const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
 const prefilledCode = new URLSearchParams(window.location.search).get('code') || '';
 
+// ═════════════════════════════════════════════════════════════
+//  GLOBAL STATE
+// ═════════════════════════════════════════════════════════════
 let assessment = null;
 let verifiedApplication = null;
 let answers = {};
 let totalQuestions = 0;
-let submitted = false;
 
-/* ── Proctoring state ─────────────────────────────────────── */
-const MAX_WARNINGS          = 3;
-const HEAD_OFFSET_THRESHOLD = 0.34;
-const HEAD_SUSTAIN_MS       = 1800;
-const VOICE_SUSTAIN_MS      = 1800;
-const WARNING_COOLDOWN_MS   = 5000;
-const VOICE_ENERGY_MIN      = 95;
-const VOICE_RMS_MIN         = 0.09;
+const state = {
+  submitted: false,
+  // warning counters
+  camWarnings: 0,
+  voiceWarnings: 0,
+  tabWarnings: 0,
+  // sustain trackers
+  lookAwayStart: null,
+  noFaceStart: null,
+  multiFaceStart: null,
+  phoneStart: null,
+  voiceStart: null,
+  // per-violation cooldowns (last warn timestamp)
+  lastCamWarn: 0,
+  lastVoiceWarn: 0,
+  lastTabWarn: 0,
+  // resources
+  cameraStream: null,
+  micStream: null,
+  audioContext: null,
+  cocoModel: null,
+  faceDetectTimer: null,
+  objectDetectTimer: null,
+  voiceDetectTimer: null,
+  micLevelAnimFrame: null,
+  timerInterval: null,
+  startTime: null,
+  timeLeftSeconds: 0,
+  paused: false,
+};
 
-let camWarnings = 0, voiceWarnings = 0;
-let headAwayStart = null, voiceStart = null;
-let lastCamWarnAt = 0,   lastVoiceWarnAt = 0;
-let cameraStream = null, audioContext = null;
-let faceDetectInterval = null, voiceDetectInterval = null;
+// ═════════════════════════════════════════════════════════════
+//  TUNING — change here if too sensitive or too lenient
+// ═════════════════════════════════════════════════════════════
+const CFG = {
+  MAX_WARNINGS: 3,
 
-let startTime = null, timeLeftSeconds = 0, timerInterval = null;
+  // Head position — must be sustained to count as "look away"
+  HEAD_OFFSET_THRESHOLD: 0.34,      // nose x-offset / half face width; 0.34 ≈ ~30°
+  HEAD_SUSTAIN_MS: 1800,            // must be sustained this long
+  NO_FACE_SUSTAIN_MS: 2000,
+  MULTI_FACE_SUSTAIN_MS: 1500,
+  PHONE_SUSTAIN_MS: 1500,
+  VOICE_SUSTAIN_MS: 1800,
+
+  // Voice detection
+  VOICE_ENERGY_MIN: 95,             // avg 300-3400Hz energy (0-255)
+  VOICE_RMS_MIN: 0.09,              // requires near-mic loudness
+
+  // Phone detection
+  PHONE_CONFIDENCE_MIN: 0.55,
+
+  // Cooldowns between warnings of same sensor
+  CAM_COOLDOWN_MS: 8000,
+  VOICE_COOLDOWN_MS: 8000,
+  TAB_COOLDOWN_MS: 5000,
+
+  // Polling intervals
+  FACE_CHECK_MS: 600,
+  OBJECT_CHECK_MS: 2000,
+  VOICE_CHECK_MS: 300,
+};
 
 if (prefilledCode) {
   const codeInput = document.getElementById('appCodeInput');
   if (codeInput) codeInput.value = prefilledCode.toUpperCase();
 }
 
+// ═════════════════════════════════════════════════════════════
+//  INIT — load assessment
+// ═════════════════════════════════════════════════════════════
 async function loadAssessment() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
     if (!res.ok) throw new Error('Assessment not found');
     assessment = await res.json();
     document.getElementById('jobTitle').textContent = assessment.title;
-    timeLeftSeconds = assessment.duration_minutes * 60;
+    state.timeLeftSeconds = assessment.duration_minutes * 60;
     applyGateMode();
   } catch (e) {
     document.getElementById('startGate').innerHTML =
@@ -195,47 +375,45 @@ async function loadAssessment() {
   }
 }
 
-/**
- * Switch the gate UI between code-input mode and name/email mode,
- * based on the assessment's require_application_code flag.
- */
 function applyGateMode() {
-  const requireCode = assessment.require_application_code !== false; // default: true
+  const requireCode = assessment.require_application_code !== false;
   const codeFields     = document.getElementById('codeGateFields');
   const identityFields = document.getElementById('identityGateFields');
   const subtitle       = document.getElementById('gateSubtitle');
   const badge          = document.getElementById('gateBadge');
-  const btnText        = document.getElementById('startBtnText');
+  const btnText        = document.getElementById('verifyBtnText');
 
   if (requireCode) {
     codeFields.style.display = '';
     identityFields.style.display = 'none';
     subtitle.textContent = 'Enter your application code to begin';
-    badge.className = 'gate-badge locked';
     badge.innerHTML = '<i class="fas fa-lock"></i> Code Required';
-    btnText.textContent = 'Verify & Start Assessment';
+    btnText.textContent = 'Verify & Continue';
   } else {
     codeFields.style.display = 'none';
     identityFields.style.display = '';
     subtitle.textContent = 'Enter your name to begin (no code needed)';
-    badge.className = 'gate-badge open';
+    badge.style.background = '#d97706';
     badge.innerHTML = '<i class="fas fa-lock-open"></i> Open Access';
-    btnText.textContent = 'Start Assessment';
+    btnText.textContent = 'Continue';
   }
 }
 
+// ═════════════════════════════════════════════════════════════
+//  GATE 1 — handle start / verify
+// ═════════════════════════════════════════════════════════════
 async function handleStart() {
   if (assessment.require_application_code !== false) {
-    return await verifyCode();
+    return verifyCode();
   }
-  return await startWithoutCode();
+  return startWithoutCode();
 }
 
 async function verifyCode() {
   const code = document.getElementById('appCodeInput').value.trim().toUpperCase();
   if (!code) return showCodeError('Please enter your application code');
 
-  const btn = document.getElementById('startBtn');
+  const btn = document.getElementById('verifyBtn');
   btn.disabled = true;
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying…';
   document.getElementById('codeError').style.display = 'none';
@@ -250,36 +428,31 @@ async function verifyCode() {
     if (!res.ok) {
       showCodeError(data.detail || 'Invalid application code');
       btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-play"></i> <span id="startBtnText">Verify &amp; Start Assessment</span>';
+      btn.innerHTML = '<i class="fas fa-play"></i> <span id="verifyBtnText">Verify &amp; Continue</span>';
       return;
     }
     verifiedApplication = data;
-    startAssessment();
+    proceedToPermissionGate();
   } catch (e) {
     showCodeError('Network error. Please try again.');
     btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-play"></i> <span id="startBtnText">Verify &amp; Start Assessment</span>';
+    btn.innerHTML = '<i class="fas fa-play"></i> Verify &amp; Continue';
   }
 }
 
 function startWithoutCode() {
   const name  = (document.getElementById('applicantNameInput').value || '').trim();
   const email = (document.getElementById('applicantEmailInput').value || '').trim();
-  if (!name) {
-    showCodeError('Please enter your name to begin');
-    return;
-  }
-  // Lightweight validation — optional email must look like an email if provided
+  if (!name) return showCodeError('Please enter your name');
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    showCodeError('Please enter a valid email address, or leave it blank');
-    return;
+    return showCodeError('Please enter a valid email, or leave it blank');
   }
   verifiedApplication = {
     application_id: null,
     applicant_name: name,
     applicant_email: email,
   };
-  startAssessment();
+  proceedToPermissionGate();
 }
 
 function showCodeError(msg) {
@@ -288,17 +461,128 @@ function showCodeError(msg) {
   el.style.display = 'block';
 }
 
-async function startAssessment() {
+function proceedToPermissionGate() {
+  if (assessment.anti_cheat === false) {
+    // No proctoring — straight into assessment
+    beginAssessment();
+    return;
+  }
   document.getElementById('startGate').style.display = 'none';
+  document.getElementById('permissionGate').style.display = 'block';
+  document.getElementById('cameraPreview').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ═════════════════════════════════════════════════════════════
+//  GATE 2 — permissions
+// ═════════════════════════════════════════════════════════════
+async function enableCamera() {
+  const btn = document.getElementById('camBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' },
+      audio: false,
+    });
+    state.cameraStream = stream;
+
+    const video = document.getElementById('camera');
+    video.srcObject = stream;
+    await new Promise(resolve => {
+      if (video.readyState >= 2) resolve();
+      else video.onloadeddata = resolve;
+    });
+
+    btn.classList.add('granted');
+    btn.innerHTML = '<i class="fas fa-check"></i> Camera Ready';
+    btn.disabled = true;
+    document.getElementById('camPermRow').classList.add('granted');
+    document.getElementById('permError').style.display = 'none';
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-video"></i> Enable Camera';
+    const err = document.getElementById('permError');
+    err.textContent = 'Camera access failed: ' + (e.message || 'permission denied') +
+      '. Please allow camera access in your browser settings and try again.';
+    err.style.display = 'block';
+  }
+  checkReadyToStart();
+}
+
+async function enableMic() {
+  const btn = document.getElementById('micBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    state.micStream = stream;
+
+    // Live mic level meter for user feedback
+    document.getElementById('micLevelWrap').style.display = 'block';
+    startMicLevelMeter(stream);
+
+    btn.classList.add('granted');
+    btn.innerHTML = '<i class="fas fa-check"></i> Microphone Ready';
+    btn.disabled = true;
+    document.getElementById('micPermRow').classList.add('granted');
+    document.getElementById('permError').style.display = 'none';
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-microphone"></i> Enable Microphone';
+    const err = document.getElementById('permError');
+    err.textContent = 'Microphone access failed: ' + (e.message || 'permission denied') +
+      '. Please allow microphone access in your browser settings and try again.';
+    err.style.display = 'block';
+  }
+  checkReadyToStart();
+}
+
+function startMicLevelMeter(stream) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const bar = document.getElementById('micLevelBar');
+
+    function tick() {
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const avg = sum / data.length;
+      bar.style.width = Math.min(100, avg * 2) + '%';
+      state.micLevelAnimFrame = requestAnimationFrame(tick);
+    }
+    tick();
+  } catch (e) {
+    console.error('Mic meter failed:', e);
+  }
+}
+
+function checkReadyToStart() {
+  const ready = !!state.cameraStream && !!state.micStream;
+  document.getElementById('startAssessmentBtn').disabled = !ready;
+}
+
+// ═════════════════════════════════════════════════════════════
+//  BEGIN ASSESSMENT
+// ═════════════════════════════════════════════════════════════
+async function beginAssessment() {
+  document.getElementById('permissionGate').style.display = 'none';
   document.getElementById('assessmentArea').style.display = 'block';
   document.getElementById('proctorBar').style.display = 'flex';
-  document.getElementById('cameraPreview').style.display = 'block';
 
   renderQuestions();
   startTimer();
-  startTime = Date.now();
+  state.startTime = Date.now();
 
-  if (assessment.anti_cheat) {
+  if (assessment.anti_cheat !== false) {
     await startProctoring();
   }
 }
@@ -306,6 +590,7 @@ async function startAssessment() {
 function renderQuestions() {
   const qs = assessment.questions || [];
   totalQuestions = qs.length;
+
   document.getElementById('assessmentTitle').innerHTML =
     `<h2 style="font-size:20px">${escapeHtml(assessment.title)}</h2>`;
   document.getElementById('assessmentMeta').innerHTML =
@@ -358,63 +643,93 @@ function saveAnswer(qid, value) {
     `${totalQuestions ? (done / totalQuestions) * 100 : 0}%`;
 }
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, m =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
-
 function startTimer() {
-  timerInterval = setInterval(() => {
-    if (submitted) return;
-    timeLeftSeconds--;
-    const m = Math.max(0, Math.floor(timeLeftSeconds / 60));
-    const s = Math.max(0, timeLeftSeconds % 60);
+  state.timerInterval = setInterval(() => {
+    if (state.submitted || state.paused) return;
+    state.timeLeftSeconds--;
+    const m = Math.max(0, Math.floor(state.timeLeftSeconds / 60));
+    const s = Math.max(0, state.timeLeftSeconds % 60);
     document.getElementById('timer').textContent = `${m}:${String(s).padStart(2, '0')}`;
-    if (timeLeftSeconds <= 0) submitAssessment('auto', 'Time expired');
+    if (state.timeLeftSeconds <= 0) submitAssessment('auto', 'Time expired');
   }, 1000);
 }
 
-/* ── Proctoring ────────────────────────────────────────────── */
+// ═════════════════════════════════════════════════════════════
+//  PROCTORING
+// ═════════════════════════════════════════════════════════════
 async function startProctoring() {
   try {
-    cameraStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 320, height: 240, facingMode: 'user' }, audio: false,
-    });
-    const video = document.getElementById('camera');
-    video.srcObject = cameraStream;
-    await new Promise(r => (video.onloadedmetadata = r));
-
+    // Load face-api models
     const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-    await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
-    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath);
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath),
+    ]);
 
-    faceDetectInterval = setInterval(checkFace, 600);
+    // Load COCO-SSD for phone/gadget detection (best effort — continue if it fails)
+    try {
+      state.cocoModel = await cocoSsd.load();
+    } catch (e) {
+      console.warn('COCO-SSD failed to load; phone detection disabled:', e);
+      state.cocoModel = null;
+    }
+
+    // Start polling loops
+    state.faceDetectTimer   = setInterval(checkFace, CFG.FACE_CHECK_MS);
+    if (state.cocoModel) {
+      state.objectDetectTimer = setInterval(checkObjects, CFG.OBJECT_CHECK_MS);
+    }
     await startVoiceDetection();
+
+    // Listen for tab/app switches
+    document.addEventListener('visibilitychange', onVisibilityChange);
   } catch (e) {
     console.error('Proctoring setup failed:', e);
+    // Don't auto-submit — just log and let candidate finish manually
   }
 }
 
 async function checkFace() {
-  if (submitted) return;
+  if (state.submitted || state.paused) return;
+  const video = document.getElementById('camera');
+  if (!video || video.readyState < 2) return;
+
   try {
-    const det = await faceapi
-      .detectSingleFace(document.getElementById('camera'),
-        new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+    const detections = await faceapi
+      .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
       .withFaceLandmarks(true);
 
     const now = Date.now();
 
-    if (!det) {
-      if (headAwayStart === null) headAwayStart = now;
-      if (now - headAwayStart > HEAD_SUSTAIN_MS && now - lastCamWarnAt > WARNING_COOLDOWN_MS) {
-        issueCamWarning('Face not detected');
-        headAwayStart = null;
+    // ── No face at all ─────────────────────────────────
+    if (detections.length === 0) {
+      if (state.noFaceStart === null) state.noFaceStart = now;
+      if (now - state.noFaceStart > CFG.NO_FACE_SUSTAIN_MS &&
+          now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning('Face not detected in camera');
+        state.noFaceStart = null;
       }
+      state.lookAwayStart = null;
+      state.multiFaceStart = null;
       return;
     }
+    state.noFaceStart = null;
 
-    const p = det.landmarks.positions;
+    // ── More than one face ────────────────────────────
+    if (detections.length > 1) {
+      if (state.multiFaceStart === null) state.multiFaceStart = now;
+      if (now - state.multiFaceStart > CFG.MULTI_FACE_SUSTAIN_MS &&
+          now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning(`${detections.length} people detected in camera`);
+        state.multiFaceStart = null;
+      }
+      state.lookAwayStart = null;
+      return;
+    }
+    state.multiFaceStart = null;
+
+    // ── Exactly 1 face: check head pose ───────────────
+    const p = detections[0].landmarks.positions;
     const noseTip   = p[30];
     const leftFace  = p[16];
     const rightFace = p[0];
@@ -422,42 +737,81 @@ async function checkFace() {
     const halfW     = Math.abs(leftFace.x - rightFace.x) / 2;
     const offset    = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
 
-    if (Math.abs(offset) > HEAD_OFFSET_THRESHOLD) {
-      if (headAwayStart === null) headAwayStart = now;
-      if (now - headAwayStart > HEAD_SUSTAIN_MS && now - lastCamWarnAt > WARNING_COOLDOWN_MS) {
-        issueCamWarning('Head turned away');
-        headAwayStart = null;
+    if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
+      if (state.lookAwayStart === null) state.lookAwayStart = now;
+      if (now - state.lookAwayStart > CFG.HEAD_SUSTAIN_MS &&
+          now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning('Head turned away from screen');
+        state.lookAwayStart = null;
       }
     } else {
-      headAwayStart = null;
+      state.lookAwayStart = null;
     }
-  } catch (_) { /* ignore transient errors */ }
+  } catch (e) {
+    // Transient detection error — silently skip this tick
+  }
+}
+
+async function checkObjects() {
+  if (state.submitted || state.paused) return;
+  if (!state.cocoModel) return;
+  const video = document.getElementById('camera');
+  if (!video || video.readyState < 2) return;
+
+  try {
+    const predictions = await state.cocoModel.detect(video);
+    const phone = predictions.find(p =>
+      p.class === 'cell phone' && p.score > CFG.PHONE_CONFIDENCE_MIN
+    );
+    const now = Date.now();
+
+    if (phone) {
+      if (state.phoneStart === null) state.phoneStart = now;
+      if (now - state.phoneStart > CFG.PHONE_SUSTAIN_MS &&
+          now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning('Phone or device detected in camera');
+        state.phoneStart = null;
+      }
+    } else {
+      state.phoneStart = null;
+    }
+  } catch (e) {
+    // ignore
+  }
 }
 
 async function startVoiceDetection() {
+  if (!state.micStream) return;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const src = audioContext.createMediaStreamSource(stream);
-    const analyser = audioContext.createAnalyser();
+    // Cancel the mic-meter animation frame from the permission gate
+    if (state.micLevelAnimFrame) {
+      cancelAnimationFrame(state.micLevelAnimFrame);
+      state.micLevelAnimFrame = null;
+    }
+
+    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const src = state.audioContext.createMediaStreamSource(state.micStream);
+    const analyser = state.audioContext.createAnalyser();
     analyser.fftSize = 2048;
     src.connect(analyser);
 
     const freqData = new Uint8Array(analyser.frequencyBinCount);
     const timeData = new Uint8Array(analyser.fftSize);
-    const binHz       = audioContext.sampleRate / analyser.fftSize;
-    const voiceStart  = Math.floor(300 / binHz);
-    const voiceEnd    = Math.ceil(3400 / binHz);
+    const binHz       = state.audioContext.sampleRate / analyser.fftSize;
+    const voiceBinLo  = Math.floor(300 / binHz);
+    const voiceBinHi  = Math.ceil(3400 / binHz);
 
-    voiceDetectInterval = setInterval(() => {
-      if (submitted) return;
+    state.voiceDetectTimer = setInterval(() => {
+      if (state.submitted || state.paused) return;
       analyser.getByteFrequencyData(freqData);
       analyser.getByteTimeDomainData(timeData);
 
+      // Energy in 300-3400Hz (human speech band)
       let energy = 0;
-      for (let i = voiceStart; i < voiceEnd; i++) energy += freqData[i];
-      energy /= (voiceEnd - voiceStart);
+      for (let i = voiceBinLo; i < voiceBinHi; i++) energy += freqData[i];
+      energy /= (voiceBinHi - voiceBinLo);
 
+      // RMS — requires near-mic loudness (filters birds, traffic, distant chatter)
       let rms = 0;
       for (let i = 0; i < timeData.length; i++) {
         const v = (timeData[i] - 128) / 128;
@@ -465,73 +819,172 @@ async function startVoiceDetection() {
       }
       rms = Math.sqrt(rms / timeData.length);
 
-      const voiceNear = energy > VOICE_ENERGY_MIN && rms > VOICE_RMS_MIN;
       const now = Date.now();
+      const voiceNear = energy > CFG.VOICE_ENERGY_MIN && rms > CFG.VOICE_RMS_MIN;
 
       if (voiceNear) {
-        if (voiceStart === null) voiceStart = now;
-        if (now - voiceStart > VOICE_SUSTAIN_MS && now - lastVoiceWarnAt > WARNING_COOLDOWN_MS) {
-          issueVoiceWarning('Loud voice near you');
-          voiceStart = null;
+        if (state.voiceStart === null) state.voiceStart = now;
+        if (now - state.voiceStart > CFG.VOICE_SUSTAIN_MS &&
+            now - state.lastVoiceWarn > CFG.VOICE_COOLDOWN_MS) {
+          issueVoiceWarning('Loud voice heard near you');
+          state.voiceStart = null;
         }
       } else {
-        voiceStart = null;
+        state.voiceStart = null;
       }
-    }, 300);
+    }, CFG.VOICE_CHECK_MS);
   } catch (e) {
     console.error('Voice detection setup failed:', e);
   }
 }
 
+// ═════════════════════════════════════════════════════════════
+//  TAB / APP SWITCH DETECTION
+// ═════════════════════════════════════════════════════════════
+function onVisibilityChange() {
+  if (state.submitted) return;
+
+  if (document.hidden) {
+    // Leaving the tab — pause proctoring so no-face detection doesn't
+    // fire while the user can't possibly be looking at the screen.
+    state.paused = true;
+    resetSustainTrackers();
+    issueTabWarning('You left the assessment tab/app');
+  } else {
+    state.paused = false;
+  }
+}
+
+function resetSustainTrackers() {
+  state.lookAwayStart = null;
+  state.noFaceStart   = null;
+  state.multiFaceStart = null;
+  state.phoneStart    = null;
+  state.voiceStart    = null;
+}
+
+// ═════════════════════════════════════════════════════════════
+//  WARNINGS
+// ═════════════════════════════════════════════════════════════
 function issueCamWarning(reason) {
-  camWarnings++;
-  lastCamWarnAt = Date.now();
+  state.camWarnings++;
+  state.lastCamWarn = Date.now();
   updateWarnUI();
-  showWarningToast(`⚠️ Camera Warning ${camWarnings}/${MAX_WARNINGS}: ${reason}`);
-  if (camWarnings >= MAX_WARNINGS) submitAssessment('auto', `Excessive camera warnings (${reason})`);
+  flashCounter('camWarnItem');
+  playWarningBeep();
+  showWarningToast(
+    `⚠️ Camera Warning ${state.camWarnings}/${CFG.MAX_WARNINGS}: ${reason}`,
+    'cam'
+  );
+  if (state.camWarnings >= CFG.MAX_WARNINGS) {
+    submitAssessment('auto', `3 camera warnings — last: ${reason}`);
+  }
 }
 
 function issueVoiceWarning(reason) {
-  voiceWarnings++;
-  lastVoiceWarnAt = Date.now();
+  state.voiceWarnings++;
+  state.lastVoiceWarn = Date.now();
   updateWarnUI();
-  showWarningToast(`⚠️ Voice Warning ${voiceWarnings}/${MAX_WARNINGS}: ${reason}`);
-  if (voiceWarnings >= MAX_WARNINGS) submitAssessment('auto', `Excessive voice warnings (${reason})`);
+  flashCounter('voiceWarnItem');
+  playWarningBeep();
+  showWarningToast(
+    `⚠️ Voice Warning ${state.voiceWarnings}/${CFG.MAX_WARNINGS}: ${reason}`,
+    'voice'
+  );
+  if (state.voiceWarnings >= CFG.MAX_WARNINGS) {
+    submitAssessment('auto', `3 voice warnings — last: ${reason}`);
+  }
+}
+
+function issueTabWarning(reason) {
+  // Cooldown prevents rapid tab-switching from filling all 3 warnings instantly
+  const now = Date.now();
+  if (now - state.lastTabWarn < CFG.TAB_COOLDOWN_MS) return;
+  state.lastTabWarn = now;
+
+  state.tabWarnings++;
+  updateWarnUI();
+  flashCounter('tabWarnItem');
+  playWarningBeep();
+  showWarningToast(
+    `⚠️ Tab Warning ${state.tabWarnings}/${CFG.MAX_WARNINGS}: ${reason}`,
+    'tab'
+  );
+  if (state.tabWarnings >= CFG.MAX_WARNINGS) {
+    submitAssessment('auto', `3 tab/app switches — last: ${reason}`);
+  }
 }
 
 function updateWarnUI() {
-  document.getElementById('camWarnCount').textContent   = camWarnings;
-  document.getElementById('voiceWarnCount').textContent = voiceWarnings;
-  document.getElementById('totalWarnings').textContent  = camWarnings + voiceWarnings;
+  document.getElementById('camWarnCount').textContent   = state.camWarnings;
+  document.getElementById('voiceWarnCount').textContent = state.voiceWarnings;
+  document.getElementById('tabWarnCount').textContent   = state.tabWarnings;
+  document.getElementById('totalWarnings').textContent  =
+    state.camWarnings + state.voiceWarnings + state.tabWarnings;
   document.getElementById('warningsBanner').style.display = 'block';
-  if (camWarnings   > 0) document.getElementById('camWarnItem').classList.add('warned');
-  if (voiceWarnings > 0) document.getElementById('voiceWarnItem').classList.add('warned');
+  if (state.camWarnings   > 0) document.getElementById('camWarnItem').classList.add('warned');
+  if (state.voiceWarnings > 0) document.getElementById('voiceWarnItem').classList.add('warned');
+  if (state.tabWarnings   > 0) document.getElementById('tabWarnItem').classList.add('warned');
 }
 
-function showWarningToast(msg) {
+function flashCounter(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('flash');
+  // Trigger reflow so the animation restarts
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+function showWarningToast(msg, type) {
   const t = document.createElement('div');
-  t.className = 'warning-toast';
+  t.className = 'warning-toast' + (type === 'voice' ? ' voice' : type === 'tab' ? ' tab' : '');
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
+  setTimeout(() => t.remove(), 4500);
 }
 
-/* ── Submit ────────────────────────────────────────────────── */
-async function submitAssessment(type = 'manual', reason = null) {
-  if (submitted) return;
-  submitted = true;
+function playWarningBeep() {
+  if (!state.audioContext) return;
+  try {
+    const osc = state.audioContext.createOscillator();
+    const gain = state.audioContext.createGain();
+    osc.connect(gain);
+    gain.connect(state.audioContext.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    const t = state.audioContext.currentTime;
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    osc.start(t);
+    osc.stop(t + 0.35);
+  } catch (e) {
+    // ignore
+  }
+}
 
-  clearInterval(timerInterval);
-  clearInterval(faceDetectInterval);
-  clearInterval(voiceDetectInterval);
-  if (cameraStream) cameraStream.getTracks().forEach(t => t.stop());
-  if (audioContext) audioContext.close();
+// ═════════════════════════════════════════════════════════════
+//  SUBMIT
+// ═════════════════════════════════════════════════════════════
+async function submitAssessment(type = 'manual', reason = null) {
+  if (state.submitted) return;
+  state.submitted = true;
+
+  // Stop all timers and streams
+  clearInterval(state.timerInterval);
+  clearInterval(state.faceDetectTimer);
+  clearInterval(state.objectDetectTimer);
+  clearInterval(state.voiceDetectTimer);
+  if (state.micLevelAnimFrame) cancelAnimationFrame(state.micLevelAnimFrame);
+  if (state.cameraStream) state.cameraStream.getTracks().forEach(t => t.stop());
+  if (state.micStream)    state.micStream.getTracks().forEach(t => t.stop());
+  if (state.audioContext) state.audioContext.close().catch(() => {});
+  document.removeEventListener('visibilitychange', onVisibilityChange);
 
   const btn = document.getElementById('submitBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting…'; }
   document.getElementById('submitStatus').textContent = 'Submitting…';
 
-  const minutes = (Date.now() - startTime) / 60000;
+  const minutes = state.startTime ? (Date.now() - state.startTime) / 60000 : 0;
 
   const payload = {
     applicant_name:     verifiedApplication?.applicant_name  || '',
@@ -573,8 +1026,14 @@ async function submitAssessment(type = 'manual', reason = null) {
       </div>`;
   } catch (e) {
     document.getElementById('submitStatus').textContent = 'Submit failed';
-    showWarningToast('Submission failed: ' + e.message);
+    showWarningToast('Submission failed: ' + e.message, 'cam');
   }
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 
 loadAssessment();
