@@ -33,15 +33,23 @@
   100% { transform: scale(1); }
 }
 
+/* Camera preview with debug overlay */
 .camera-preview {
   position: fixed; bottom: 20px; right: 20px;
-  width: 180px; height: 135px; border-radius: 12px;
+  width: 240px; height: 180px; border-radius: 12px;
   border: 3px solid #6366f1; overflow: hidden; z-index: 1000;
   background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
 .camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.camera-preview canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+.debug-info {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.8); color: #10b981;
+  font-family: monospace; font-size: 11px; padding: 4px;
+  text-align: center; z-index: 2;
+}
 @media (max-width: 640px) {
-  .camera-preview { width: 110px; height: 82px; bottom: 12px; right: 12px; }
+  .camera-preview { width: 160px; height: 120px; bottom: 12px; right: 12px; }
 }
 
 .warning-toast {
@@ -55,7 +63,7 @@
 .warning-toast.tab   { background: #7c3aed; }
 @keyframes slideDown { from { top:-60px; opacity:0 } to { top:80px; opacity:1 } }
 
-/* ── Permission rows ── */
+/* Permission rows */
 .perm-row {
   display: flex; align-items: center; gap: 16px;
   padding: 18px; background: #f8fafc;
@@ -98,12 +106,10 @@
 </head>
 <body>
 
-<!-- ══ Proctoring Bar (Hidden until assessment starts) ══ -->
 <div id="proctorBar" class="proctor-bar" style="display:none">
   <div class="warn-counter">
     <div class="warn-item" id="camWarnItem"><i class="fas fa-video"></i> Camera <b><span id="camWarnCount">0</span>/3</b></div>
     <div class="warn-item" id="voiceWarnItem"><i class="fas fa-microphone"></i> Voice <b><span id="voiceWarnCount">0</span>/3</b></div>
-    <div class="warn-item" id="tabWarnItem"><i class="fas fa-window-restore"></i> Tab <b><span id="tabWarnCount">0</span>/3</b></div>
   </div>
   <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
     <div style="font-size:14px"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
@@ -155,7 +161,8 @@
     <div class="card-header"><h3><i class="fas fa-shield-alt"></i> Proctoring Setup</h3></div>
     <div class="card-body">
       <div class="alert alert-info" style="margin-bottom:16px">
-        This assessment is proctored. You must enable your camera and microphone before starting.
+        This assessment is proctored. You must enable your camera and microphone before starting. 
+        <b>Switching tabs will immediately fail the assessment.</b>
       </div>
 
       <div class="perm-row" id="camPermRow">
@@ -192,7 +199,7 @@
 <div id="assessmentArea" style="display:none">
   <div class="apply-page">
     <div id="warningsBanner" class="alert alert-warning" style="display:none">
-      <b><i class="fas fa-exclamation-triangle"></i> Total warnings: <span id="totalWarnings">0</span>/9</b>
+      <b><i class="fas fa-exclamation-triangle"></i> Total warnings: <span id="totalWarnings">0</span>/6</b>
     </div>
     <div class="card mb-4">
       <div class="card-body">
@@ -210,13 +217,15 @@
   </div>
 </div>
 
-<!-- ══ Camera preview ══ -->
+<!-- ══ Camera preview with Debug Canvas ══ -->
 <div class="camera-preview" id="cameraPreview" style="display:none">
   <video id="camera" autoplay muted playsinline></video>
+  <canvas id="overlay"></canvas>
+  <div class="debug-info" id="debugInfo">Initializing...</div>
 </div>
 
 <script>
-console.log("✅ HRPro Proctoring Script V5.0 Loaded");
+console.log("✅ HRPro Proctoring Script V6.0 Loaded");
 
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
@@ -229,20 +238,25 @@ let answers = {};
 let totalQuestions = 0;
 
 const state = {
-  submitted: false, camWarnings: 0, voiceWarnings: 0, tabWarnings: 0,
-  lookAwayStart: null, noFaceStart: null, multiFaceStart: null, phoneStart: null, voiceStart: null,
-  lastCamWarn: 0, lastVoiceWarn: 0, lastTabWarn: 0,
-  cameraStream: null, micStream: null, audioContext: null, cocoModel: null,
-  faceDetectTimer: null, objectDetectTimer: null, voiceDetectTimer: null, micLevelAnimFrame: null,
-  timerInterval: null, startTime: null, timeLeftSeconds: 0, paused: false
+  submitted: false, camWarnings: 0, voiceWarnings: 0,
+  lookAwayStart: null, noFaceStart: null, voiceStart: null,
+  lastCamWarn: 0, lastVoiceWarn: 0,
+  cameraStream: null, micStream: null, audioContext: null,
+  faceDetectTimer: null, voiceDetectTimer: null, micLevelAnimFrame: null,
+  timerInterval: null, startTime: null, timeLeftSeconds: 0
 };
 
+// Lowered thresholds for better sensitivity based on user feedback
 const CFG = {
-  MAX_WARNINGS: 3, HEAD_OFFSET_THRESHOLD: 0.34, HEAD_SUSTAIN_MS: 1800, NO_FACE_SUSTAIN_MS: 2000,
-  MULTI_FACE_SUSTAIN_MS: 1500, PHONE_SUSTAIN_MS: 1500, VOICE_SUSTAIN_MS: 1800,
-  VOICE_ENERGY_MIN: 95, VOICE_RMS_MIN: 0.09, PHONE_CONFIDENCE_MIN: 0.55,
-  CAM_COOLDOWN_MS: 8000, VOICE_COOLDOWN_MS: 8000, TAB_COOLDOWN_MS: 5000,
-  FACE_CHECK_MS: 600, OBJECT_CHECK_MS: 2000, VOICE_CHECK_MS: 300
+  MAX_WARNINGS: 3, 
+  HEAD_OFFSET_THRESHOLD: 0.35, 
+  HEAD_SUSTAIN_MS: 1500, 
+  NO_FACE_SUSTAIN_MS: 1500,
+  VOICE_SUSTAIN_MS: 1000,
+  VOICE_ENERGY_MIN: 30,  // Was 95, much lower now
+  VOICE_RMS_MIN: 0.02,   // Was 0.09, much lower now
+  CAM_COOLDOWN_MS: 5000, 
+  VOICE_COOLDOWN_MS: 5000
 };
 
 if (prefilledCode) {
@@ -371,7 +385,6 @@ async function startAssessment() {
   if (!assessment) return;
   const btn = document.getElementById('startAssessmentBtn');
   
-  // 1. Validate Code / Identity
   if (assessment.require_application_code !== false) {
     const code = document.getElementById('appCodeInput').value.trim().toUpperCase();
     if (!code) return showCodeError('Please enter your application code');
@@ -407,7 +420,6 @@ async function startAssessment() {
     verifiedApplication = { application_id: null, applicant_name: name, applicant_email: email };
   }
 
-  // 2. Validate Camera & Mic
   if (!state.cameraStream || !state.micStream) {
     showCodeError('⚠️ Please enable BOTH Camera and Microphone before starting.');
     btn.innerHTML = '<i class="fas fa-play-circle"></i> Start Assessment';
@@ -415,7 +427,6 @@ async function startAssessment() {
     return;
   }
 
-  // 3. Begin!
   document.getElementById('codeError').style.display = 'none';
   document.getElementById('startGate').style.display = 'none';
   document.getElementById('assessmentArea').style.display = 'block';
@@ -472,7 +483,7 @@ function saveAnswer(qid, value) {
 
 function startTimer() {
   state.timerInterval = setInterval(() => {
-    if (state.submitted || state.paused) return;
+    if (state.submitted) return;
     state.timeLeftSeconds--;
     const m = Math.max(0, Math.floor(state.timeLeftSeconds / 60));
     const s = Math.max(0, state.timeLeftSeconds % 60);
@@ -482,7 +493,7 @@ function startTimer() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  PROCTORING LOGIC
+//  PROCTORING LOGIC (With Debug UI)
 // ═════════════════════════════════════════════════════════════
 async function startProctoring() {
   try {
@@ -491,25 +502,39 @@ async function startProctoring() {
       faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
       faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath),
     ]);
-    try { state.cocoModel = await cocoSsd.load(); } catch (e) {}
-
-    state.faceDetectTimer = setInterval(checkFace, CFG.FACE_CHECK_MS);
-    if (state.cocoModel) state.objectDetectTimer = setInterval(checkObjects, CFG.OBJECT_CHECK_MS);
+    
+    document.getElementById('debugInfo').textContent = "Monitoring Active...";
+    
+    state.faceDetectTimer = setInterval(checkFace, 500); // Check face every half second
     await startVoiceDetection();
+    
     document.addEventListener('visibilitychange', onVisibilityChange);
-  } catch (e) { console.error(e); }
+  } catch (e) { 
+    console.error("Proctoring init failed", e); 
+    document.getElementById('debugInfo').textContent = "Init Failed";
+  }
 }
 
 async function checkFace() {
-  if (state.submitted || state.paused) return;
+  if (state.submitted) return;
   const video = document.getElementById('camera');
+  const debugEl = document.getElementById('debugInfo');
   if (!video || video.readyState < 2) return;
 
   try {
     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks(true);
     const now = Date.now();
+    
+    // Clear canvas
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (detections.length === 0) {
+      debugEl.textContent = `Faces: 0 | No Face`;
+      debugEl.style.color = '#ef4444';
       if (state.noFaceStart === null) state.noFaceStart = now;
       if (now - state.noFaceStart > CFG.NO_FACE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
         issueCamWarning('Face not detected in camera');
@@ -519,7 +544,15 @@ async function checkFace() {
     }
     state.noFaceStart = null;
 
+    // Draw green box around face
+    const box = detections[0].detection.box;
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(box.x, box.y, box.width, box.height);
+
     if (detections.length > 1) {
+      debugEl.textContent = `Faces: ${detections.length} | Multiple!`;
+      debugEl.style.color = '#ef4444';
       if (state.multiFaceStart === null) state.multiFaceStart = now;
       if (now - state.multiFaceStart > CFG.MULTI_FACE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
         issueCamWarning('Multiple people detected');
@@ -529,13 +562,21 @@ async function checkFace() {
     }
     state.multiFaceStart = null;
 
+    // Calculate head turn
     const p = detections[0].landmarks.positions;
     const noseTip = p[30];
     const centerX = (p[16].x + p[0].x) / 2;
     const halfW = Math.abs(p[16].x - p[0].x) / 2;
     const offset = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
 
+    // Show live debug info
+    debugEl.textContent = `Faces: 1 | Offset: ${offset.toFixed(2)}`;
+    debugEl.style.color = '#10b981';
+
     if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
+      debugEl.textContent = `Faces: 1 | Offset: ${offset.toFixed(2)} (Looking Away!)`;
+      debugEl.style.color = '#f59e0b';
+      
       if (state.lookAwayStart === null) state.lookAwayStart = now;
       if (now - state.lookAwayStart > CFG.HEAD_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
         issueCamWarning('Head turned away from screen');
@@ -544,34 +585,20 @@ async function checkFace() {
     } else {
       state.lookAwayStart = null;
     }
-  } catch (e) {}
-}
-
-async function checkObjects() {
-  if (state.submitted || state.paused || !state.cocoModel) return;
-  const video = document.getElementById('camera');
-  if (!video || video.readyState < 2) return;
-
-  try {
-    const predictions = await state.cocoModel.detect(video);
-    const phone = predictions.find(p => p.class === 'cell phone' && p.score > CFG.PHONE_CONFIDENCE_MIN);
-    const now = Date.now();
-
-    if (phone) {
-      if (state.phoneStart === null) state.phoneStart = now;
-      if (now - state.phoneStart > CFG.PHONE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
-        issueCamWarning('Phone detected in camera');
-        state.phoneStart = null;
-      }
-    } else { state.phoneStart = null; }
-  } catch (e) {}
+  } catch (e) {
+    console.error("Face check error", e);
+  }
 }
 
 async function startVoiceDetection() {
   if (!state.micStream) return;
   try {
     if (state.micLevelAnimFrame) cancelAnimationFrame(state.micLevelAnimFrame);
+    
+    // Ensure AudioContext is resumed (browsers block it by default until interaction)
     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    await state.audioContext.resume(); 
+    
     const src = state.audioContext.createMediaStreamSource(state.micStream);
     const analyser = state.audioContext.createAnalyser();
     analyser.fftSize = 2048;
@@ -584,7 +611,7 @@ async function startVoiceDetection() {
     const voiceBinHi = Math.ceil(3400 / binHz);
 
     state.voiceDetectTimer = setInterval(() => {
-      if (state.submitted || state.paused) return;
+      if (state.submitted) return;
       analyser.getByteFrequencyData(freqData);
       analyser.getByteTimeDomainData(timeData);
 
@@ -596,59 +623,64 @@ async function startVoiceDetection() {
       for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; rms += v * v; }
       rms = Math.sqrt(rms / timeData.length);
 
+      // Show voice debug info
+      const debugEl = document.getElementById('debugInfo');
+      if (debugEl && document.getElementById('startGate').style.display === 'none') {
+        // Only overwrite face text if the voice is currently loud
+        if (energy > CFG.VOICE_ENERGY_MIN && rms > CFG.VOICE_RMS_MIN) {
+           debugEl.textContent += ` | 🔊 Voice: ${energy.toFixed(0)}`;
+           debugEl.style.color = '#f59e0b';
+        }
+      }
+
       const now = Date.now();
       if (energy > CFG.VOICE_ENERGY_MIN && rms > CFG.VOICE_RMS_MIN) {
         if (state.voiceStart === null) state.voiceStart = now;
         if (now - state.voiceStart > CFG.VOICE_SUSTAIN_MS && now - state.lastVoiceWarn > CFG.VOICE_COOLDOWN_MS) {
-          issueVoiceWarning('Loud voice heard');
+          issueVoiceWarning('Loud voice heard near you');
           state.voiceStart = null;
         }
       } else { state.voiceStart = null; }
-    }, CFG.VOICE_CHECK_MS);
-  } catch (e) {}
+    }, 250);
+  } catch (e) { console.error("Voice error", e); }
 }
 
+// ═════════════════════════════════════════════════════════════
+//  TAB SWITCH (INSTANT AUTO-SUBMIT)
+// ═════════════════════════════════════════════════════════════
 function onVisibilityChange() {
   if (state.submitted) return;
   if (document.hidden) {
-    state.paused = true;
-    issueTabWarning('You left the assessment tab');
-  } else { state.paused = false; }
+    submitAssessment('auto', 'Tab switch detected. Assessment automatically submitted.');
+  }
 }
 
+// ═════════════════════════════════════════════════════════════
+//  WARNINGS
+// ═════════════════════════════════════════════════════════════
 function issueCamWarning(reason) {
-  state.camWarnings++; state.lastCamWarn = Date.now();
+  state.camWarnings++; 
+  state.lastCamWarn = Date.now();
   updateWarnUI(); flashCounter('camWarnItem'); playWarningBeep();
   showWarningToast(`⚠️ Camera Warning ${state.camWarnings}/3: ${reason}`, 'cam');
   if (state.camWarnings >= 3) submitAssessment('auto', `3 camera warnings`);
 }
 
 function issueVoiceWarning(reason) {
-  state.voiceWarnings++; state.lastVoiceWarn = Date.now();
+  state.voiceWarnings++; 
+  state.lastVoiceWarn = Date.now();
   updateWarnUI(); flashCounter('voiceWarnItem'); playWarningBeep();
   showWarningToast(`⚠️ Voice Warning ${state.voiceWarnings}/3: ${reason}`, 'voice');
   if (state.voiceWarnings >= 3) submitAssessment('auto', `3 voice warnings`);
 }
 
-function issueTabWarning(reason) {
-  const now = Date.now();
-  if (now - state.lastTabWarn < CFG.TAB_COOLDOWN_MS) return;
-  state.lastTabWarn = now;
-  state.tabWarnings++;
-  updateWarnUI(); flashCounter('tabWarnItem'); playWarningBeep();
-  showWarningToast(`⚠️ Tab Warning ${state.tabWarnings}/3: ${reason}`, 'tab');
-  if (state.tabWarnings >= 3) submitAssessment('auto', `3 tab switches`);
-}
-
 function updateWarnUI() {
   document.getElementById('camWarnCount').textContent = state.camWarnings;
   document.getElementById('voiceWarnCount').textContent = state.voiceWarnings;
-  document.getElementById('tabWarnCount').textContent = state.tabWarnings;
-  document.getElementById('totalWarnings').textContent = state.camWarnings + state.voiceWarnings + state.tabWarnings;
+  document.getElementById('totalWarnings').textContent = state.camWarnings + state.voiceWarnings;
   document.getElementById('warningsBanner').style.display = 'block';
   if (state.camWarnings > 0) document.getElementById('camWarnItem').classList.add('warned');
   if (state.voiceWarnings > 0) document.getElementById('voiceWarnItem').classList.add('warned');
-  if (state.tabWarnings > 0) document.getElementById('tabWarnItem').classList.add('warned');
 }
 
 function flashCounter(id) {
@@ -660,7 +692,7 @@ function flashCounter(id) {
 
 function showWarningToast(msg, type) {
   const t = document.createElement('div');
-  t.className = 'warning-toast' + (type === 'voice' ? ' voice' : type === 'tab' ? ' tab' : '');
+  t.className = 'warning-toast' + (type === 'voice' ? ' voice' : '');
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 4500);
@@ -692,13 +724,14 @@ async function submitAssessment(type = 'manual', reason = null) {
 
   clearInterval(state.timerInterval);
   clearInterval(state.faceDetectTimer);
-  clearInterval(state.objectDetectTimer);
   clearInterval(state.voiceDetectTimer);
   if (state.micLevelAnimFrame) cancelAnimationFrame(state.micLevelAnimFrame);
   if (state.cameraStream) state.cameraStream.getTracks().forEach(t => t.stop());
   if (state.micStream)    state.micStream.getTracks().forEach(t => t.stop());
   if (state.audioContext) state.audioContext.close().catch(() => {});
   document.removeEventListener('visibilitychange', onVisibilityChange);
+  
+  document.getElementById('cameraPreview').style.display = 'none';
 
   const btn = document.getElementById('submitBtn');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting…'; }
@@ -731,17 +764,12 @@ async function submitAssessment(type = 'manual', reason = null) {
           <div style="font-size:64px;margin-bottom:16px">🎉</div>
           <h2 style="font-size:24px;margin-bottom:8px">Assessment Submitted</h2>
           <p class="text-light">${type === 'auto'
-            ? `Auto-submitted: ${escapeHtml(reason || '')}`
+            ? `<b style="color:#dc2626">Auto-submitted:</b> ${escapeHtml(reason || '')}`
             : 'Thank you for completing the assessment.'}</p>
           <div style="margin-top:24px;padding:20px;background:#f8fafc;border-radius:12px;display:inline-block">
             <div style="font-size:36px;font-weight:800;color:var(--primary)">${data.percentage}%</div>
             <div class="text-light">Grade ${data.grade} — ${data.score}/${data.total}</div>
           </div>
-          <p class="text-sm text-light mt-4">
-            ${verifiedApplication?.applicant_email
-              ? 'A confirmation and marksheet have been sent to your email.'
-              : 'Your submission has been recorded.'}
-          </p>
         </div>
       </div>`;
   } catch (e) {
