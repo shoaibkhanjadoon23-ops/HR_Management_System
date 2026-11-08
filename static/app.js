@@ -33,6 +33,42 @@ const API = {
     return data;
   },
 
+  // Fetch binary data (PDF, CSV, etc.) with auth headers
+  async blob(url) {
+    const fullUrl = url.startsWith('http') ? url : `${BACKEND_URL}${url}`;
+    const res = await fetch(fullUrl, {
+      headers: { 'Authorization': `Bearer ${this.token()}` }
+    });
+    if (res.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login.html';
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Download failed' }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.blob();
+  },
+
+  // Download a file directly to the user's device
+  async download(url, filename) {
+    try {
+      showToast('Downloading...', 'info', 1500);
+      const blob = await this.blob(url);
+      const objectUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename || 'download.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      showToast('Download failed: ' + e.message, 'error');
+    }
+  },
+
   get: (url) => API.req('GET', url),
   post: (url, body) => API.req('POST', url, body),
   put: (url, body) => API.req('PUT', url, body),
@@ -90,7 +126,8 @@ function statusBadge(s) {
     active: 'badge-active', closed: 'badge-rejected', draft: 'badge-draft',
     paid: 'badge-paid', unpaid: 'badge-pending', scheduled: 'badge-interview',
     completed: 'badge-passed', passed: 'badge-passed', failed: 'badge-failed',
-    sent: 'badge-sent', accepted: 'badge-active'
+    sent: 'badge-sent', accepted: 'badge-active',
+    present: 'badge-active', absent: 'badge-rejected', half_day: 'badge-interview', leave: 'badge-pending'
   };
   const labels = {
     pending: 'Pending', under_review: 'Under Review', shortlisted: 'Shortlisted',
@@ -99,7 +136,8 @@ function statusBadge(s) {
     rejected: 'Rejected', withdrawn: 'Withdrawn', active: 'Active',
     closed: 'Closed', draft: 'Draft', paid: 'Paid', unpaid: 'Unpaid',
     scheduled: 'Scheduled', completed: 'Completed', passed: 'Passed',
-    failed: 'Failed', sent: 'Sent', accepted: 'Accepted'
+    failed: 'Failed', sent: 'Sent', accepted: 'Accepted',
+    present: 'Present', absent: 'Absent', half_day: 'Half Day', leave: 'On Leave'
   };
   return `<span class="badge ${map[s] || 'badge-draft'}">${labels[s] || s}</span>`;
 }
