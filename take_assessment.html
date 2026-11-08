@@ -33,10 +33,9 @@
   100% { transform: scale(1); }
 }
 
-/* Camera preview with debug overlay */
 .camera-preview {
   position: fixed; bottom: 20px; right: 20px;
-  width: 260px; height: 195px; border-radius: 12px;
+  width: 240px; height: 180px; border-radius: 12px;
   border: 3px solid #6366f1; overflow: hidden; z-index: 1000;
   background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
@@ -49,7 +48,7 @@
   text-align: center; z-index: 2; line-height: 1.4;
 }
 @media (max-width: 640px) {
-  .camera-preview { width: 180px; height: 135px; bottom: 12px; right: 12px; }
+  .camera-preview { width: 160px; height: 120px; bottom: 12px; right: 12px; }
 }
 
 .warning-toast {
@@ -63,7 +62,6 @@
 .warning-toast.tab   { background: #7c3aed; }
 @keyframes slideDown { from { top:-60px; opacity:0 } to { top:80px; opacity:1 } }
 
-/* Permission rows */
 .perm-row {
   display: flex; align-items: center; gap: 16px;
   padding: 18px; background: #f8fafc;
@@ -102,6 +100,27 @@
   background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
   transition: width .06s linear;
 }
+
+/* ── Guidelines Card ── */
+.guidelines-card {
+  background: #fffbeb; border: 1.5px solid #f59e0b;
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.guidelines-card h3 {
+  color: #b45309; font-size: 16px; font-weight: 800;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.guidelines-card ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.guidelines-card li {
+  display: flex; gap: 10px; font-size: 13.5px;
+  color: #78350f; line-height: 1.5;
+}
+.guidelines-card li i {
+  color: #d97706; margin-top: 2px; flex-shrink: 0;
+}
 </style>
 </head>
 <body>
@@ -126,6 +145,18 @@
     <span id="gateBadge" class="gate-badge" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#4338ca;color:#fff">
       <i class="fas fa-lock"></i> Code Required
     </span>
+  </div>
+
+  <!-- Guidelines Card -->
+  <div class="guidelines-card">
+    <h3><i class="fas fa-exclamation-triangle"></i> Rules & Guidelines — Read Carefully</h3>
+    <ul>
+      <li><i class="fas fa-check-circle"></i> <div><b>One Attempt Only:</b> You cannot pause or restart this assessment once you click Start.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>No Tab Switching:</b> Do not switch tabs, minimize the window, or open other apps. Doing so will instantly auto-submit your assessment.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>Stay in Frame:</b> Ensure your face is clearly visible in the camera. Looking away for too long or having multiple people in the frame will result in warnings.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>No Talking:</b> The microphone will monitor for loud voices or background help. 3 warnings in any category will auto-submit your test.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>Stable Connection:</b> Ensure you have a stable internet connection before starting.</div></li>
+    </ul>
   </div>
 
   <div class="card" style="margin-bottom:16px">
@@ -154,12 +185,12 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:16px">
+  <!-- Hardware Setup (Hidden if anti-cheat is off) -->
+  <div class="card" style="margin-bottom:16px" id="hardwareCard">
     <div class="card-header"><h3><i class="fas fa-shield-alt"></i> Proctoring Setup</h3></div>
     <div class="card-body">
       <div class="alert alert-info" style="margin-bottom:16px">
         This assessment is proctored. You must enable your camera and microphone before starting. 
-        <b>Switching tabs will immediately fail the assessment.</b>
       </div>
 
       <div class="perm-row" id="camPermRow">
@@ -192,6 +223,7 @@
   </button>
 </div>
 
+<!-- ══ Assessment Area ══ -->
 <div id="assessmentArea" style="display:none">
   <div class="apply-page">
     <div id="warningsBanner" class="alert alert-warning" style="display:none">
@@ -213,7 +245,6 @@
   </div>
 </div>
 
-<!-- ══ Camera preview with Debug Canvas ══ -->
 <div class="camera-preview" id="cameraPreview" style="display:none">
   <video id="camera" autoplay muted playsinline></video>
   <canvas id="overlay"></canvas>
@@ -221,7 +252,7 @@
 </div>
 
 <script>
-console.log("✅ HRPro Proctoring Script V7.0 Loaded");
+console.log("✅ HRPro Proctoring Script V8.0 Loaded");
 
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
@@ -247,9 +278,9 @@ const CFG = {
   HEAD_OFFSET_THRESHOLD: 0.35, 
   HEAD_SUSTAIN_MS: 1500, 
   NO_FACE_SUSTAIN_MS: 1500,
-  VOICE_SUSTAIN_MS: 1000, // Requires 1 second of speaking
-  VOICE_ENERGY_MIN: 25,   // Lowered for better sensitivity
-  VOICE_RMS_MIN: 0.015,   // Lowered for better sensitivity
+  VOICE_SUSTAIN_MS: 1000,
+  VOICE_ENERGY_MIN: 25,
+  VOICE_RMS_MIN: 0.015,
   CAM_COOLDOWN_MS: 5000, 
   VOICE_COOLDOWN_MS: 5000
 };
@@ -266,6 +297,12 @@ async function loadAssessment() {
     assessment = await res.json();
     document.getElementById('jobTitle').textContent = assessment.title;
     state.timeLeftSeconds = assessment.duration_minutes * 60;
+    
+    // Core fix: if anti-cheat is off, hide the camera setup and skip requirements
+    if (!assessment.anti_cheat) {
+      document.getElementById('hardwareCard').style.display = 'none';
+    }
+
     applyGateMode();
   } catch (e) {
     document.getElementById('startGate').innerHTML = '<div class="alert alert-error">Assessment not found or inactive.</div>';
@@ -290,9 +327,6 @@ function showCodeError(msg) {
   el.style.display = 'block';
 }
 
-// ═════════════════════════════════════════════════════════════
-//  HARDWARE SETUP
-// ═════════════════════════════════════════════════════════════
 async function enableCamera() {
   const btn = document.getElementById('camBtn');
   if (!btn || btn.classList.contains('granted')) return;
@@ -337,7 +371,6 @@ async function enableMic() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     state.micStream = stream;
     
-    // Initialize AudioContext ONCE here so it's shared
     state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     await state.audioContext.resume();
     
@@ -376,9 +409,6 @@ function startMicLevelMeter() {
   } catch (e) {}
 }
 
-// ═════════════════════════════════════════════════════════════
-//  START ASSESSMENT
-// ═════════════════════════════════════════════════════════════
 async function startAssessment() {
   if (!assessment) return;
   const btn = document.getElementById('startAssessmentBtn');
@@ -418,28 +448,33 @@ async function startAssessment() {
     verifiedApplication = { application_id: null, applicant_name: name, applicant_email: email };
   }
 
-  if (!state.cameraStream || !state.micStream) {
-    showCodeError('⚠️ Please enable BOTH Camera and Microphone before starting.');
-    btn.innerHTML = '<i class="fas fa-play-circle"></i> Start Assessment';
-    btn.disabled = false;
-    return;
+  // Only enforce hardware setup if anti-cheat is ON
+  if (assessment.anti_cheat) {
+    if (!state.cameraStream || !state.micStream) {
+      showCodeError('⚠️ Please enable BOTH Camera and Microphone before starting.');
+      btn.innerHTML = '<i class="fas fa-play-circle"></i> Start Assessment';
+      btn.disabled = false;
+      return;
+    }
   }
 
   document.getElementById('codeError').style.display = 'none';
   document.getElementById('startGate').style.display = 'none';
   document.getElementById('assessmentArea').style.display = 'block';
-  document.getElementById('proctorBar').style.display = 'flex';
+  
+  if (assessment.anti_cheat) {
+    document.getElementById('proctorBar').style.display = 'flex';
+  }
 
   renderQuestions();
   startTimer();
   state.startTime = Date.now();
 
-  await startProctoring();
+  if (assessment.anti_cheat) {
+    await startProctoring();
+  }
 }
 
-// ═════════════════════════════════════════════════════════════
-//  ASSESSMENT RENDERING
-// ═════════════════════════════════════════════════════════════
 function renderQuestions() {
   const qs = assessment.questions || [];
   totalQuestions = qs.length;
@@ -491,7 +526,7 @@ function startTimer() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  PROCTORING LOGIC (With Debug UI)
+//  PROCTORING (Only runs if anti-cheat is on)
 // ═════════════════════════════════════════════════════════════
 async function startProctoring() {
   try {
@@ -585,7 +620,6 @@ async function checkFace() {
 async function startVoiceDetection() {
   if (!state.micStream || !state.audioContext) return;
   try {
-    // Reuse the existing AudioContext, but create a new analyser
     const src = state.audioContext.createMediaStreamSource(state.micStream);
     const analyser = state.audioContext.createAnalyser();
     analyser.fftSize = 2048;
@@ -610,7 +644,6 @@ async function startVoiceDetection() {
       for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; rms += v * v; }
       rms = Math.sqrt(rms / timeData.length);
 
-      // Update debug text with mic numbers
       const debugEl = document.getElementById('debugInfo');
       if (debugEl && document.getElementById('startGate').style.display === 'none') {
         const faceText = state.lastFaceOffset !== null && state.lastFaceOffset !== '0.00'
@@ -631,7 +664,6 @@ async function startVoiceDetection() {
           state.voiceStart = null;
         }
       } else {
-        // 500ms Grace period: don't reset instantly if you pause for a breath
         if (state.voiceStart !== null && (now - state.lastVoiceLoudTime > 500)) {
           state.voiceStart = null;
         }
@@ -640,9 +672,6 @@ async function startVoiceDetection() {
   } catch (e) { console.error("Voice error", e); }
 }
 
-// ═════════════════════════════════════════════════════════════
-//  TAB SWITCH (INSTANT AUTO-SUBMIT)
-// ═════════════════════════════════════════════════════════════
 function onVisibilityChange() {
   if (state.submitted) return;
   if (document.hidden) {
@@ -650,9 +679,6 @@ function onVisibilityChange() {
   }
 }
 
-// ═════════════════════════════════════════════════════════════
-//  WARNINGS
-// ═════════════════════════════════════════════════════════════
 function issueCamWarning(reason) {
   state.camWarnings++; 
   state.lastCamWarn = Date.now();
@@ -710,9 +736,6 @@ function playWarningBeep() {
   } catch (e) {}
 }
 
-// ═════════════════════════════════════════════════════════════
-//  SUBMIT
-// ═════════════════════════════════════════════════════════════
 async function submitAssessment(type = 'manual', reason = null) {
   if (state.submitted) return;
   state.submitted = true;
