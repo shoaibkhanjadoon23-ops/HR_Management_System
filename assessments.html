@@ -6,7 +6,6 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
-/* Small helpers specific to this page */
 .mode-badge {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 10px; border-radius: 20px;
@@ -683,55 +682,47 @@ function renderSubmissionBadge(r) {
   return `<span class="badge badge-active"><i class="fas fa-check"></i> Submit Button</span>`;
 }
 
+/* ─── Answer Sheet & Manual Grading ───────────────────────────── */
+let currentDetailedResult = null;
+let currentCandidateName = "";
+
 async function viewDetailedAnswers(resultId, candidateName) {
   try {
     const response = await fetch(`${ASSESS_BACKEND_URL}/api/assessment-results/${resultId}/detailed`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
     });
-    if (!response.ok) {
-      const contentType = response.headers.get('Content-Type') || '';
-      if (contentType.includes('application/json')) {
-        const err = await response.json();
-        throw new Error(err.detail || `HTTP ${response.status}`);
-      }
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    if (!data.questions || data.questions.length === 0) {
-      showToast('No answers found', 'info');
-      return;
-    }
-    document.getElementById('answersTitle').innerHTML =
-      `<i class="fas fa-tasks"></i> Answers by ${escapeHtml(candidateName || '')}`;
+    
+    currentDetailedResult = data;
+    currentCandidateName = candidateName;
+    renderAnswersModal(resultId);
+  } catch (e) {
+    showToast('Error loading answers: ' + e.message, 'error');
+  }
+}
 
+function renderAnswersModal(resultId) {
+    if (!currentDetailedResult) return;
+    const data = currentDetailedResult;
+    
+    document.getElementById('answersTitle').innerHTML = `<i class="fas fa-tasks"></i> Answers by ${escapeHtml(currentCandidateName)}`;
     let html = '';
+    
     for (const q of data.questions) {
-      const typeLabel = {
-        mcq: 'MCQ',
-        fill_blank: 'Fill in the Blank',
-        typing: 'Written Answer',
-        practical: 'Practical',
-      }[q.type] || q.type;
-
-      const typeBg    = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
+      const typeLabel = { mcq: 'MCQ', fill_blank: 'Fill in the Blank', typing: 'Written Answer', practical: 'Practical' }[q.type] || q.type;
+      const typeBg = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
       const typeColor = { mcq: '#2563eb', fill_blank: '#7c3aed', typing: '#059669', practical: '#d97706' }[q.type] || '#374151';
-
-      const editBtn = `<button class="btn btn-sm btn-primary"
-        onclick="openEditMarks(${resultId}, '${escapeAttr(q.id)}', ${q.marks}, ${q.obtained_marks}, '${escapeAttr(q.feedback || '').replace(/'/g, '&#39;')}')">
-        Grade / Edit
-      </button>`;
+      
+      const editBtn = `<button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${q.id}', ${q.marks}, ${q.obtained_marks}, '${escapeAttr(q.feedback || '').replace(/'/g, "&#39;")}')">Grade / Edit</button>`;
 
       const correct = q.is_correct
         ? '<span style="color:#059669;font-weight:700"><i class="fas fa-check-circle"></i> Correct</span>'
         : '<span style="color:#dc2626;font-weight:700"><i class="fas fa-times-circle"></i> Incorrect</span>';
 
       if (q.type === 'mcq') {
-        const userText = (q.user_answer !== undefined && q.user_answer !== -1 && q.options)
-          ? (q.options[q.user_answer] || 'Invalid option')
-          : 'Not answered';
-        const correctText = (q.options && q.correct_answer !== undefined)
-          ? (q.options[q.correct_answer] || 'N/A')
-          : 'N/A';
+        const userText = q.options && q.user_answer !== -1 ? (q.options[q.user_answer] || 'Invalid') : 'Not answered';
+        const correctText = q.options ? (q.options[q.correct_answer] || 'N/A') : 'N/A';
         html += `
           <div class="card mb-4">
             <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
@@ -780,22 +771,13 @@ async function viewDetailedAnswers(resultId, candidateName) {
           </div>`;
       }
     }
-
     document.getElementById('answersBody').innerHTML = html;
     openModal('answersModal');
-  } catch (e) {
-    console.error(e);
-    showToast('Error loading answers: ' + e.message, 'error');
-  }
 }
 
-/* ─── Per-question editing ─────────────────────────────────────── */
 let currentEditResultId = null, currentEditQuestionId = null, currentMaxMarks = 0;
-
 function openEditMarks(resultId, questionId, maxMarks, currentMarks, currentFeedback) {
-  currentEditResultId  = resultId;
-  currentEditQuestionId = questionId;
-  currentMaxMarks      = maxMarks;
+  currentEditResultId = resultId; currentEditQuestionId = questionId; currentMaxMarks = maxMarks;
   document.getElementById('editObtainedMarks').value = currentMarks;
   document.getElementById('editFeedback').value = currentFeedback;
   openModal('editMarksModal');
@@ -805,32 +787,36 @@ async function saveEditedMarks() {
   const obtainedMarks = parseFloat(document.getElementById('editObtainedMarks').value);
   const feedback = document.getElementById('editFeedback').value;
   if (isNaN(obtainedMarks) || obtainedMarks < 0 || obtainedMarks > currentMaxMarks) {
-    showToast(`Marks must be between 0 and ${currentMaxMarks}`, 'warning');
-    return;
+    showToast(`Marks must be between 0 and ${currentMaxMarks}`, 'warning'); return;
   }
   try {
     await API.put(`/api/assessment-results/${currentEditResultId}/update-question`, {
       question_id: currentEditQuestionId,
       obtained_marks: obtainedMarks,
-      feedback: feedback,
+      feedback: feedback
     });
+    
     showToast('Question marks updated!', 'success');
     closeModal('editMarksModal');
 
-    const answersModal = document.getElementById('answersModal');
-    if (answersModal.style.display === 'flex') {
-      const title = document.getElementById('answersTitle').innerText;
-      const match = title.match(/Answers by (.+)/);
-      if (match) await viewDetailedAnswers(currentEditResultId, match[1]);
+    // Update the local state immediately so other questions' marks aren't lost
+    if (currentDetailedResult) {
+        const q = currentDetailedResult.questions.find(x => String(x.id) === String(currentEditQuestionId));
+        if (q) {
+            q.obtained_marks = obtainedMarks;
+            q.feedback = feedback;
+        }
+        // Re-render the modal with the new state
+        renderAnswersModal(currentEditResultId);
     }
-    // Refresh results table if open
-    const resultsModal = document.getElementById('resultsModal');
-    if (resultsModal.style.display === 'flex') {
-      const titleElem = document.getElementById('resultTitle');
-      const assessmentId = titleElem.innerHTML.match(/\d+/)?.[0];
-      if (assessmentId) await viewResults(parseInt(assessmentId), '');
+    
+    // Refresh the results table if it's open
+    if (document.getElementById('resultsModal').style.display === 'flex') {
+       const titleElem = document.getElementById('resultTitle');
+       const assessmentId = titleElem.innerHTML.match(/\d+/)?.[0];
+       if (assessmentId) await viewResults(parseInt(assessmentId), '');
     }
-  } catch (e) {
+  } catch(e) {
     showToast('Error updating marks: ' + e.message, 'error');
   }
 }
