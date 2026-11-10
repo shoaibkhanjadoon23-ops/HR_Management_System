@@ -387,12 +387,36 @@ function playQuestion(text, base64Audio) {
 async function toggleRecording() {
     if (!isRecording) {
         try {
-            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(audioStream);
+            const audioStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+            });
+            
+            // ✅ FIX: Explicitly set mimeType and chunk every 1s to prevent empty blobs
+            let options = { mimeType: 'audio/webm' };
+            if (!MediaRecorder.isTypeSupported('audio/webm')) {
+                options = {}; // Fallback to default
+            }
+            
+            mediaRecorder = new MediaRecorder(audioStream, options);
             audioChunks = [];
-            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
-            mediaRecorder.onstop = sendAnswer;
-            mediaRecorder.start();
+            
+            mediaRecorder.ondataavailable = e => { 
+                if (e.data.size > 0) {
+                    audioChunks.push(e.data); 
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+                if (audioChunks.length === 0) {
+                    alert("Error: No audio was recorded. Please try again and speak clearly into the mic.");
+                    document.getElementById('statusText').innerText = "Click mic to answer";
+                    return;
+                }
+                sendAnswer();
+            };
+            
+            // ✅ FIX: Pass 1000ms so it gathers chunks constantly
+            mediaRecorder.start(1000); 
             
             isRecording = true;
             recordSeconds = 0;
@@ -409,7 +433,10 @@ async function toggleRecording() {
                 document.getElementById('recordTimer').innerText = `${m}:${s}`;
             }, 1000);
             
-        } catch(e) { alert("Microphone access denied."); }
+        } catch(e) { 
+            alert("Microphone access denied or unsupported browser.");
+            console.error(e);
+        }
     } else {
         if (recordSeconds < 2) {
             if (!confirm("Recording is very short. Are you sure?")) return;
