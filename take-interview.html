@@ -59,6 +59,7 @@
   .q-block{margin-bottom:20px}
   .q-header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:10px}
   .q-number{font-size:15px;font-weight:800;letter-spacing:.6px;color:#bcd3ff;text-transform:uppercase}
+  .q-number.intro{color:#fbbf24}
   .q-followup-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(245,158,11,.15);color:#fbbf24;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600}
   .q-followup-badge .note{color:rgba(251,191,36,.75);font-weight:500;font-size:11px}
   .q-progress-mini{margin-left:auto;font-size:12px;color:var(--muted)}
@@ -201,9 +202,9 @@
         <div class="q-header">
           <div class="q-number" id="q-type">Question 1 of 5</div>
           <div class="q-followup-badge hidden" id="q-followup">
-            <i class="fas fa-reply"></i>
-            <span id="q-followup-label">Follow-up</span>
-            <span class="note">&mdash; doesn't count toward your question limit</span>
+            <i class="fas fa-comment-dots"></i>
+            <span id="q-followup-label">Introduction</span>
+            <span class="note" id="q-followup-note">&mdash; doesn't count toward your question limit</span>
           </div>
           <div class="q-progress-mini" id="q-progress-mini"></div>
         </div>
@@ -264,13 +265,14 @@
     interviewId: null,
     currentQuestion: '',
     isFollowUp: false,
-    mainQCount: 1,
+    isIntroduction: false,
+    mainQCount: 0,
     maxQ: 5,
     followUpCounter: 0,
     pendingAudioB64: null,
     lastAudioB64: null,
     lastQuestionText: '',
-    usingFallbackAudio: false,   // true when backend returned empty audio
+    usingFallbackAudio: false,
 
     mediaStream: null,
     recorder: null,
@@ -302,7 +304,8 @@
     meter: $('meter'), checkDevices: $('check-devices'), beginBtn: $('begin-btn'),
 
     interviewSection: $('interview-section'),
-    qType: $('q-type'), qFollowup: $('q-followup'), qFollowupLabel: $('q-followup-label'),
+    qType: $('q-type'), qFollowup: $('q-followup'),
+    qFollowupLabel: $('q-followup-label'), qFollowupNote: $('q-followup-note'),
     qProgressMini: $('q-progress-mini'),
     questionText: $('question-text'),
     audioStatus: $('audio-status'), audioStatusText: $('audio-status-text'),
@@ -349,7 +352,6 @@
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       if (!audioCtx) audioCtx = new AC();
-      // Play a silent buffer to permanently unlock audio output.
       const buf = audioCtx.createBuffer(1, 1, 22050);
       const src = audioCtx.createBufferSource();
       src.buffer = buf;
@@ -359,20 +361,12 @@
         audioUnlocked = true;
         console.log('[audio] context unlocked, state=' + audioCtx.state);
       }).catch(e => console.warn('[audio] resume failed:', e));
-    } catch (e) {
-      console.warn('[audio] unlock failed:', e);
-    }
+    } catch (e) { console.warn('[audio] unlock failed:', e); }
   }
-  // Attach to first pointerdown anywhere on the page.
   document.addEventListener('pointerdown', unlockAudio);
 
   function stopAudio() {
-    // Stop backend-TTS playback
-    if (currentSource) {
-      try { currentSource.stop(); } catch (_) {}
-      currentSource = null;
-    }
-    // Stop browser-TTS fallback
+    if (currentSource) { try { currentSource.stop(); } catch (_) {} currentSource = null; }
     try { window.speechSynthesis.cancel(); } catch (_) {}
     hideAudioStatus();
   }
@@ -383,26 +377,16 @@
     if (kind) el.audioStatus.classList.add(kind);
     el.audioStatusText.textContent = text;
   }
-  function hideAudioStatus() {
-    el.audioStatus.classList.add('hidden');
-  }
+  function hideAudioStatus() { el.audioStatus.classList.add('hidden'); }
 
   function playAudio(b64, allowFallback) {
-    if (!b64) {
-      console.warn('[audio] empty base64 — cannot play');
-      return false;
-    }
-    if (!audioCtx) {
-      // Context not yet created — try unlocking then warn.
-      unlockAudio();
-    }
+    if (!b64) { console.warn('[audio] empty base64'); return false; }
+    if (!audioCtx) unlockAudio();
     try {
       const binary = atob(b64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-      // Ensure AudioContext is running before decode (some browsers
-      // need resume before decodeAudioData works).
       const decoded = (audioCtx && audioCtx.state === 'running')
         ? audioCtx.decodeAudioData(bytes.buffer.slice(0))
         : audioCtx.resume().then(() => audioCtx.decodeAudioData(bytes.buffer.slice(0)));
@@ -412,23 +396,17 @@
         const source = audioCtx.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(audioCtx.destination);
-        source.onended = () => {
-          currentSource = null;
-          hideAudioStatus();
-        };
+        source.onended = () => { currentSource = null; hideAudioStatus(); };
         source.start(0);
         currentSource = source;
         showAudioStatus('Speaking…', 'speaking');
-        // Show the replay button for manual re-listen.
         el.replayBtn.style.display = 'inline-flex';
         el.replayBtn.classList.remove('attention');
       }).catch((err) => {
         console.error('[audio] decode failed:', err);
         el.replayBtn.style.display = 'inline-flex';
         el.replayBtn.classList.add('attention');
-        if (allowFallback) {
-          toast('Question audio could not be decoded. Tap "Replay Question".', 'warn');
-        }
+        if (allowFallback) toast('Question audio could not be decoded. Tap "Replay Question".', 'warn');
       });
       return true;
     } catch (e) {
@@ -443,17 +421,11 @@
    * accepted / 400 response). Guarantees the candidate hears the question.
    */
   function speakFallback(text) {
-    if (!text) return false;
-    if (!('speechSynthesis' in window)) {
-      console.warn('[speakFallback] speechSynthesis not supported');
-      return false;
-    }
+    if (!text || !('speechSynthesis' in window)) return false;
     try {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 0.98;
-      u.pitch = 1.0;
-      u.lang = 'en-US';
+      u.rate = 0.98; u.pitch = 1.0; u.lang = 'en-US';
       const voices = window.speechSynthesis.getVoices();
       const male = voices.find(v =>
         /en-/i.test(v.lang) &&
@@ -462,16 +434,10 @@
       if (male) u.voice = male;
       u.onstart = () => showAudioStatus('Speaking (browser voice)…', 'fallback');
       u.onend = () => hideAudioStatus();
-      u.onerror = (e) => {
-        console.warn('[speakFallback] error:', e);
-        hideAudioStatus();
-      };
+      u.onerror = (e) => { console.warn('[speakFallback] error:', e); hideAudioStatus(); };
       window.speechSynthesis.speak(u);
       return true;
-    } catch (e) {
-      console.warn('[speakFallback] failed:', e);
-      return false;
-    }
+    } catch (e) { console.warn('[speakFallback] failed:', e); return false; }
   }
 
   /* ═══════════ Boot ═══════════ */
@@ -496,16 +462,12 @@
     el.recordBtn.addEventListener('click', onRecordClick);
     el.replayBtn.addEventListener('click', () => {
       el.replayBtn.classList.remove('attention');
-      if (state.usingFallbackAudio) {
-        speakFallback(state.lastQuestionText);
-      } else if (state.lastAudioB64) {
-        playAudio(state.lastAudioB64, true);
-      }
+      if (state.usingFallbackAudio) speakFallback(state.lastQuestionText);
+      else if (state.lastAudioB64) playAudio(state.lastAudioB64, true);
     });
     document.addEventListener('visibilitychange', onVisibilityChange);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     window.addEventListener('beforeunload', onBeforeUnload);
-    // Preload voices list (some browsers populate it async).
     if ('speechSynthesis' in window) {
       window.speechSynthesis.getVoices();
       window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
@@ -517,11 +479,9 @@
     el.gateError.classList.remove('hidden');
   }
 
-  /* ═══════════ STEP 1: Code verification ═══════════ */
+  /* ═══════════ STEP 1: Verify ═══════════ */
   async function onVerify() {
-    // Unlock audio on this click — the FIRST interaction the candidate makes.
     unlockAudio();
-
     const code = el.gateInput.value.trim().toUpperCase();
     if (!code) { showGateError('Please enter your application code.'); return; }
 
@@ -543,18 +503,20 @@
         return;
       }
 
-      state.interviewId     = data.interview_id;
-      state.currentQuestion = data.question || '';
-      state.mainQCount      = data.main_q_count || 1;
-      state.maxQ            = data.max_questions || 5;
-      state.isFollowUp      = false;
-      state.followUpCounter = 0;
-      state.pendingAudioB64 = data.audio || null;
-      state.lastAudioB64    = data.audio || null;
-      state.lastQuestionText = data.question || '';
+      state.interviewId       = data.interview_id;
+      state.currentQuestion   = data.question || '';
+      state.mainQCount        = data.main_q_count != null ? data.main_q_count : 0;
+      state.maxQ              = data.max_questions || 5;
+      state.isFollowUp        = false;
+      state.isIntroduction    = !!data.is_introduction;
+      state.followUpCounter   = 0;
+      state.pendingAudioB64   = data.audio || null;
+      state.lastAudioB64      = data.audio || null;
+      state.lastQuestionText  = data.question || '';
 
-      console.log('[interview] first question received, audio bytes ≈',
-        data.audio ? Math.round(data.audio.length * 0.75) : 0);
+      console.log('[interview] first question received',
+        { isIntroduction: state.isIntroduction, mainQCount: state.mainQCount,
+          audioBytes: data.audio ? Math.round(data.audio.length * 0.75) : 0 });
 
       el.gateSection.classList.add('hidden');
       el.hardwareSection.classList.remove('hidden');
@@ -569,7 +531,7 @@
   const meterState = { ctx: null, analyser: null, raf: 0, speakStart: 0, unlocked: false };
 
   async function startHardwareCheck() {
-    unlockAudio();   // extra safety — the check itself is a click
+    unlockAudio();
     el.beginBtn.disabled = true;
     el.beginBtn.classList.add('hidden');
     el.checkDevices.textContent = 'Retry devices';
@@ -665,8 +627,7 @@
     meterState.ctx = null;
     meterState.analyser = null;
     el.meter.querySelectorAll('.meter-bar').forEach(b => {
-      b.classList.remove('on');
-      b.style.transform = 'scaleY(0.25)';
+      b.classList.remove('on'); b.style.transform = 'scaleY(0.25)';
     });
   }
 
@@ -682,29 +643,23 @@
   /* ═══════════ STEP 3: Begin interview ═══════════ */
   async function beginInterview() {
     if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
-
-    // Unlock audio on the click itself (defensive — the pointerdown
-    // handler on document should have already unlocked, but this makes
-    // it deterministic on browsers that throttle passive listeners).
     unlockAudio();
 
-    // Switch to interview UI first.
     el.hardwareSection.classList.add('hidden');
     el.interviewSection.classList.remove('hidden');
     el.proctorBar.style.display = 'flex';
     el.cameraPreview.style.display = 'block';
 
-    // Show the first question.
     showQuestion({
       text: state.currentQuestion,
       isFollowUp: false,
+      isIntroduction: state.isIntroduction,
       mainQ: state.mainQCount,
       maxQ: state.maxQ,
       followUpCounter: 0,
     });
 
-    // Play the first audio synchronously — BEFORE any await — so the
-    // browser's autoplay policy sees it inside the click gesture chain.
+    // Play first audio INSIDE the click handler before any await.
     if (state.pendingAudioB64) {
       state.lastAudioB64 = state.pendingAudioB64;
       state.usingFallbackAudio = false;
@@ -712,12 +667,10 @@
       playAudio(state.pendingAudioB64, true);
       state.pendingAudioB64 = null;
     } else {
-      // Backend returned no audio → browser TTS fallback.
       state.usingFallbackAudio = true;
       speakFallback(state.currentQuestion);
     }
 
-    // Now the slow/async work.
     el.camera.srcObject = state.mediaStream;
     try { await el.camera.play(); } catch (_) {}
     stopMeter();
@@ -746,12 +699,10 @@
       autoSubmitInterview('Exited fullscreen during the interview.');
     }
   }
-
   function onVisibilityChange() {
     if (!state.proctoringActive || state.submitted) return;
     if (document.hidden) autoSubmitInterview('Tab switch detected during the interview.');
   }
-
   function onBeforeUnload(e) {
     if (state.proctoringActive && !state.submitted) {
       e.preventDefault();
@@ -759,12 +710,11 @@
       return e.returnValue;
     }
   }
-
   function exitFullscreen() {
     try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (_) {}
   }
 
-  /* ═══════════ Proctoring: face detection ═══════════ */
+  /* ═══════════ Face detection ═══════════ */
   async function startProctoring() {
     state.proctoringActive = true;
     try {
@@ -825,8 +775,7 @@
       state.multiFaceStart = null;
 
       const box = detections[0].detection.box;
-      ctx.strokeStyle = '#10b981';
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#10b981'; ctx.lineWidth = 4;
       ctx.strokeRect(box.x, box.y, box.width, box.height);
 
       const p = detections[0].landmarks.positions;
@@ -850,9 +799,7 @@
         el.debugInfo.style.color = '#10b981';
         state.lookAwayStart = null;
       }
-    } catch (e) {
-      console.warn('[proctor] face check error:', e);
-    }
+    } catch (e) { console.warn('[proctor] face check error:', e); }
   }
 
   function issueCamWarning(reason) {
@@ -877,15 +824,12 @@
       const ctx = new AC();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 800;
-      osc.type = 'sine';
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 800; osc.type = 'sine';
       const t = ctx.currentTime;
       gain.gain.setValueAtTime(0.15, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
-      osc.start(t);
-      osc.stop(t + 0.35);
+      osc.start(t); osc.stop(t + 0.35);
       setTimeout(() => ctx.close().catch(() => {}), 500);
     } catch (_) {}
   }
@@ -898,7 +842,7 @@
     setTimeout(() => t.remove(), 4500);
   }
 
-  /* ═══════════ Auto-submit (proctoring violation) ═══════════ */
+  /* ═══════════ Auto-submit ═══════════ */
   async function autoSubmitInterview(reason) {
     if (state.submitted) return;
     state.submitted = true;
@@ -929,7 +873,6 @@
       `Your interview was auto-submitted because: <strong>${escapeHtml(reason)}</strong>`;
   }
 
-  /* ═══════════ Normal completion ═══════════ */
   function finishNormally() {
     if (state.submitted) return;
     state.submitted = true;
@@ -955,37 +898,46 @@
   }
 
   /* ═══════════ Question display ═══════════ */
-  function showQuestion({ text, isFollowUp, mainQ, maxQ, followUpCounter }) {
+  function showQuestion({ text, isFollowUp, isIntroduction, mainQ, maxQ, followUpCounter }) {
     state.currentQuestion  = text;
     state.isFollowUp       = !!isFollowUp;
-    state.mainQCount       = mainQ || state.mainQCount;
-    state.maxQ             = maxQ  || state.maxQ;
+    state.isIntroduction   = !!isIntroduction;
+    state.mainQCount       = (mainQ != null) ? mainQ : state.mainQCount;
+    state.maxQ             = maxQ || state.maxQ;
     state.followUpCounter  = followUpCounter || 0;
     state.lastQuestionText = text;
 
     el.questionText.textContent = text;
 
-    // Big "Question X of Y" header for MAIN questions.
-    el.qType.textContent = `Question ${state.mainQCount} of ${state.maxQ}`;
-
-    // Follow-up badge only when the current question is a follow-up.
-    if (isFollowUp) {
+    // Header label + badge
+    if (isIntroduction) {
+      el.qType.textContent = 'Introduction';
+      el.qType.classList.add('intro');
+      el.qFollowup.classList.remove('hidden');
+      el.qFollowupLabel.textContent = 'Warm-up';
+      el.qFollowupNote.textContent = "— doesn't count toward your question limit";
+      el.qProgressMini.textContent = `${state.maxQ} main questions after this`;
+    } else if (isFollowUp) {
+      el.qType.textContent = `Question ${state.mainQCount} of ${state.maxQ}`;
+      el.qType.classList.remove('intro');
       el.qFollowup.classList.remove('hidden');
       const n = state.followUpCounter > 0
         ? `Follow-up ${state.followUpCounter}/2`
         : 'Follow-up';
       el.qFollowupLabel.textContent = n;
+      el.qFollowupNote.textContent = "— doesn't count toward your question limit";
+      el.qProgressMini.textContent = '';
     } else {
+      el.qType.textContent = `Question ${state.mainQCount} of ${state.maxQ}`;
+      el.qType.classList.remove('intro');
       el.qFollowup.classList.add('hidden');
+      const remaining = Math.max(0, state.maxQ - state.mainQCount);
+      el.qProgressMini.textContent = remaining > 0
+        ? `${remaining} more main question${remaining === 1 ? '' : 's'} to go`
+        : 'Last main question';
     }
 
-    // "N main questions remaining" mini indicator.
-    const remaining = Math.max(0, state.maxQ - state.mainQCount + (isFollowUp ? 1 : 0));
-    el.qProgressMini.textContent = remaining > 0
-      ? `${remaining} main question${remaining === 1 ? '' : 's'} remaining`
-      : '';
-
-    // Reset per-question UI.
+    // Reset per-question UI
     el.transcriptPanel.classList.add('hidden');
     el.scoreLine.textContent = '';
     el.recordStatus.textContent = 'Tap the mic to record your answer.';
@@ -1004,8 +956,7 @@
 
   function startRecording() {
     if (state.submitted) return;
-    // Stop any playing question audio before recording.
-    stopAudio();
+    stopAudio();  // don't record over the question audio
 
     if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
 
@@ -1070,6 +1021,10 @@
     if (state.submitted) return;
     el.recordStatus.textContent = 'Uploading answer…';
 
+    // Remember whether THIS turn was the introduction — determines whether
+    // we show a score line for the transcribed answer.
+    const wasIntroduction = state.isIntroduction;
+
     const ext = /mp4/.test(blob.type) ? 'mp4' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
     const fd = new FormData();
     fd.append('file', blob, 'answer.' + ext);
@@ -1090,41 +1045,39 @@
       if (data.transcript) {
         el.transcriptText.textContent = data.transcript;
         el.transcriptPanel.classList.remove('hidden');
-        if (data.score != null) {
+        if (wasIntroduction) {
+          // Introduction isn't scored — show a neutral confirmation.
+          el.scoreLine.textContent = 'Introduction noted — moving on to Question 1.';
+        } else if (data.score != null) {
           let s = `Score: ${data.score}/10`;
           if (data.plagiarism_flag) s += ` — ⚠️ ${data.plagiarism_flag}`;
           el.scoreLine.textContent = s;
         }
       }
 
-      // 5 main questions complete → backend returns status "completed".
       if (data.status === 'completed') {
         finishNormally();
         return;
       }
 
-      // Compute followUpCounter for the next question.
       let nextFollowUpCounter = 0;
-      if (data.is_follow_up) {
-        nextFollowUpCounter = state.followUpCounter + 1;
-      }
+      if (data.is_follow_up) nextFollowUpCounter = state.followUpCounter + 1;
 
       showQuestion({
         text: data.next_question || '',
         isFollowUp: !!data.is_follow_up,
+        isIntroduction: !!data.is_introduction,
         mainQ: data.main_q_count,
         maxQ: data.max_questions,
         followUpCounter: nextFollowUpCounter,
       });
 
-      // Play the new question audio.
       if (data.audio) {
         state.lastAudioB64 = data.audio;
         state.usingFallbackAudio = false;
         el.replayBtn.style.display = 'inline-flex';
         playAudio(data.audio, true);
       } else {
-        // Backend returned no audio (e.g. Groq TTS 400) → browser fallback.
         console.warn('[interview] next question returned no audio — using browser TTS fallback');
         state.lastAudioB64 = null;
         state.usingFallbackAudio = true;
