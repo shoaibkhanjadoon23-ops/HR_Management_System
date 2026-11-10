@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Take Interview</title>
+<title>AI Interview</title>
 <style>
   :root {
     --bg: #0f172a;
@@ -70,23 +70,30 @@
     background: linear-gradient(135deg, var(--accent), #2f6fe0);
     border-color: transparent;
   }
-  .btn.ghost { background: transparent; }
   .field { display: block; margin: 14px 0; }
   .field span {
     display: block; font-weight: 600; margin-bottom: 6px;
     font-size: 13px; color: #cdd9ee;
   }
-  textarea, input[type="text"] {
+  input[type="text"] {
     width: 100%; background: #0c1526; color: var(--text);
     border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px; font: inherit; resize: vertical;
+    padding: 12px; font: inherit;
+    font-size: 20px; letter-spacing: 4px; text-align: center; font-weight: 700;
+    text-transform: uppercase;
   }
-  textarea:focus, input[type="text"]:focus {
+  input[type="text"]:focus {
     outline: 2px solid rgba(79, 140, 255, .4);
     border-color: var(--accent);
   }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .row.end { justify-content: flex-end; }
+  .error-text { color: var(--danger); font-size: 13px; margin-top: 10px; }
+  .alert {
+    padding: 12px 16px; border-radius: 10px; margin-bottom: 16px;
+    border: 1px solid var(--border); background: var(--panel);
+  }
+  .alert.error { border-color: rgba(239,68,68,.5); color: #fecaca; background: rgba(239,68,68,.08); }
+  .alert.success { border-color: rgba(34,197,94,.5); color: #bbf7d0; background: rgba(34,197,94,.08); }
 
   /* Hardware check */
   .hw-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; margin-top: 14px; }
@@ -124,8 +131,7 @@
 
   /* Interview */
   .q-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-  #question-text { font-size: 22px; line-height: 1.35; margin: 6px 0; }
-  #question-rationale { min-height: 18px; margin-bottom: 12px; }
+  #question-text { font-size: 22px; line-height: 1.35; margin: 6px 0 18px; }
   .record-panel {
     display: flex; align-items: center; gap: 18px;
     margin: 18px 0; padding: 16px;
@@ -152,8 +158,6 @@
   }
   .record-info { display: flex; flex-direction: column; gap: 4px; }
   .timer { font-variant-numeric: tabular-nums; font-size: 28px; font-weight: 700; letter-spacing: .5px; }
-  .chunks-panel { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
-  .chunks-panel strong { color: var(--accent-2); }
   .transcript {
     background: rgba(34, 211, 238, .06);
     border: 1px solid rgba(34, 211, 238, .2);
@@ -163,7 +167,7 @@
     font-size: 13px; text-transform: uppercase;
     letter-spacing: .08em; color: var(--accent-2); margin-bottom: 6px;
   }
-  .transcript p { margin: 0; white-space: pre-wrap; }
+  .transcript p { margin: 0 0 6px; white-space: pre-wrap; }
 
   /* Toast */
   .toast {
@@ -185,38 +189,30 @@
     <div class="brand"><span class="dot"></span> AI Interview</div>
     <div class="header-right">
       <span id="role-badge" class="pill subtle hidden"></span>
-      <button id="end-btn" class="btn ghost hidden">End Interview</button>
     </div>
   </header>
 
   <main>
-    <!-- ============== SETUP ============== -->
-    <section id="setup-section" class="card hidden">
-      <h2>Interview setup</h2>
-      <p class="muted">
-        Paste the job description and list the key skills. They are sent to the
-        question generator so questions are grounded in the role.
-      </p>
+    <!-- Identity / code gate -->
+    <section id="gate-section" class="card hidden">
+      <h2>Verify your identity</h2>
+      <p class="muted">Enter the application code you received when you applied for this role.</p>
       <label class="field">
-        <span>Job description</span>
-        <textarea id="setup-jd" rows="6" placeholder="Paste the JD here…"></textarea>
-      </label>
-      <label class="field">
-        <span>Skills (comma separated)</span>
-        <input id="setup-skills" type="text" placeholder="e.g. Python, AWS, SQL, Communication" />
+        <span>Application code</span>
+        <input id="code-input" type="text" maxlength="12" placeholder="A3B5K9XZ" autocomplete="off" spellcheck="false" />
       </label>
       <div class="row">
-        <button id="setup-continue" class="btn primary">Continue</button>
+        <button id="verify-btn" class="btn primary">Continue</button>
       </div>
+      <p id="gate-error" class="error-text hidden"></p>
     </section>
 
-    <!-- ============== HARDWARE CHECK ============== -->
+    <!-- Hardware check -->
     <section id="hardware-section" class="card hidden">
       <h2>Hardware check</h2>
       <p class="muted">
         We ask for camera + microphone <strong>once</strong> and reuse the
-        <strong>same stream</strong> during the interview for recording.
-        No second <code>getUserMedia</code>, no second permission prompt.
+        <strong>same stream</strong> during the interview.
       </p>
       <div class="hw-grid">
         <div class="video-wrap">
@@ -226,7 +222,7 @@
         <div class="hw-side">
           <div class="status-line">
             <span id="hw-status-dot" class="status-dot"></span>
-            <span id="hw-status">Click “Check my devices” to start.</span>
+            <span id="hw-status">Click &ldquo;Check devices&rdquo; to start.</span>
           </div>
           <div id="meter" class="meter" aria-hidden="true">
             <span class="meter-bar"></span><span class="meter-bar"></span>
@@ -245,14 +241,13 @@
       </div>
     </section>
 
-    <!-- ============== INTERVIEW ============== -->
+    <!-- Interview -->
     <section id="interview-section" class="card hidden">
       <div class="q-head">
         <span id="q-type" class="pill">Question</span>
-        <span id="q-followup" class="pill subtle hidden">Follow-up 0/2</span>
+        <span id="q-followup" class="pill subtle hidden">Follow-up</span>
       </div>
       <h2 id="question-text">Loading…</h2>
-      <p id="question-rationale" class="muted small"></p>
 
       <div class="record-panel">
         <button id="record-btn" class="rec-btn" aria-label="Record answer" aria-pressed="false">
@@ -264,28 +259,17 @@
         </div>
       </div>
 
-      <div class="chunks-panel">
-        Audio chunks gathered: <strong id="chunk-count">0</strong> ·
-        <span id="chunk-bytes">0 B</span>
-      </div>
-
       <div id="transcript-panel" class="transcript hidden">
-        <h3>Last answer</h3>
+        <h3>Your last answer (transcribed)</h3>
         <p id="transcript-text"></p>
-      </div>
-
-      <div class="row end">
-        <button id="submit-anyway" class="btn ghost hidden">Submit anyway</button>
+        <div id="score-line" class="muted small"></div>
       </div>
     </section>
 
-    <!-- ============== SUMMARY ============== -->
+    <!-- Summary -->
     <section id="summary-section" class="card hidden">
       <h2>Interview complete</h2>
-      <p class="muted">Thanks — your responses have been submitted.</p>
-      <div class="row">
-        <button id="restart-btn" class="btn primary">Start a new interview</button>
-      </div>
+      <p class="muted">Thank you — your responses have been submitted to the HR team.</p>
     </section>
   </main>
 </div>
@@ -295,209 +279,139 @@
 (function () {
   'use strict';
 
-  /* =========================================================================
-     API CONTRACT (must be implemented by your backend around ai_service.py)
-
-     POST {API_BASE}/api/interview/start
-       body (JSON): { job_description: string, skills: string[] }
-       → { question: string,
-           type?: 'main' | 'followup',
-           follow_up_count?: number,
-           max_follow_ups?: number,
-           rationale?: string }
-
-     POST {API_BASE}/api/interview/answer   (multipart/form-data)
-       fields:
-         audio              : Blob (webm / ogg / mp4)
-         job_description    : string
-         skills             : JSON string  (string[])
-         main_question      : string       (main question this answer belongs to)
-         current_question   : string       (exact question being answered)
-         follow_up_count    : number       (follow-ups already asked on this main Q)
-         max_follow_ups     : number
-         is_follow_up       : "true" | "false"
-         previous_questions : JSON string  (string[])
-       → { transcript?: string,
-           next_question?: { question, type, follow_up_count, max_follow_ups, rationale } | null,
-           is_complete?: boolean }
-
-     Set CONFIG.DEMO_MODE = true to test the page (and the audio fix) without a backend.
-     ========================================================================= */
-
-  const CONFIG = {
-    API_BASE: '',               // '' = same origin, or e.g. 'http://localhost:8000'
-    DEMO_MODE: false,           // true = simulate a backend in the browser
-    MAX_RECORD_SECONDS: 180,    // auto-stop a single answer at 3 min
-    MIN_BLOB_BYTES: 1000,       // below this we warn / offer "Submit anyway"
-    MIC_THRESHOLD: 0.045,       // RMS threshold to consider "speaking"
-    MIC_HOLD_MS: 700,           // how long above threshold before enabling Begin
-    TIMESLICE_MS: 1000,         // MediaRecorder timeslice (deliver a chunk every 1s)
-  };
+  const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
+  const params = new URLSearchParams(location.search);
+  const applicationId = parseInt(params.get('app_id'), 10);
 
   const state = {
-    // context
-    jd: '',
-    skills: [],
-
-    // audio — the hardware-check stream lives here and is reused by MediaRecorder
+    interviewId: null,
+    currentQuestion: '',
+    isFollowUp: false,
+    mainQCount: 0,
+    maxQ: 5,
+    pendingAudioB64: null,   // audio of the first question, played after hardware check
     mediaStream: null,
     recorder: null,
     chunks: [],
     isRecording: false,
     timerStart: 0,
     timerInterval: null,
-    pendingBlob: null,
-    cancelled: false,
-    finished: false,
-
-    // question flow
-    currentQuestion: null,
-    mainQuestion: null,
-    followUpCount: 0,
-    maxFollowUps: 2,
-    previousQuestions: [],
-    mainNumber: 0,
-
-    // demo backend
-    demo: { mainIndex: 0, followIndex: 0 },
   };
 
-  const $ = (id) => document.getElementById(id);
+  const $ = id => document.getElementById(id);
   const el = {
-    setupSection:        $('setup-section'),
-    setupJd:             $('setup-jd'),
-    setupSkills:         $('setup-skills'),
-    setupContinue:       $('setup-continue'),
+    gateSection: $('gate-section'),
+    gateInput: $('code-input'),
+    gateError: $('gate-error'),
+    verifyBtn: $('verify-btn'),
 
-    hardwareSection:     $('hardware-section'),
-    preview:             $('preview'),
-    previewPlaceholder:  $('preview-placeholder'),
-    hwStatus:            $('hw-status'),
-    hwStatusDot:         $('hw-status-dot'),
-    meter:               $('meter'),
-    checkDevices:        $('check-devices'),
-    beginBtn:            $('begin-btn'),
+    hardwareSection: $('hardware-section'),
+    preview: $('preview'),
+    previewPlaceholder: $('preview-placeholder'),
+    hwStatus: $('hw-status'),
+    hwStatusDot: $('hw-status-dot'),
+    meter: $('meter'),
+    checkDevices: $('check-devices'),
+    beginBtn: $('begin-btn'),
 
-    interviewSection:    $('interview-section'),
-    qType:               $('q-type'),
-    qFollowup:           $('q-followup'),
-    questionText:        $('question-text'),
-    questionRationale:   $('question-rationale'),
-    recordBtn:           $('record-btn'),
-    timer:               $('timer'),
-    recordStatus:        $('record-status'),
-    chunkCount:          $('chunk-count'),
-    chunkBytes:          $('chunk-bytes'),
-    transcriptPanel:     $('transcript-panel'),
-    transcriptText:      $('transcript-text'),
-    submitAnyway:        $('submit-anyway'),
+    interviewSection: $('interview-section'),
+    qType: $('q-type'),
+    qFollowup: $('q-followup'),
+    questionText: $('question-text'),
+    recordBtn: $('record-btn'),
+    timer: $('timer'),
+    recordStatus: $('record-status'),
+    transcriptPanel: $('transcript-panel'),
+    transcriptText: $('transcript-text'),
+    scoreLine: $('score-line'),
 
-    summarySection:      $('summary-section'),
-    restartBtn:          $('restart-btn'),
-
-    roleBadge:           $('role-badge'),
-    endBtn:              $('end-btn'),
-    toast:               $('toast'),
+    summarySection: $('summary-section'),
+    toast: $('toast'),
   };
 
-  /* ============================ BOOT ============================ */
-  function init() {
-    loadContext();
+  /* ================= Boot ================= */
+  function boot() {
+    if (!applicationId || isNaN(applicationId)) {
+      el.gateSection.classList.remove('hidden');
+      el.gateSection.innerHTML =
+        '<div class="alert error"><strong>Invalid link.</strong><br>' +
+        'Missing or invalid application ID. Please use the link from your interview invitation email.</div>';
+      return;
+    }
+    el.gateSection.classList.remove('hidden');
+    el.gateInput.focus();
     bindEvents();
-    if (!state.jd) {
-      el.setupSection.classList.remove('hidden');
-      el.hardwareSection.classList.add('hidden');
-    } else {
-      el.hardwareSection.classList.remove('hidden');
-    }
-  }
-
-  function loadContext() {
-    let jd = '';
-    let skillsRaw = '';
-    try {
-      jd = sessionStorage.getItem('interview_jd') || '';
-      skillsRaw = sessionStorage.getItem('interview_skills') || '';
-    } catch (_) { /* storage may be blocked */ }
-
-    const params = new URLSearchParams(location.search);
-    if (!jd && params.get('jd')) jd = params.get('jd');
-    if (!skillsRaw && params.get('skills')) skillsRaw = params.get('skills');
-
-    state.jd = String(jd || '').trim();
-    state.skills = parseSkills(skillsRaw);
-
-    if (state.skills.length) {
-      el.roleBadge.textContent = state.skills.length + ' skills';
-      el.roleBadge.classList.remove('hidden');
-    }
-  }
-
-  function parseSkills(raw) {
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.map(String).map(s => s.trim()).filter(Boolean);
-    } catch (_) { /* not JSON */ }
-    return String(raw).split(',').map(s => s.trim()).filter(Boolean);
   }
 
   function bindEvents() {
-    el.setupContinue.addEventListener('click', onSetupContinue);
+    el.verifyBtn.addEventListener('click', onVerify);
+    el.gateInput.addEventListener('keydown', e => { if (e.key === 'Enter') onVerify(); });
     el.checkDevices.addEventListener('click', startHardwareCheck);
     el.beginBtn.addEventListener('click', beginInterview);
     el.recordBtn.addEventListener('click', onRecordClick);
-    el.submitAnyway.addEventListener('click', onSubmitAnyway);
-    el.endBtn.addEventListener('click', endInterview);
-    el.restartBtn.addEventListener('click', () => location.reload());
-
-    // Resume AudioContext on any user gesture (some browsers start it suspended).
-    document.addEventListener('pointerdown', () => {
-      if (meterState.ctx && meterState.ctx.state === 'suspended') {
-        meterState.ctx.resume().catch(() => {});
-      }
-    }, { passive: true });
-
     window.addEventListener('beforeunload', cleanupAll);
   }
 
-  function onSetupContinue() {
-    const jd = el.setupJd.value.trim();
-    const skills = el.setupSkills.value.split(',').map(s => s.trim()).filter(Boolean);
-    if (!jd) { toast('Please paste the job description.', 'error'); return; }
-    if (!skills.length) { toast('Please list at least one skill.', 'error'); return; }
-
-    state.jd = jd;
-    state.skills = skills;
-    try {
-      sessionStorage.setItem('interview_jd', jd);
-      sessionStorage.setItem('interview_skills', JSON.stringify(skills));
-    } catch (_) { /* ignore */ }
-
-    el.roleBadge.textContent = skills.length + ' skills';
-    el.roleBadge.classList.remove('hidden');
-    el.setupSection.classList.add('hidden');
-    el.hardwareSection.classList.remove('hidden');
+  function showGateError(msg) {
+    el.gateError.textContent = msg;
+    el.gateError.classList.remove('hidden');
   }
 
-  /* ======================= HARDWARE CHECK =======================
-     This is the ONLY place that calls getUserMedia. The resulting
-     stream is stored in state.mediaStream and reused later by
-     MediaRecorder — that is the fix for the "no audio captured" bug.
-     ============================================================== */
+  /* ============ Gate: verify code & get first question ============ */
+  async function onVerify() {
+    const code = el.gateInput.value.trim().toUpperCase();
+    if (!code) { showGateError('Please enter your application code.'); return; }
+
+    el.verifyBtn.disabled = true;
+    el.verifyBtn.textContent = 'Verifying…';
+    el.gateError.classList.add('hidden');
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/ai-interviews/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          application_id: applicationId,
+          application_code: code,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showGateError(data.detail || 'Verification failed. Please check your code.');
+        el.verifyBtn.disabled = false;
+        el.verifyBtn.textContent = 'Continue';
+        return;
+      }
+
+      state.interviewId     = data.interview_id;
+      state.currentQuestion = data.question || '';
+      state.mainQCount      = data.main_q_count || 1;
+      state.maxQ            = data.max_questions || 5;
+      state.pendingAudioB64 = data.audio || null;
+      state.isFollowUp      = false;
+
+      el.gateSection.classList.add('hidden');
+      el.hardwareSection.classList.remove('hidden');
+    } catch (e) {
+      showGateError('Network error: ' + e.message);
+      el.verifyBtn.disabled = false;
+      el.verifyBtn.textContent = 'Continue';
+    }
+  }
+
+  /* ================= Hardware check ================= */
+  const meterState = { ctx: null, analyser: null, raf: 0, speakStart: 0, unlocked: false };
+
   async function startHardwareCheck() {
     el.beginBtn.disabled = true;
     el.beginBtn.classList.add('hidden');
-    el.checkDevices.classList.remove('hidden');
     el.checkDevices.textContent = 'Retry devices';
     setHwStatus('pending', 'Requesting camera and microphone…');
-
     stopMeter();
     releaseStream();
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setHwStatus('error', 'This browser does not support camera/microphone access.');
-      toast('getUserMedia is not supported in this browser.', 'error');
       return;
     }
 
@@ -506,24 +420,17 @@
         video: { width: { ideal: 640 }, height: { ideal: 480 } },
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
-
-      // *** Save the stream. Everything downstream reuses it. ***
       state.mediaStream = stream;
-
-      stream.getTracks().forEach((t) =>
-        console.log('[hw] ' + t.kind + ' track:', t.label || '(no label)', t.readyState)
-      );
 
       el.preview.srcObject = stream;
       el.preview.classList.remove('hidden');
       el.previewPlaceholder.classList.add('hidden');
-      try { await el.preview.play(); } catch (_) { /* autoplay muted is fine */ }
+      try { await el.preview.play(); } catch (_) {}
 
       setHwStatus('ok', 'Devices connected. Speak to test your microphone.');
       startMeter(stream);
 
-      // Safety net: if the meter never crosses the threshold (e.g. quiet mic),
-      // don't leave the user stuck — enable Begin after a few seconds.
+      // Safety net: enable Begin after 6s even if mic never crosses threshold
       setTimeout(() => {
         if (hasLiveAudio() && el.beginBtn.disabled) {
           el.beginBtn.disabled = false;
@@ -534,22 +441,14 @@
     } catch (err) {
       console.error('getUserMedia error:', err);
       let msg = 'Could not access camera/microphone.';
-      if (err && err.name === 'NotAllowedError') {
-        msg = 'Permission denied. Allow camera and microphone access, then retry.';
-      } else if (err && err.name === 'NotFoundError') {
-        msg = 'No camera or microphone found.';
-      } else if (err && err.name === 'NotReadableError') {
-        msg = 'The device is busy. Close other apps using the camera/microphone.';
-      }
+      if (err.name === 'NotAllowedError')       msg = 'Permission denied. Allow camera + microphone access, then retry.';
+      else if (err.name === 'NotFoundError')    msg = 'No camera or microphone found.';
+      else if (err.name === 'NotReadableError') msg = 'Device is busy. Close other apps using the camera/microphone.';
       setHwStatus('error', msg);
-      toast(msg, 'error');
       el.preview.classList.add('hidden');
       el.previewPlaceholder.classList.remove('hidden');
     }
   }
-
-  /* ---------------- Mic level meter ---------------- */
-  const meterState = { ctx: null, analyser: null, raf: 0, speakStart: 0, unlocked: false };
 
   function startMeter(stream) {
     stopMeter();
@@ -572,21 +471,19 @@
     const tick = () => {
       analyser.getByteTimeDomainData(buf);
       let sum = 0;
-      for (let i = 0; i < buf.length; i++) {
-        const v = (buf[i] - 128) / 128;
-        sum += v * v;
-      }
+      for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
       const rms = Math.sqrt(sum / buf.length);
       const level = Math.min(1, rms * 5);
       const active = Math.round(level * bars.length);
+
       bars.forEach((b, i) => {
         b.classList.toggle('on', i < active);
         b.style.transform = 'scaleY(' + (0.25 + Math.min(1, level) * 0.75) + ')';
       });
 
-      if (rms > CONFIG.MIC_THRESHOLD) {
+      if (rms > 0.045) {
         if (!meterState.speakStart) meterState.speakStart = performance.now();
-        if (!meterState.unlocked && performance.now() - meterState.speakStart > CONFIG.MIC_HOLD_MS) {
+        if (!meterState.unlocked && performance.now() - meterState.speakStart > 700) {
           meterState.unlocked = true;
           el.beginBtn.disabled = false;
           el.beginBtn.classList.remove('hidden');
@@ -595,7 +492,6 @@
       } else {
         meterState.speakStart = 0;
       }
-
       meterState.raf = requestAnimationFrame(tick);
     };
     tick();
@@ -607,7 +503,7 @@
     if (meterState.ctx) meterState.ctx.close().catch(() => {});
     meterState.ctx = null;
     meterState.analyser = null;
-    el.meter.querySelectorAll('.meter-bar').forEach((b) => {
+    el.meter.querySelectorAll('.meter-bar').forEach(b => {
       b.classList.remove('on');
       b.style.transform = 'scaleY(0.25)';
     });
@@ -618,162 +514,81 @@
     el.hwStatusDot.className = 'status-dot ' + kind;
   }
 
-  /* ======================= BEGIN INTERVIEW ======================= */
-  async function beginInterview() {
-    if (!hasLiveAudio()) {
-      toast('Microphone is not available. Please retry the hardware check.', 'error');
-      return;
-    }
+  function hasLiveAudio() {
+    return !!state.mediaStream && state.mediaStream.getAudioTracks().some(t => t.readyState === 'live');
+  }
 
-    // Turn the camera off to save resources. The audio track stays live
-    // and MediaRecorder will reuse it from state.mediaStream.
-    state.mediaStream.getVideoTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+  /* ================= Begin interview ================= */
+  function beginInterview() {
+    if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
+
+    // Stop the video track to save resources. Audio track stays live for MediaRecorder.
+    state.mediaStream.getVideoTracks().forEach(t => { try { t.stop(); } catch (_) {} });
     stopMeter();
 
     el.hardwareSection.classList.add('hidden');
     el.interviewSection.classList.remove('hidden');
-    el.endBtn.classList.remove('hidden');
-    el.recordStatus.textContent = 'Loading question…';
 
-    try {
-      const first = await apiStart();
-      if (!first || !first.question) throw new Error('No question returned');
-      showQuestion(first);
-    } catch (err) {
-      console.error('start failed:', err);
-      toast('Could not load the first question: ' + (err.message || err), 'error');
-      el.recordStatus.textContent = 'Failed to load question.';
+    showQuestion(state.currentQuestion, state.isFollowUp, state.mainQCount, state.maxQ);
+    if (state.pendingAudioB64) {
+      playAudio(state.pendingAudioB64);
+      state.pendingAudioB64 = null;
     }
   }
 
-  function hasLiveAudio() {
-    const s = state.mediaStream;
-    return !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
-  }
+  /* ================= Question display ================= */
+  function showQuestion(text, isFollowUp, mainQ, maxQ) {
+    state.currentQuestion = text;
+    state.isFollowUp      = !!isFollowUp;
+    state.mainQCount      = mainQ || state.mainQCount;
+    state.maxQ            = maxQ  || state.maxQ;
 
-  /* ======================= QUESTION DISPLAY ======================= */
-  function showQuestion(q) {
-    state.pendingBlob = null;
-    el.submitAnyway.classList.add('hidden');
+    el.questionText.textContent = text;
+    el.qType.textContent = isFollowUp
+      ? 'Follow-up'
+      : `Question ${state.mainQCount} / ${state.maxQ}`;
+    el.qFollowup.classList.toggle('hidden', !isFollowUp);
 
-    state.currentQuestion = q;
-    state.followUpCount = Number(q.follow_up_count || 0);
-    state.maxFollowUps = Number(q.max_follow_ups || 2);
-
-    const isFollow = q.type === 'followup' || state.followUpCount > 0;
-    if (!isFollow) {
-      state.mainQuestion = q.question;
-      state.mainNumber += 1;
-    }
-
-    // Client-side safety net: warn if the backend repeats a question.
-    const norm = normalizeQ(q.question);
-    if (state.previousQuestions.some((p) => normalizeQ(p) === norm)) {
-      console.warn('[flow] backend returned a repeated question:', q.question);
-    }
-    if (isFollow && state.followUpCount > state.maxFollowUps) {
-      console.warn('[flow] follow-up count exceeds max:', state.followUpCount, '>', state.maxFollowUps);
-    }
-
-    el.questionText.textContent = q.question;
-    el.questionRationale.textContent = q.rationale ? 'Why we ask: ' + q.rationale : '';
-    el.qType.textContent = isFollow ? 'Follow-up' : 'Question ' + state.mainNumber;
-
-    if (isFollow) {
-      el.qFollowup.textContent = 'Follow-up ' + state.followUpCount + '/' + state.maxFollowUps;
-      el.qFollowup.classList.remove('hidden');
-    } else {
-      el.qFollowup.classList.add('hidden');
-    }
-
-    setRecordingUi(false);
     el.transcriptPanel.classList.add('hidden');
-    el.transcriptText.textContent = '';
+    el.scoreLine.textContent = '';
     el.recordStatus.textContent = 'Tap the mic to record your answer.';
     el.timer.textContent = '00:00';
+    setRecordingUi(false);
     state.chunks = [];
-    updateChunkInfo();
   }
 
-  function normalizeQ(s) {
-    return String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[^\w ?]/g, '').trim();
-  }
-
-  /* ======================= RECORDING ======================= */
+  /* ================= Recording ================= */
   function onRecordClick() {
     if (state.isRecording) stopRecording();
     else startRecording();
   }
 
   function startRecording() {
-    if (!hasLiveAudio()) {
-      toast('Microphone stream is not live. Please redo the hardware check.', 'error');
-      return;
-    }
+    if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
 
-    state.cancelled = false;
-    state.pendingBlob = null;
-    el.submitAnyway.classList.add('hidden');
-
-    // *** Reuse the hardware-check stream. No second getUserMedia call. ***
-    const audioTracks = state.mediaStream.getAudioTracks().filter((t) => t.readyState === 'live');
-    if (audioTracks.length === 0) {
-      toast('Audio track is not live.', 'error');
-      return;
-    }
+    const audioTracks = state.mediaStream.getAudioTracks().filter(t => t.readyState === 'live');
+    if (!audioTracks.length) { toast('Audio track is not live.', 'error'); return; }
     const audioStream = new MediaStream(audioTracks);
 
-    const mimeType = pickMimeType();
-    let recorder;
-    try {
-      recorder = new MediaRecorder(audioStream, mimeType ? { mimeType } : undefined);
-    } catch (err) {
-      console.error('MediaRecorder ctor failed:', err);
-      toast('Could not start the recorder: ' + err.message, 'error');
-      return;
-    }
+    const mime = pickMimeType();
+    let rec;
+    try { rec = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined); }
+    catch (err) { toast('Could not start the recorder: ' + err.message, 'error'); return; }
 
     state.chunks = [];
-    state.recorder = recorder;
+    state.recorder = rec;
+    rec.ondataavailable = e => { if (e.data && e.data.size > 0) state.chunks.push(e.data); };
+    rec.onerror = e => toast('Recording error: ' + (e.error && e.error.message || 'unknown'), 'error');
+    rec.onstop = onRecordingStopped;
 
-    recorder.ondataavailable = (e) => {
-      // IMPORTANT: empty chunks are the symptom of the old capture bug.
-      if (e.data && e.data.size > 0) {
-        state.chunks.push(e.data);
-        console.log('[rec] chunk ' + state.chunks.length + ': ' + e.data.size + ' bytes');
-      } else {
-        console.warn('[rec] empty data chunk received — ignored');
-      }
-      updateChunkInfo();
-    };
-
-    recorder.onerror = (e) => {
-      console.error('[rec] error', e);
-      toast('Recording error: ' + (e.error && e.error.message ? e.error.message : 'unknown'), 'error');
-    };
-
-    recorder.onstop = onRecordingStopped;
-
-    try {
-      recorder.start(CONFIG.TIMESLICE_MS);
-    } catch (err) {
-      console.error('recorder.start failed:', err);
-      toast('Could not start recording: ' + err.message, 'error');
-      state.recorder = null;
-      return;
-    }
+    try { rec.start(1000); }
+    catch (err) { toast('Could not start recording: ' + err.message, 'error'); state.recorder = null; return; }
 
     state.isRecording = true;
     state.timerStart = Date.now();
     startTimer();
     setRecordingUi(true);
-    updateChunkInfo();
     el.recordStatus.textContent = 'Recording… tap again to stop.';
-    console.log('[rec] started', {
-      mimeType: recorder.mimeType,
-      audioTracks: audioTracks.length,
-      streamId: state.mediaStream.id,
-    });
   }
 
   function stopRecording() {
@@ -782,200 +597,98 @@
     stopTimer();
     setRecordingUi(false);
     el.recordStatus.textContent = 'Processing your answer…';
-
-    // Flush any buffered data before stop.
     try { state.recorder.requestData(); } catch (_) {}
-    try {
-      state.recorder.stop();
-    } catch (err) {
-      console.warn('recorder.stop threw:', err);
-      onRecordingStopped();
-    }
+    try { state.recorder.stop(); } catch (_) { onRecordingStopped(); }
   }
 
   async function onRecordingStopped() {
     const rec = state.recorder;
-    if (!rec) return;                 // guard against a double onstop
+    if (!rec) return;
     state.recorder = null;
-
-    if (state.cancelled) {            // user hit End Interview
-      state.cancelled = false;
-      state.chunks = [];
-      updateChunkInfo();
-      return;
-    }
 
     const chunks = state.chunks.slice();
     state.chunks = [];
     const totalBytes = chunks.reduce((n, b) => n + b.size, 0);
-    console.log('[rec] stopped. chunks=' + chunks.length + ' bytes=' + totalBytes);
 
-    // ---- The original bug: no chunks were actually gathered. ----
     if (chunks.length === 0 || totalBytes === 0) {
-      updateChunkInfo();
-      el.recordStatus.textContent = 'No audio was captured — please try again.';
-      toast('No audio was captured. Check that your mic is not muted or blocked, then record again.', 'error');
+      el.recordStatus.textContent = 'No audio captured — please try again.';
+      toast('No audio was captured. Check that your mic is not muted.', 'error');
       return;
     }
 
-    const mimeType = (rec && rec.mimeType) || 'audio/webm';
+    const mimeType = rec.mimeType || 'audio/webm';
     const blob = new Blob(chunks, { type: mimeType });
-
-    if (totalBytes < CONFIG.MIN_BLOB_BYTES) {
-      state.pendingBlob = blob;
-      el.submitAnyway.classList.remove('hidden');
-      el.recordStatus.textContent =
-        'Only ' + totalBytes + ' bytes recorded — very short. Re-record, or press “Submit anyway”.';
-      toast('The recording is very short. Re-record, or press “Submit anyway”.', 'warn');
-      return;
-    }
-
-    await submitAnswer(blob);
+    await uploadAnswer(blob);
   }
 
-  function onSubmitAnyway() {
-    const blob = state.pendingBlob;
-    if (!blob) return;
-    state.pendingBlob = null;
-    el.submitAnyway.classList.add('hidden');
-    submitAnswer(blob);
-  }
-
-  /* ======================= SUBMIT ANSWER ======================= */
-  async function submitAnswer(blob) {
+  /* ============ Upload answer & fetch next ============ */
+  async function uploadAnswer(blob) {
     el.recordStatus.textContent = 'Uploading answer…';
+
+    const ext = /mp4/.test(blob.type) ? 'mp4' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+    const fd = new FormData();
+    // Backend's FastAPI signature is `file: UploadFile = File(...)`
+    fd.append('file', blob, 'answer.' + ext);
+
     try {
-      const data = CONFIG.DEMO_MODE ? await demoAnswer() : await apiSubmit(blob);
-
-      if (state.currentQuestion && state.currentQuestion.question) {
-        state.previousQuestions.push(state.currentQuestion.question);
+      const res = await fetch(`${BACKEND_URL}/api/ai-interviews/${state.interviewId}/process`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error('HTTP ' + res.status + ' ' + txt);
       }
+      const data = await res.json();
 
-      if (data && data.transcript) {
+      if (data.transcript) {
         el.transcriptText.textContent = data.transcript;
         el.transcriptPanel.classList.remove('hidden');
+        if (data.score != null) {
+          let s = `Score: ${data.score}/10`;
+          if (data.plagiarism_flag) s += ` — ⚠️ ${data.plagiarism_flag}`;
+          el.scoreLine.textContent = s;
+        }
       }
 
-      if (data && data.is_complete) { finishInterview(); return; }
+      if (data.status === 'completed') {
+        el.interviewSection.classList.add('hidden');
+        el.summarySection.classList.remove('hidden');
+        cleanupAll();
+        return;
+      }
 
-      const next = data && data.next_question;
-      if (!next || !next.question) { finishInterview(); return; }
-
-      showQuestion(next);
-    } catch (err) {
-      console.error('submit failed:', err);
-      state.pendingBlob = blob;
-      el.submitAnyway.classList.remove('hidden');
-      el.recordStatus.textContent = 'Upload failed. Press “Submit anyway” to retry, or record again.';
-      toast('Failed to submit answer: ' + (err.message || err), 'error');
-      setRecordingUi(false);
+      showQuestion(data.next_question || '', data.is_follow_up, data.main_q_count, data.max_questions);
+      if (data.audio) playAudio(data.audio);
+    } catch (e) {
+      console.error('Submit error:', e);
+      el.recordStatus.textContent = 'Upload failed. Please record again.';
+      toast('Failed to submit answer: ' + e.message, 'error');
     }
   }
 
-  async function apiStart() {
-    const res = await fetch(joinUrl(CONFIG.API_BASE, '/api/interview/start'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_description: state.jd, skills: state.skills }),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error('HTTP ' + res.status + ' ' + txt);
+  /* ================= Audio playback ================= */
+  let currentAudioEl = null;
+  function playAudio(b64) {
+    if (!b64) return;
+    try {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+
+      if (currentAudioEl) { try { currentAudioEl.pause(); } catch (_) {} }
+      const audio = new Audio(url);
+      currentAudioEl = audio;
+      audio.onended = () => URL.revokeObjectURL(url);
+      audio.play().catch(err => console.warn('Audio autoplay blocked:', err));
+    } catch (e) {
+      console.error('Audio decode error:', e);
     }
-    return res.json();
   }
 
-  async function apiSubmit(blob) {
-    const fd = new FormData();
-    const ext = /mp4/.test(blob.type) ? 'mp4' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
-    fd.append('audio', blob, 'answer.' + ext);
-    fd.append('job_description', state.jd);
-    fd.append('skills', JSON.stringify(state.skills));
-    fd.append('main_question', state.mainQuestion || '');
-    fd.append('current_question', state.currentQuestion ? state.currentQuestion.question : '');
-    fd.append('follow_up_count', String(state.followUpCount));
-    fd.append('max_follow_ups', String(state.maxFollowUps));
-    fd.append('is_follow_up', String(state.followUpCount > 0));
-    fd.append('previous_questions', JSON.stringify(state.previousQuestions));
-
-    const res = await fetch(joinUrl(CONFIG.API_BASE, '/api/interview/answer'), {
-      method: 'POST',
-      body: fd,
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      throw new Error('HTTP ' + res.status + ' ' + txt);
-    }
-    return res.json();
-  }
-
-  function joinUrl(base, path) {
-    if (!base) return path;
-    return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
-  }
-
-  /* ======================= DEMO BACKEND ======================= */
-  const DEMO_MAIN = [
-    'Walk me through your experience with the core skills listed for this role.',
-    'Describe a challenging project you delivered and how you resolved the hardest part.',
-    'How do you keep your skills current with the technologies in this job description?',
-  ];
-  const DEMO_FOLLOW = [
-    'Can you give a concrete example of that?',
-    'What trade-offs did you consider, and why did you choose that path?',
-  ];
-
-  async function demoStart() {
-    state.demo.mainIndex = 0;
-    state.demo.followIndex = 0;
-    await sleep(250);
-    return {
-      question: DEMO_MAIN[0],
-      type: 'main',
-      follow_up_count: 0,
-      max_follow_ups: 2,
-      rationale: 'Demo question 1',
-    };
-  }
-
-  async function demoAnswer() {
-    await sleep(400);
-    const transcript = '(demo transcript — audio was captured and would be sent to the backend)';
-    const d = state.demo;
-
-    if (d.followIndex < 2) {
-      const q = DEMO_FOLLOW[d.followIndex];
-      d.followIndex += 1;
-      return {
-        transcript,
-        next_question: {
-          question: q,
-          type: 'followup',
-          follow_up_count: d.followIndex,
-          max_follow_ups: 2,
-        },
-      };
-    }
-
-    d.mainIndex += 1;
-    d.followIndex = 0;
-    if (d.mainIndex >= DEMO_MAIN.length) {
-      return { transcript, is_complete: true };
-    }
-    return {
-      transcript,
-      next_question: {
-        question: DEMO_MAIN[d.mainIndex],
-        type: 'main',
-        follow_up_count: 0,
-        max_follow_ups: 2,
-      },
-    };
-  }
-
-  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
-
-  /* ======================= UI HELPERS ======================= */
+  /* ================= Timer / UI ================= */
   function setRecordingUi(recording) {
     el.recordBtn.classList.toggle('recording', recording);
     el.recordBtn.setAttribute('aria-pressed', String(recording));
@@ -987,7 +700,7 @@
     const tick = () => {
       const elapsed = Math.floor((Date.now() - state.timerStart) / 1000);
       el.timer.textContent = fmt(elapsed);
-      if (elapsed >= CONFIG.MAX_RECORD_SECONDS && state.isRecording) {
+      if (elapsed >= 180 && state.isRecording) {
         el.recordStatus.textContent = 'Maximum length reached — stopping…';
         stopRecording();
       }
@@ -1007,26 +720,13 @@
     return m + ':' + ss;
   }
 
-  function updateChunkInfo() {
-    const n = state.chunks.length;
-    const bytes = state.chunks.reduce((a, b) => a + b.size, 0);
-    el.chunkCount.textContent = String(n);
-    el.chunkBytes.textContent = humanBytes(bytes);
-  }
-
-  function humanBytes(n) {
-    if (n < 1024) return n + ' B';
-    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-    return (n / 1024 / 1024).toFixed(2) + ' MB';
-  }
-
   function pickMimeType() {
     if (typeof MediaRecorder === 'undefined') return '';
     const candidates = [
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/ogg;codecs=opus',
-      'audio/mp4',   // Safari
+      'audio/mp4',
       'audio/aac',
     ];
     for (const t of candidates) {
@@ -1038,55 +738,28 @@
   function toast(msg, kind) {
     el.toast.textContent = msg;
     el.toast.className = 'toast ' + (kind || 'info');
+    el.toast.classList.remove('hidden');
     clearTimeout(toast._t);
     toast._t = setTimeout(() => el.toast.classList.add('hidden'), 5500);
   }
 
-  /* ======================= END / CLEANUP ======================= */
-  function finishInterview() {
-    if (state.finished) return;
-    state.finished = true;
-
-    state.cancelled = true;
-    if (state.isRecording) stopRecording();
-    stopTimer();
-    stopMeter();
-    releaseStream();
-
-    el.interviewSection.classList.add('hidden');
-    el.hardwareSection.classList.add('hidden');
-    el.endBtn.classList.add('hidden');
-    el.summarySection.classList.remove('hidden');
-  }
-
-  function endInterview() {
-    if (state.isRecording) state.cancelled = true;
-    finishInterview();
-  }
-
   function releaseStream() {
     const s = state.mediaStream;
-    if (s) s.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+    if (s) s.getTracks().forEach(t => { try { t.stop(); } catch (_) {} });
     state.mediaStream = null;
-    if (el.preview.srcObject) {
-      try { el.preview.srcObject = null; } catch (_) {}
-    }
+    if (el.preview.srcObject) { try { el.preview.srcObject = null; } catch (_) {} }
   }
 
   function cleanupAll() {
     try {
-      if (state.recorder && state.recorder.state !== 'inactive') {
-        state.cancelled = true;
-        state.recorder.stop();
-      }
+      if (state.recorder && state.recorder.state !== 'inactive') state.recorder.stop();
     } catch (_) {}
     stopMeter();
     stopTimer();
     releaseStream();
   }
 
-  /* GO */
-  init();
+  boot();
 })();
 </script>
 </body>
