@@ -27,16 +27,8 @@
   .btn:hover{border-color:#33476d}.btn:active{transform:translateY(1px)}.btn:disabled{opacity:.5;cursor:not-allowed}
   .btn.primary{background:linear-gradient(135deg,var(--accent),#2f6fe0);border-color:transparent}
   .btn.ghost{background:transparent}
-  .btn.ghost.attention{
-    background:rgba(245,158,11,.15);
-    border-color:#f59e0b;
-    color:#fde68a;
-    animation:replay-pulse 1.4s infinite;
-  }
-  @keyframes replay-pulse{
-    0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}
-    50%{box-shadow:0 0 0 8px rgba(245,158,11,0)}
-  }
+  .btn.ghost.attention{background:rgba(245,158,11,.15);border-color:#f59e0b;color:#fde68a;animation:replay-pulse 1.4s infinite}
+  @keyframes replay-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}50%{box-shadow:0 0 0 8px rgba(245,158,11,0)}}
   .field{display:block;margin:14px 0}
   .field span{display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:#cdd9ee}
   input[type="text"]{width:100%;background:#0c1526;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font:inherit;font-size:20px;letter-spacing:4px;text-align:center;font-weight:700;text-transform:uppercase}
@@ -47,7 +39,7 @@
   .alert.error{border-color:rgba(239,68,68,.5);color:#fecaca;background:rgba(239,68,68,.08)}
   .alert.success{border-color:rgba(34,197,94,.5);color:#bbf7d0;background:rgba(34,197,94,.08)}
 
-  /* Hardware check */
+  /* HW check */
   .hw-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:14px}
   @media (max-width:760px){.hw-grid{grid-template-columns:1fr}}
   .video-wrap{position:relative;aspect-ratio:4/3;background:#0a1220;border:1px solid var(--border);border-radius:12px;overflow:hidden}
@@ -71,6 +63,10 @@
   .q-followup-badge .note{color:rgba(251,191,36,.75);font-weight:500;font-size:11px}
   .q-progress-mini{margin-left:auto;font-size:12px;color:var(--muted)}
   #question-text{font-size:22px;line-height:1.35;margin:8px 0 16px}
+  .audio-status{margin-top:8px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .audio-status.speaking{color:var(--accent-2)}
+  .audio-status.fallback{color:#fbbf24}
+  .audio-status i{font-size:11px}
 
   .replay-row{display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px}
   .record-panel{display:flex;align-items:center;gap:18px;margin:18px 0;padding:16px;border:1px dashed var(--border);border-radius:12px;background:rgba(10,18,32,.5)}
@@ -212,6 +208,10 @@
           <div class="q-progress-mini" id="q-progress-mini"></div>
         </div>
         <h2 id="question-text">Loading…</h2>
+        <div id="audio-status" class="audio-status hidden">
+          <i class="fas fa-volume-up"></i>
+          <span id="audio-status-text">Speaking…</span>
+        </div>
       </div>
 
       <div class="replay-row">
@@ -269,6 +269,8 @@
     followUpCounter: 0,
     pendingAudioB64: null,
     lastAudioB64: null,
+    lastQuestionText: '',
+    usingFallbackAudio: false,   // true when backend returned empty audio
 
     mediaStream: null,
     recorder: null,
@@ -302,7 +304,9 @@
     interviewSection: $('interview-section'),
     qType: $('q-type'), qFollowup: $('q-followup'), qFollowupLabel: $('q-followup-label'),
     qProgressMini: $('q-progress-mini'),
-    questionText: $('question-text'), replayBtn: $('replay-btn'),
+    questionText: $('question-text'),
+    audioStatus: $('audio-status'), audioStatusText: $('audio-status-text'),
+    replayBtn: $('replay-btn'),
     recordBtn: $('record-btn'), timer: $('timer'), recordStatus: $('record-status'),
     transcriptPanel: $('transcript-panel'), transcriptText: $('transcript-text'),
     scoreLine: $('score-line'),
@@ -328,6 +332,148 @@
     MAX_RECORD_SECONDS: 180,
   };
 
+  /* ═══════════ Audio engine (Web Audio API) ═══════════
+     HTMLAudioElement's autoplay policy blocks playback that happens
+     seconds after a user gesture (which is every TTS response from the
+     backend). Web Audio API's AudioContext, once resumed by ANY gesture,
+     stays unlocked for the rest of the page session — so all subsequent
+     question audio plays reliably.
+  */
+  let audioCtx = null;
+  let currentSource = null;
+  let audioUnlocked = false;
+
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      // Play a silent buffer to permanently unlock audio output.
+      const buf = audioCtx.createBuffer(1, 1, 22050);
+      const src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioCtx.destination);
+      src.start(0);
+      audioCtx.resume().then(() => {
+        audioUnlocked = true;
+        console.log('[audio] context unlocked, state=' + audioCtx.state);
+      }).catch(e => console.warn('[audio] resume failed:', e));
+    } catch (e) {
+      console.warn('[audio] unlock failed:', e);
+    }
+  }
+  // Attach to first pointerdown anywhere on the page.
+  document.addEventListener('pointerdown', unlockAudio);
+
+  function stopAudio() {
+    // Stop backend-TTS playback
+    if (currentSource) {
+      try { currentSource.stop(); } catch (_) {}
+      currentSource = null;
+    }
+    // Stop browser-TTS fallback
+    try { window.speechSynthesis.cancel(); } catch (_) {}
+    hideAudioStatus();
+  }
+
+  function showAudioStatus(text, kind) {
+    el.audioStatus.classList.remove('hidden');
+    el.audioStatus.classList.remove('speaking', 'fallback');
+    if (kind) el.audioStatus.classList.add(kind);
+    el.audioStatusText.textContent = text;
+  }
+  function hideAudioStatus() {
+    el.audioStatus.classList.add('hidden');
+  }
+
+  function playAudio(b64, allowFallback) {
+    if (!b64) {
+      console.warn('[audio] empty base64 — cannot play');
+      return false;
+    }
+    if (!audioCtx) {
+      // Context not yet created — try unlocking then warn.
+      unlockAudio();
+    }
+    try {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      // Ensure AudioContext is running before decode (some browsers
+      // need resume before decodeAudioData works).
+      const decoded = (audioCtx && audioCtx.state === 'running')
+        ? audioCtx.decodeAudioData(bytes.buffer.slice(0))
+        : audioCtx.resume().then(() => audioCtx.decodeAudioData(bytes.buffer.slice(0)));
+
+      decoded.then((audioBuffer) => {
+        if (currentSource) { try { currentSource.stop(); } catch (_) {} }
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.onended = () => {
+          currentSource = null;
+          hideAudioStatus();
+        };
+        source.start(0);
+        currentSource = source;
+        showAudioStatus('Speaking…', 'speaking');
+        // Show the replay button for manual re-listen.
+        el.replayBtn.style.display = 'inline-flex';
+        el.replayBtn.classList.remove('attention');
+      }).catch((err) => {
+        console.error('[audio] decode failed:', err);
+        el.replayBtn.style.display = 'inline-flex';
+        el.replayBtn.classList.add('attention');
+        if (allowFallback) {
+          toast('Question audio could not be decoded. Tap "Replay Question".', 'warn');
+        }
+      });
+      return true;
+    } catch (e) {
+      console.error('[audio] play error:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Browser speech synthesis fallback.
+   * Used when the backend returns empty audio (e.g. Groq TTS terms not
+   * accepted / 400 response). Guarantees the candidate hears the question.
+   */
+  function speakFallback(text) {
+    if (!text) return false;
+    if (!('speechSynthesis' in window)) {
+      console.warn('[speakFallback] speechSynthesis not supported');
+      return false;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.98;
+      u.pitch = 1.0;
+      u.lang = 'en-US';
+      const voices = window.speechSynthesis.getVoices();
+      const male = voices.find(v =>
+        /en-/i.test(v.lang) &&
+        /(male|david|daniel|alex|google uk english male|google us english)/i.test(v.name)
+      );
+      if (male) u.voice = male;
+      u.onstart = () => showAudioStatus('Speaking (browser voice)…', 'fallback');
+      u.onend = () => hideAudioStatus();
+      u.onerror = (e) => {
+        console.warn('[speakFallback] error:', e);
+        hideAudioStatus();
+      };
+      window.speechSynthesis.speak(u);
+      return true;
+    } catch (e) {
+      console.warn('[speakFallback] failed:', e);
+      return false;
+    }
+  }
+
   /* ═══════════ Boot ═══════════ */
   function boot() {
     if (!applicationId || isNaN(applicationId)) {
@@ -350,11 +496,20 @@
     el.recordBtn.addEventListener('click', onRecordClick);
     el.replayBtn.addEventListener('click', () => {
       el.replayBtn.classList.remove('attention');
-      if (state.lastAudioB64) playAudio(state.lastAudioB64, true);
+      if (state.usingFallbackAudio) {
+        speakFallback(state.lastQuestionText);
+      } else if (state.lastAudioB64) {
+        playAudio(state.lastAudioB64, true);
+      }
     });
     document.addEventListener('visibilitychange', onVisibilityChange);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     window.addEventListener('beforeunload', onBeforeUnload);
+    // Preload voices list (some browsers populate it async).
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
   }
 
   function showGateError(msg) {
@@ -364,6 +519,9 @@
 
   /* ═══════════ STEP 1: Code verification ═══════════ */
   async function onVerify() {
+    // Unlock audio on this click — the FIRST interaction the candidate makes.
+    unlockAudio();
+
     const code = el.gateInput.value.trim().toUpperCase();
     if (!code) { showGateError('Please enter your application code.'); return; }
 
@@ -393,6 +551,7 @@
       state.followUpCounter = 0;
       state.pendingAudioB64 = data.audio || null;
       state.lastAudioB64    = data.audio || null;
+      state.lastQuestionText = data.question || '';
 
       console.log('[interview] first question received, audio bytes ≈',
         data.audio ? Math.round(data.audio.length * 0.75) : 0);
@@ -410,6 +569,7 @@
   const meterState = { ctx: null, analyser: null, raf: 0, speakStart: 0, unlocked: false };
 
   async function startHardwareCheck() {
+    unlockAudio();   // extra safety — the check itself is a click
     el.beginBtn.disabled = true;
     el.beginBtn.classList.add('hidden');
     el.checkDevices.textContent = 'Retry devices';
@@ -523,6 +683,11 @@
   async function beginInterview() {
     if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
 
+    // Unlock audio on the click itself (defensive — the pointerdown
+    // handler on document should have already unlocked, but this makes
+    // it deterministic on browsers that throttle passive listeners).
+    unlockAudio();
+
     // Switch to interview UI first.
     el.hardwareSection.classList.add('hidden');
     el.interviewSection.classList.remove('hidden');
@@ -538,14 +703,18 @@
       followUpCounter: 0,
     });
 
-    // ── IMPORTANT: play the first audio synchronously, BEFORE any `await`. ──
-    // Awaiting (e.g. `await enterFullscreen()`) breaks the user-gesture chain
-    // that Chrome/Safari require for autoplay. Do it now, in the click handler.
+    // Play the first audio synchronously — BEFORE any await — so the
+    // browser's autoplay policy sees it inside the click gesture chain.
     if (state.pendingAudioB64) {
       state.lastAudioB64 = state.pendingAudioB64;
+      state.usingFallbackAudio = false;
       el.replayBtn.style.display = 'inline-flex';
       playAudio(state.pendingAudioB64, true);
       state.pendingAudioB64 = null;
+    } else {
+      // Backend returned no audio → browser TTS fallback.
+      state.usingFallbackAudio = true;
+      speakFallback(state.currentQuestion);
     }
 
     // Now the slow/async work.
@@ -559,9 +728,9 @@
   /* ═══════════ Fullscreen & tab-switch enforcement ═══════════ */
   async function enterFullscreen() {
     try {
-      const el = document.documentElement;
-      if (el.requestFullscreen) await el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      const elm = document.documentElement;
+      if (elm.requestFullscreen) await elm.requestFullscreen();
+      else if (elm.webkitRequestFullscreen) await elm.webkitRequestFullscreen();
       else return;
       state.fullscreenEnforced = true;
     } catch (e) {
@@ -738,6 +907,7 @@
     if (state.isRecording && state.recorder) { try { state.recorder.stop(); } catch (_) {} }
     stopTimer();
     stopProctoring();
+    stopAudio();
     exitFullscreen();
 
     try {
@@ -765,6 +935,7 @@
     state.submitted = true;
     state.proctoringActive = false;
     stopProctoring();
+    stopAudio();
     exitFullscreen();
 
     el.interviewSection.classList.add('hidden');
@@ -790,6 +961,7 @@
     state.mainQCount       = mainQ || state.mainQCount;
     state.maxQ             = maxQ  || state.maxQ;
     state.followUpCounter  = followUpCounter || 0;
+    state.lastQuestionText = text;
 
     el.questionText.textContent = text;
 
@@ -820,9 +992,8 @@
     el.timer.textContent = '00:00';
     setRecordingUi(false);
     state.chunks = [];
+    hideAudioStatus();
     el.replayBtn.classList.remove('attention');
-    // Note: do NOT clear lastAudioB64 here — the next question's audio will
-    // overwrite it, and keeping it lets the candidate replay the current one.
   }
 
   /* ═══════════ Recording ═══════════ */
@@ -833,6 +1004,9 @@
 
   function startRecording() {
     if (state.submitted) return;
+    // Stop any playing question audio before recording.
+    stopAudio();
+
     if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
 
     const audioTracks = state.mediaStream.getAudioTracks().filter(t => t.readyState === 'live');
@@ -923,6 +1097,7 @@
         }
       }
 
+      // 5 main questions complete → backend returns status "completed".
       if (data.status === 'completed') {
         finishNormally();
         return;
@@ -945,52 +1120,21 @@
       // Play the new question audio.
       if (data.audio) {
         state.lastAudioB64 = data.audio;
+        state.usingFallbackAudio = false;
         el.replayBtn.style.display = 'inline-flex';
         playAudio(data.audio, true);
       } else {
-        // No audio came back — at least give the candidate the replay button
-        // so they can retry if the backend manages to generate audio later.
-        el.replayBtn.style.display = 'none';
-        console.warn('[interview] next question returned no audio');
+        // Backend returned no audio (e.g. Groq TTS 400) → browser fallback.
+        console.warn('[interview] next question returned no audio — using browser TTS fallback');
+        state.lastAudioB64 = null;
+        state.usingFallbackAudio = true;
+        el.replayBtn.style.display = 'inline-flex';
+        speakFallback(data.next_question || '');
       }
     } catch (e) {
       console.error('Submit error:', e);
       el.recordStatus.textContent = 'Upload failed. Please record again.';
       toast('Failed to submit answer: ' + e.message, 'error');
-    }
-  }
-
-  /* ═══════════ Audio playback ═══════════ */
-  let currentAudioEl = null;
-  function playAudio(b64, allowFallback) {
-    if (!b64) { console.warn('[audio] empty base64'); return; }
-    try {
-      const binary = atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-
-      if (currentAudioEl) { try { currentAudioEl.pause(); } catch (_) {} }
-      const audio = new Audio(url);
-      currentAudioEl = audio;
-      audio.onended = () => URL.revokeObjectURL(url);
-
-      const playPromise = audio.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(err => {
-          console.warn('[audio] autoplay blocked:', err);
-          // Show the replay button prominently so the candidate can click it
-          // — the same click satisfies the browser's gesture requirement.
-          el.replayBtn.style.display = 'inline-flex';
-          el.replayBtn.classList.add('attention');
-          if (allowFallback) {
-            toast('Click "Replay Question" to hear the question.', 'info');
-          }
-        });
-      }
-    } catch (e) {
-      console.error('[audio] decode error:', e);
     }
   }
 
@@ -1055,28 +1199,6 @@
     return String(s ?? '').replace(/[&<>"']/g, m =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   }
-
-  /* ═══════════ Audio-context unlock ═══════════ */
-  // Browsers block autoplay until the page has received at least one user
-  // gesture. We create and resume an AudioContext on the very first
-  // pointerdown — usually the "Continue" click on the code screen — so by
-  // the time "Begin Interview" is clicked, audio playback is already
-  // permitted and the very first question plays reliably.
-  let _audioUnlocked = false;
-  document.addEventListener('pointerdown', function _unlock() {
-    if (_audioUnlocked) return;
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) {
-        const ctx = new AC();
-        ctx.resume().then(() => {
-          _audioUnlocked = true;
-          console.log('[audio] context unlocked');
-        }).catch(() => {});
-      }
-    } catch (_) {}
-    document.removeEventListener('pointerdown', _unlock);
-  });
 
   boot();
 })();
