@@ -40,19 +40,13 @@
 
 <div class="page-content">
   <div class="page-header">
-    <div><h1>Interviews</h1><p>Manage scheduled, completed, and AI interviews</p></div>
+    <div><h1>Interviews</h1><p>Complete history of AI and Custom interviews</p></div>
     <button class="btn btn-primary" onclick="openScheduleModal()"><i class="fas fa-plus"></i> Schedule Custom Interview</button>
   </div>
 
-  <div class="tabs" id="interviewTabs">
-    <button class="tab active" data-tab="upcomingTab">Upcoming</button>
-    <button class="tab" data-tab="completedTab">Completed / History</button>
-    <button class="tab" data-tab="allTab">All</button>
+  <div id="interviewsList">
+    <div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>
   </div>
-
-  <div id="upcomingTab" class="tab-content active"><div class="spinner"><i class="fas fa-spinner fa-spin"></i></div></div>
-  <div id="completedTab" class="tab-content"></div>
-  <div id="allTab" class="tab-content"></div>
 </div>
 </div>
 
@@ -73,13 +67,10 @@
   </div>
 </div>
 
-<!-- AI Answer Sheet / Marksheet Modal -->
+<!-- AI Marksheet Modal -->
 <div id="marksheetModal" class="modal-overlay" style="display:none">
   <div class="modal modal-xl">
-    <div class="modal-header">
-      <h3 id="msTitle"><i class="fas fa-file-invoice"></i> AI Interview Marksheet</h3>
-      <button class="modal-close" onclick="closeModal('marksheetModal')"><i class="fas fa-times"></i></button>
-    </div>
+    <div class="modal-header"><h3 id="msTitle"><i class="fas fa-file-invoice"></i> AI Interview Marksheet</h3><button class="modal-close" onclick="closeModal('marksheetModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body" style="max-height:75vh;overflow-y:auto">
       <div id="msSummary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px"></div>
       <div id="msTranscript"></div>
@@ -93,7 +84,7 @@
 
 <script src="/static/app.js"></script>
 <script>
-requireAuth(); renderSidebarUser(); setActiveNav(); initTabs('interviewTabs');
+requireAuth(); renderSidebarUser(); setActiveNav();
 
 let interviews = [];
 let apps = [];
@@ -111,19 +102,12 @@ async function loadData() {
 }
 
 function renderAll() {
-    const now = new Date();
-    const upcoming = interviews.filter(i => i.status === 'scheduled' && i.scheduled_date && new Date(i.scheduled_date) >= now);
-    const completed = interviews.filter(i => i.status === 'completed' || i.status === 'auto_submitted' || i.status === 'interview_passed' || i.status === 'interview_scheduled');
+    if (!interviews.length) {
+        document.getElementById('interviewsList').innerHTML = '<div class="empty-state"><i class="fas fa-calendar"></i><h3>No interviews found</h3><p>Schedule a custom interview or launch an AI interview from the applications page.</p></div>';
+        return;
+    }
     
-    document.getElementById('upcomingTab').innerHTML = renderList(upcoming);
-    document.getElementById('completedTab').innerHTML = renderList(completed);
-    document.getElementById('allTab').innerHTML = renderList(interviews);
-}
-
-function renderList(list) {
-    if (!list.length) return '<div class="empty-state"><i class="fas fa-calendar"></i><h3>No interviews found</h3></div>';
-    
-    return list.map(i => {
+    document.getElementById('interviewsList').innerHTML = interviews.map(i => {
         const isAi = i.type === 'ai';
         const d = i.scheduled_date ? new Date(i.scheduled_date) : null;
         
