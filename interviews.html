@@ -15,9 +15,48 @@
   .qa-box {
     background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px;
   }
-  .qa-box .q-text { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .qa-box .q-text { font-weight: 700; font-size: 14px; margin-bottom: 8px; padding-right: 100px; }
   .qa-box .a-text { font-size: 14px; color: var(--text); background: white; padding: 12px; border-radius: 8px; border: 1px solid var(--border); white-space: pre-wrap; }
-  .qa-box .score-badge { float: right; background: var(--primary); color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .qa-box .score-badge {
+    float: right; background: var(--primary); color: white;
+    padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .qa-box .score-badge.muted {
+    background: #6b7280; opacity: 0.75; font-weight: 600;
+  }
+  .qa-box .score-badge .edit-icon {
+    cursor: pointer; opacity: 0.85; transition: opacity 0.15s, transform 0.15s;
+    font-size: 11px;
+  }
+  .qa-box .score-badge .edit-icon:hover { opacity: 1; transform: scale(1.15); }
+  .qa-box .score-edit {
+    float: right; display: flex; align-items: center; gap: 6px;
+  }
+  .qa-box .score-edit input {
+    width: 58px; padding: 4px 6px; border-radius: 6px;
+    border: 1px solid var(--border); text-align: center;
+    font-weight: 700; font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .qa-box .score-edit button {
+    padding: 5px 10px; font-size: 11px; border-radius: 6px;
+    border: none; cursor: pointer; font-weight: 700;
+  }
+  .qa-box .score-edit .save-btn { background: var(--success); color: white; }
+  .qa-box .score-edit .cancel-btn { background: #6b7280; color: white; }
+  .qa-box .q-intro-badge {
+    background: rgba(245,158,11,.18); color: #b45309;
+    padding: 1px 7px; border-radius: 4px; font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-left: 6px; vertical-align: middle;
+  }
+  .qa-box .q-followup-badge {
+    background: rgba(245,158,11,.18); color: #b45309;
+    padding: 1px 7px; border-radius: 4px; font-size: 10px;
+    margin-left: 6px; vertical-align: middle;
+  }
 </style>
 </head>
 <body>
@@ -89,11 +128,15 @@ requireAuth(); renderSidebarUser(); setActiveNav();
 let interviews = [];
 let apps = [];
 
+// Tracks which interview's marksheet is currently open — needed by saveScore().
+const marksheetState = {
+    interviewId: null,
+};
+
 async function loadData() {
     try {
         [interviews, apps] = await Promise.all([API.get('/api/interviews'), API.get('/api/applications')]);
         
-        // Populate candidate select
         const sel = document.getElementById('sCandidate');
         sel.innerHTML = '<option value="">Select candidate...</option>' + apps.map(a => `<option value="${a.id}">${a.applicant_name} - ${a.job_title}</option>`).join('');
         
@@ -159,8 +202,13 @@ async function scheduleCustom() {
     } catch(e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-// --- View Marksheet Logic ---
+/* =========================================================================
+   Marksheet — loaded when HR clicks "View Marksheet".
+   Introduction turn shows no score. Every other turn's score is editable
+   in-place via the pencil icon.
+   ========================================================================= */
 async function viewMarksheet(id) {
+    marksheetState.interviewId = id;
     openModal('marksheetModal');
     document.getElementById('msSummary').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>';
     document.getElementById('msTranscript').innerHTML = '';
@@ -171,49 +219,194 @@ async function viewMarksheet(id) {
         
         document.getElementById('msTitle').innerHTML = `<i class="fas fa-file-invoice"></i> Marksheet: ${escapeHtml(data.candidate_name)}`;
         
-        // Render Summary
-        document.getElementById('msSummary').innerHTML = `
-            <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-                <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Total Score</div>
-                <div style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.total_score} / ${data.total_possible}</div>
-            </div>
-            <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-                <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Percentage</div>
-                <div style="font-size:28px;font-weight:800;color:${data.percentage >= 50 ? 'var(--success)' : 'var(--danger)'};margin-top:8px">${data.percentage}%</div>
-            </div>
-            <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-                <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Grade</div>
-                <div style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.grade}</div>
-            </div>
-        `;
-
-        // Render Transcript
-        if (!data.transcript || data.transcript.length === 0) {
-            document.getElementById('msTranscript').innerHTML = '<p class="text-light text-center">No answers recorded.</p>';
-            return;
-        }
-
-        document.getElementById('msTranscript').innerHTML = data.transcript.map((item, idx) => {
-            const isPlagiarized = item.plagiarism_flag;
-            return `
-            <div class="qa-box">
-                <div class="score-badge">${item.score} / 10</div>
-                <div class="q-text">Q${idx + 1}: ${escapeHtml(item.question)}</div>
-                <div class="a-text">${escapeHtml(item.answer || 'No answer provided.')}</div>
-                ${isPlagiarized ? `
-                    <div class="plagiarism-alert">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <div><b>Plagiarism Flag:</b> ${escapeHtml(item.plagiarism_flag)}</div>
-                    </div>
-                ` : ''}
-            </div>`;
-        }).join('');
-
+        renderMarksheetSummary(data);
+        renderMarksheetTranscript(data);
     } catch(e) {
-        document.getElementById('msSummary').innerHTML = `<div class="alert alert-error">Error loading marksheet: ${e.message}</div>`;
+        document.getElementById('msSummary').innerHTML = `<div class="alert alert-error">Error loading marksheet: ${escapeHtml(e.message)}</div>`;
     }
 }
 
+function renderMarksheetSummary(data) {
+    document.getElementById('msSummary').innerHTML = `
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+            <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Total Score</div>
+            <div id="ms-total-score" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.total_score} / ${data.total_possible}</div>
+        </div>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+            <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Percentage</div>
+            <div id="ms-percentage" style="font-size:28px;font-weight:800;color:${data.percentage >= 50 ? 'var(--success)' : 'var(--danger)'};margin-top:8px">${data.percentage}%</div>
+        </div>
+        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+            <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Grade</div>
+            <div id="ms-grade" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.grade}</div>
+        </div>
+    `;
+}
+
+function renderMarksheetTranscript(data) {
+    if (!data.transcript || data.transcript.length === 0) {
+        document.getElementById('msTranscript').innerHTML = '<p class="text-light text-center">No answers recorded.</p>';
+        return;
+    }
+
+    // Compute sequential main-question numbers so the "Q1", "Q2" labels
+    // skip the introduction and align with what the candidate saw.
+    let mainNum = 0;
+
+    document.getElementById('msTranscript').innerHTML = data.transcript.map((item, idx) => {
+        const isIntro = !!item.is_introduction;
+        const isFollowUp = !!item.is_follow_up;
+        const isPlagiarized = item.plagiarism_flag;
+
+        // ── Score badge ──
+        let scoreHtml;
+        if (isIntro) {
+            scoreHtml = '<div class="score-badge muted">— Not scored</div>';
+        } else {
+            const rawScore = item.score || 0;
+            const displayScore = Number.isInteger(rawScore) ? rawScore : rawScore.toFixed(1);
+            scoreHtml = `
+                <div class="score-badge" id="score-badge-${idx}" data-score="${rawScore}">
+                    ${displayScore} / 10
+                    <i class="fas fa-pencil-alt edit-icon"
+                       onclick="startEditScore(${idx}, ${rawScore})"
+                       title="Edit score"></i>
+                </div>`;
+        }
+
+        // ── Question label ──
+        let qLabel;
+        if (isIntro) {
+            qLabel = `<span style="color:#b45309;font-weight:700">Warm-up</span><span class="q-intro-badge">Introduction</span>`;
+        } else if (isFollowUp) {
+            qLabel = `Q${mainNum}<span class="q-followup-badge">Follow-up</span>`;
+        } else {
+            mainNum++;
+            qLabel = `Q${mainNum}`;
+        }
+
+        return `
+        <div class="qa-box">
+            ${scoreHtml}
+            <div class="q-text">${qLabel}: ${escapeHtml(item.question)}</div>
+            <div class="a-text">${escapeHtml(item.answer || 'No answer provided.')}</div>
+            ${isPlagiarized ? `
+                <div class="plagiarism-alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div><b>Plagiarism Flag:</b> ${escapeHtml(item.plagiarism_flag)}</div>
+                </div>
+            ` : ''}
+        </div>`;
+    }).join('');
+}
+
+/* =========================================================================
+   Inline score editing
+   ========================================================================= */
+function startEditScore(idx, currentScore) {
+    const badge = document.getElementById('score-badge-' + idx);
+    if (!badge) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'score-edit';
+    wrapper.id = 'score-edit-' + idx;
+    wrapper.innerHTML = `
+        <input type="number" min="0" max="10" step="0.5"
+               value="${currentScore}"
+               id="score-input-${idx}"
+               onkeydown="onScoreKeydown(event, ${idx}, ${currentScore})">
+        <button class="save-btn" onclick="saveScore(${idx}, ${currentScore})">Save</button>
+        <button class="cancel-btn" onclick="cancelEditScore(${idx}, ${currentScore})">Cancel</button>
+    `;
+
+    badge.replaceWith(wrapper);
+    const input = document.getElementById('score-input-' + idx);
+    if (input) { input.focus(); input.select(); }
+}
+
+function onScoreKeydown(e, idx, previousScore) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        saveScore(idx, previousScore);
+    } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEditScore(idx, previousScore);
+    }
+}
+
+async function saveScore(idx, previousScore) {
+    const interviewId = marksheetState.interviewId;
+    if (!interviewId) return;
+
+    const input = document.getElementById('score-input-' + idx);
+    if (!input) return;
+
+    const newScore = parseFloat(input.value);
+    if (isNaN(newScore) || newScore < 0 || newScore > 10) {
+        showToast('Score must be between 0 and 10', 'warning');
+        input.focus();
+        return;
+    }
+
+    // Optimistically disable the buttons to prevent double-submit.
+    const wrapper = document.getElementById('score-edit-' + idx);
+    if (wrapper) {
+        wrapper.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    }
+
+    try {
+        const res = await API.put(
+            `/api/ai-interviews/${interviewId}/turn/${idx}/score`,
+            { score: newScore }
+        );
+
+        // Update the three summary cards in-place.
+        const totalEl = document.getElementById('ms-total-score');
+        const pctEl = document.getElementById('ms-percentage');
+        const gradeEl = document.getElementById('ms-grade');
+        if (totalEl) totalEl.textContent = `${res.total_score} / ${res.total_possible}`;
+        if (pctEl) {
+            pctEl.textContent = `${res.percentage}%`;
+            pctEl.style.color = res.percentage >= 50 ? 'var(--success)' : 'var(--danger)';
+        }
+        if (gradeEl) gradeEl.textContent = res.grade;
+
+        // Restore the badge with the new score.
+        cancelEditScore(idx, res.new_score);
+
+        showToast(`Score updated to ${res.new_score}/10`, 'success');
+    } catch (e) {
+        showToast('Error saving score: ' + e.message, 'error');
+        // Restore the edit view so HR can retry.
+        if (wrapper) {
+            wrapper.querySelectorAll('button').forEach(b => { b.disabled = false; });
+        }
+    }
+}
+
+function cancelEditScore(idx, score) {
+    const wrapper = document.getElementById('score-edit-' + idx);
+    if (!wrapper) return;
+
+    const displayScore = Number.isInteger(score) ? score : Number(score).toFixed(1);
+
+    const badge = document.createElement('div');
+    badge.className = 'score-badge';
+    badge.id = 'score-badge-' + idx;
+    badge.dataset.score = score;
+    badge.innerHTML = `
+        ${displayScore} / 10
+        <i class="fas fa-pencil-alt edit-icon"
+           onclick="startEditScore(${idx}, ${score})"
+           title="Edit score"></i>
+    `;
+
+    wrapper.replaceWith(badge);
+}
+
+/* =========================================================================
+   Other helpers (unchanged)
+   ========================================================================= */
 async function deleteInt(id, type) {
     if (!confirm('Delete this interview record? This action cannot be undone.')) return;
     try {
