@@ -17,6 +17,12 @@
   display: flex; align-items: center; gap: 8px;
   cursor: pointer; font-size: 13px; user-select: none;
 }
+.plagiarism-alert {
+  background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+  border-radius: 8px; padding: 10px 14px; font-size: 13px;
+  margin-top: 8px; display: flex; gap: 10px; align-items: flex-start;
+}
+.plagiarism-alert i { font-size: 16px; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -34,7 +40,7 @@
     </div>
     <div class="nav-section">
       <div class="nav-section-title">Recruitment</div>
-      <a href="/assessments.html" class="nav-item" data-path="/assessments"><i class="fas fa-clipboard-check"></i> Assessments</a>
+      <a href="/assessments.html" class="nav-item active" data-path="/assessments"><i class="fas fa-clipboard-check"></i> Assessments</a>
       <a href="/interviews.html" class="nav-item" data-path="/interviews"><i class="fas fa-video"></i> Interviews</a>
     </div>
     <div class="nav-section">
@@ -280,7 +286,7 @@ function renderAssessments() {
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">
       ${assessments.map(a => {
         const fixedLink = fixAssessmentLink(a.link);
-        const requireCode = a.require_application_code !== false;   // default true
+        const requireCode = a.require_application_code !== false;
         return `
         <div class="card">
           <div class="card-body">
@@ -352,7 +358,6 @@ function openCreateModal() {
   customQuestions = [];
   customQIdCounter = 1;
   renderCustomQuestions();
-  // Reset form fields
   document.getElementById('aTitle').value = '';
   document.getElementById('aJob').value = '';
   document.getElementById('aDuration').value = 30;
@@ -530,7 +535,6 @@ async function createAssessmentCustom() {
   if (!jobId) { showToast('Please select a job', 'warning'); return; }
   if (!customQuestions.length) { showToast('Add at least one question', 'warning'); return; }
 
-  // Validate
   for (let i = 0; i < customQuestions.length; i++) {
     const q = customQuestions[i];
     if (!q.question.trim()) { showToast(`Question ${i+1} has no text`, 'warning'); return; }
@@ -720,6 +724,12 @@ function renderAnswersModal(resultId) {
         ? '<span style="color:#059669;font-weight:700"><i class="fas fa-check-circle"></i> Correct</span>'
         : '<span style="color:#dc2626;font-weight:700"><i class="fas fa-times-circle"></i> Incorrect</span>';
 
+      // PLAGIARISM WARNING DISPLAY LOGIC
+      const isPlagiarized = q.feedback && q.feedback.includes('PLAGIARISM DETECTED');
+      const feedbackHtml = isPlagiarized 
+        ? `<div class="plagiarism-alert"><i class="fas fa-exclamation-triangle"></i><div>${escapeHtml(q.feedback)}</div></div>`
+        : `<div><strong>AI Feedback:</strong> ${escapeHtml(q.feedback || 'Not graded yet')}</div>`;
+
       if (q.type === 'mcq') {
         const userText = q.options && q.user_answer !== -1 ? (q.options[q.user_answer] || 'Invalid') : 'Not answered';
         const correctText = q.options ? (q.options[q.correct_answer] || 'N/A') : 'N/A';
@@ -734,7 +744,7 @@ function renderAnswersModal(resultId) {
               <div><strong>Candidate:</strong> ${escapeHtml(userText)}</div>
               <div><strong>Correct:</strong> ${escapeHtml(correctText)}</div>
               <div><strong>Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
-              <div><strong>Feedback:</strong> ${escapeHtml(q.feedback || 'No feedback')}</div>
+              ${feedbackHtml}
               <div class="mt-2">${editBtn}</div>
             </div>
           </div>`;
@@ -750,7 +760,7 @@ function renderAnswersModal(resultId) {
               <div><strong>Candidate Answer:</strong> ${escapeHtml(q.user_answer || 'Not answered')}</div>
               <div><strong>Expected Answer:</strong> ${escapeHtml(q.correct_answer || 'N/A')}</div>
               <div><strong>Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
-              <div><strong>AI Feedback:</strong> ${escapeHtml(q.feedback || 'No feedback')}</div>
+              ${feedbackHtml}
               <div class="mt-2">${editBtn}</div>
             </div>
           </div>`;
@@ -765,7 +775,7 @@ function renderAnswersModal(resultId) {
               <div><strong>Candidate Answer:</strong></div>
               <pre style="background:#f8fafc;padding:12px;border-radius:8px;white-space:pre-wrap;font-size:13px">${escapeHtml(q.user_answer || 'No answer provided')}</pre>
               <div><strong>Marks:</strong> ${q.obtained_marks} / ${q.marks}</div>
-              <div><strong>AI Feedback:</strong> ${escapeHtml(q.feedback || 'Not graded yet')}</div>
+              ${feedbackHtml}
               <div class="mt-2">${editBtn}</div>
             </div>
           </div>`;
