@@ -1,517 +1,1093 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Interview - HRPro</title>
-<link rel="stylesheet" href="/static/style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Take Interview</title>
 <style>
-    body { background: linear-gradient(135deg, #1e1b4b, #312e81); color: white; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; }
-    .container { max-width: 650px; width: 100%; padding: 20px; text-align: center; animation: fadeIn 0.4s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    
-    .ai-avatar { width: 120px; height: 120px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 50px; margin: 0 auto 24px; box-shadow: 0 0 30px rgba(99,102,241,0.6); transition: all 0.3s ease; }
-    .ai-avatar.speaking { animation: pulse-glow 1.5s infinite; }
-    @keyframes pulse-glow { 0% { box-shadow: 0 0 20px rgba(99,102,241,0.4); transform: scale(1); } 50% { box-shadow: 0 0 50px rgba(99,102,241,0.9); transform: scale(1.05); } 100% { box-shadow: 0 0 20px rgba(99,102,241,0.4); transform: scale(1); } }
-    
-    .question-box { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); padding: 24px; border-radius: 16px; margin-bottom: 30px; min-height: 100px; text-align: left; font-size: 16px; line-height: 1.6; display: flex; align-items: center; }
-    
-    .btn-record { background: #dc2626; color: white; border: none; padding: 24px; border-radius: 50%; font-size: 28px; cursor: pointer; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin: 0 auto; transition: all 0.2s; box-shadow: 0 0 20px rgba(220,38,38,0.5); position: relative; }
-    .btn-record:hover { transform: scale(1.05); }
-    .btn-record.recording { animation: pulse-record 1.2s infinite; background: #ef4444; box-shadow: 0 0 40px rgba(239,68,68,0.8); }
-    @keyframes pulse-record { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
-    .record-timer { position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); font-size: 14px; font-weight: bold; color: #ef4444; white-space: nowrap; }
-    
-    .verify-input { width: 100%; padding: 16px; font-size: 24px; text-align: center; letter-spacing: 6px; text-transform: uppercase; border-radius: 10px; border: 2px solid #6366f1; background: rgba(255,255,255,0.05); color: white; margin-bottom: 20px; font-weight: 700; outline: none; }
-    .verify-input::placeholder { color: rgba(99,102,241,0.5); letter-spacing: 4px; }
-    .verify-input:focus { border-color: #8b5cf6; box-shadow: 0 0 15px rgba(139,92,246,0.3); }
-    
-    .video-preview { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; border: 3px solid #10b981; margin: 0 auto 20px; display: block; background: #000; box-shadow: 0 0 20px rgba(16,185,129,0.4); }
-    
-    .proctor-cam { position: fixed; bottom: 20px; right: 20px; width: 180px; height: 135px; border-radius: 12px; border: 3px solid #6366f1; overflow: hidden; z-index: 1000; background: #000; display: none; }
-    .proctor-cam video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-    .proctor-info { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); color: #10b981; font-family: monospace; font-size: 11px; text-align: center; padding: 4px; }
+  :root {
+    --bg: #0f172a;
+    --panel: #111c33;
+    --panel-2: #16233f;
+    --text: #e6edf7;
+    --muted: #93a4bf;
+    --accent: #4f8cff;
+    --accent-2: #22d3ee;
+    --danger: #ef4444;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --border: #22304a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 10% -10%, #1a2a4a 0%, var(--bg) 45%) no-repeat, var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    min-height: 100vh;
+  }
+  .app { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .app-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
+  .brand .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 0 16px var(--accent);
+  }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .card {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+  }
+  h1, h2, h3 { margin: 0 0 10px; line-height: 1.2; }
+  h2 { font-size: 20px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+  .hidden { display: none !important; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(79, 140, 255, .15);
+    color: #bcd3ff; font-size: 12px; font-weight: 600;
+  }
+  .pill.subtle { background: rgba(255, 255, 255, .06); color: var(--muted); }
+  .btn {
+    appearance: none; border: 1px solid var(--border);
+    background: #1b2942; color: var(--text);
+    padding: 10px 16px; border-radius: 10px;
+    font-weight: 600; cursor: pointer;
+    transition: transform .05s ease, background .2s ease, border-color .2s;
+    font-size: 14px;
+  }
+  .btn:hover { border-color: #33476d; }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--accent), #2f6fe0);
+    border-color: transparent;
+  }
+  .btn.ghost { background: transparent; }
+  .field { display: block; margin: 14px 0; }
+  .field span {
+    display: block; font-weight: 600; margin-bottom: 6px;
+    font-size: 13px; color: #cdd9ee;
+  }
+  textarea, input[type="text"] {
+    width: 100%; background: #0c1526; color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px; font: inherit; resize: vertical;
+  }
+  textarea:focus, input[type="text"]:focus {
+    outline: 2px solid rgba(79, 140, 255, .4);
+    border-color: var(--accent);
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row.end { justify-content: flex-end; }
 
-    .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
-    .status-text { margin-top: 30px; color: #a5b4fc; font-size: 14px; font-weight: 500; }
-    
-    .warning-toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #dc2626; color: white; padding: 16px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; z-index: 2000; animation: slideDown 0.3s ease; box-shadow: 0 10px 30px rgba(220,38,38,0.5); max-width: 90vw; text-align: center; }
-    @keyframes slideDown { from { top: -60px; opacity: 0; } to { top: 80px; opacity: 1; } }
+  /* Hardware check */
+  .hw-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; margin-top: 14px; }
+  @media (max-width: 760px) { .hw-grid { grid-template-columns: 1fr; } }
+  .video-wrap {
+    position: relative; aspect-ratio: 4 / 3;
+    background: #0a1220; border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+  }
+  .video-wrap video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  .video-placeholder {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    color: var(--muted); font-size: 14px;
+  }
+  .status-line { display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #64748b; flex: none; }
+  .status-dot.pending { background: var(--warn); box-shadow: 0 0 10px var(--warn); animation: pulse 1.2s infinite; }
+  .status-dot.ok { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .status-dot.error { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  .meter {
+    display: flex; align-items: flex-end; gap: 4px;
+    height: 70px; padding: 8px; background: #0a1220;
+    border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 8px;
+  }
+  .meter-bar {
+    flex: 1; height: 100%; transform-origin: bottom;
+    transform: scaleY(.25);
+    background: linear-gradient(180deg, var(--accent-2), var(--accent));
+    border-radius: 3px; opacity: .35;
+    transition: opacity .08s linear;
+  }
+  .meter-bar.on { opacity: 1; }
+
+  /* Interview */
+  .q-head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  #question-text { font-size: 22px; line-height: 1.35; margin: 6px 0; }
+  #question-rationale { min-height: 18px; margin-bottom: 12px; }
+  .record-panel {
+    display: flex; align-items: center; gap: 18px;
+    margin: 18px 0; padding: 16px;
+    border: 1px dashed var(--border); border-radius: 12px;
+    background: rgba(10, 18, 32, .5);
+  }
+  .rec-btn {
+    width: 72px; height: 72px; border-radius: 50%;
+    border: none; cursor: pointer; flex: none;
+    background: radial-gradient(circle at 30% 30%, #ff7b7b, #d33);
+    display: grid; place-items: center; position: relative;
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, .15);
+    transition: box-shadow .2s;
+  }
+  .rec-btn .rec-inner {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #fff; transition: border-radius .2s, transform .2s;
+  }
+  .rec-btn.recording { box-shadow: 0 0 0 10px rgba(239, 68, 68, .22); animation: rec-pulse 1.4s infinite; }
+  .rec-btn.recording .rec-inner { border-radius: 6px; transform: scale(.9); }
+  @keyframes rec-pulse {
+    0%, 100% { box-shadow: 0 0 0 6px rgba(239, 68, 68, .2); }
+    50% { box-shadow: 0 0 0 16px rgba(239, 68, 68, .05); }
+  }
+  .record-info { display: flex; flex-direction: column; gap: 4px; }
+  .timer { font-variant-numeric: tabular-nums; font-size: 28px; font-weight: 700; letter-spacing: .5px; }
+  .chunks-panel { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+  .chunks-panel strong { color: var(--accent-2); }
+  .transcript {
+    background: rgba(34, 211, 238, .06);
+    border: 1px solid rgba(34, 211, 238, .2);
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 14px;
+  }
+  .transcript h3 {
+    font-size: 13px; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--accent-2); margin-bottom: 6px;
+  }
+  .transcript p { margin: 0; white-space: pre-wrap; }
+
+  /* Toast */
+  .toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    padding: 12px 16px; border-radius: 10px;
+    background: #1b2942; border: 1px solid var(--border);
+    color: var(--text); max-width: min(560px, 90vw);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .35);
+    z-index: 50; font-size: 14px;
+  }
+  .toast.error { border-color: rgba(239, 68, 68, .6); }
+  .toast.warn  { border-color: rgba(245, 158, 11, .6); }
+  .toast.info  { border-color: rgba(79, 140, 255, .6); }
 </style>
 </head>
 <body>
-
-<!-- ═══════════════ SCREEN 1: Hardware Check & Code Verification ═══════════════ -->
-<div class="container" id="setupScreen">
-    <div class="ai-avatar"><i class="fas fa-shield-alt"></i></div>
-    <h2 style="font-size:24px;margin-bottom:8px">Secure AI Interview</h2>
-    <p style="color:#a5b4fc;margin-bottom:24px;font-size:14px">Ensure your camera is on and enter your code to begin.</p>
-    
-    <video id="previewVideo" class="video-preview" autoplay muted playsinline style="display:none"></video>
-    
-    <input type="text" id="appCodeInput" class="verify-input" placeholder="A3B5K9XZ" maxlength="12" autocomplete="off">
-    <div id="errorMsg" style="color:#ef4444;margin-bottom:16px;font-size:14px;display:none;"></div>
-    
-    <button class="btn btn-primary" id="enableCamBtn" style="width:100%;padding:16px;font-size:16px;border-radius:10px;margin-bottom:12px" onclick="enableHardware()">
-        <i class="fas fa-video"></i> Enable Camera & Mic
-    </button>
-    
-    <button class="btn btn-primary" id="startBtn" style="width:100%;padding:16px;font-size:16px;border-radius:10px;display:none" onclick="verifyCodeAndStart()">
-        <i class="fas fa-play"></i> Verify & Start Interview
-    </button>
-</div>
-
-<!-- ═══════════════ SCREEN 2: Active Interview ═══════════════ -->
-<div class="container" id="interviewUI" style="display:none">
-    <div class="ai-avatar" id="aiAvatar"><i class="fas fa-robot"></i></div>
-    
-    <div style="font-size:13px;color:#a5b4fc;margin-bottom:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase">
-        Question <span id="qIndex">1</span> of <span id="qTotal">5</span>
-        <span id="followUpBadge" style="display:none;background:#f59e0b;color:white;padding:2px 8px;border-radius:10px;margin-left:8px;font-size:11px">Follow-up</span>
+<div class="app">
+  <header class="app-header">
+    <div class="brand"><span class="dot"></span> AI Interview</div>
+    <div class="header-right">
+      <span id="role-badge" class="pill subtle hidden"></span>
+      <button id="end-btn" class="btn ghost hidden">End Interview</button>
     </div>
-    
-    <div class="question-box" id="questionText">
-        Preparing your first question...
-    </div>
-    
-    <div style="position:relative;margin-bottom:40px">
-        <button class="btn-record" id="recordBtn" onclick="toggleRecording()">
-            <i class="fas fa-microphone"></i>
-            <div class="record-timer" id="recordTimer" style="display:none">00:00</div>
+  </header>
+
+  <main>
+    <!-- ============== SETUP ============== -->
+    <section id="setup-section" class="card hidden">
+      <h2>Interview setup</h2>
+      <p class="muted">
+        Paste the job description and list the key skills. They are sent to the
+        question generator so questions are grounded in the role.
+      </p>
+      <label class="field">
+        <span>Job description</span>
+        <textarea id="setup-jd" rows="6" placeholder="Paste the JD here…"></textarea>
+      </label>
+      <label class="field">
+        <span>Skills (comma separated)</span>
+        <input id="setup-skills" type="text" placeholder="e.g. Python, AWS, SQL, Communication" />
+      </label>
+      <div class="row">
+        <button id="setup-continue" class="btn primary">Continue</button>
+      </div>
+    </section>
+
+    <!-- ============== HARDWARE CHECK ============== -->
+    <section id="hardware-section" class="card hidden">
+      <h2>Hardware check</h2>
+      <p class="muted">
+        We ask for camera + microphone <strong>once</strong> and reuse the
+        <strong>same stream</strong> during the interview for recording.
+        No second <code>getUserMedia</code>, no second permission prompt.
+      </p>
+      <div class="hw-grid">
+        <div class="video-wrap">
+          <video id="preview" class="hidden" autoplay playsinline muted></video>
+          <div id="preview-placeholder" class="video-placeholder">Camera preview</div>
+        </div>
+        <div class="hw-side">
+          <div class="status-line">
+            <span id="hw-status-dot" class="status-dot"></span>
+            <span id="hw-status">Click “Check my devices” to start.</span>
+          </div>
+          <div id="meter" class="meter" aria-hidden="true">
+            <span class="meter-bar"></span><span class="meter-bar"></span>
+            <span class="meter-bar"></span><span class="meter-bar"></span>
+            <span class="meter-bar"></span><span class="meter-bar"></span>
+            <span class="meter-bar"></span><span class="meter-bar"></span>
+            <span class="meter-bar"></span><span class="meter-bar"></span>
+            <span class="meter-bar"></span><span class="meter-bar"></span>
+          </div>
+          <p class="muted small">Speak a few words — the meter should react.</p>
+          <div class="row">
+            <button id="check-devices" class="btn primary">Check my camera &amp; microphone</button>
+            <button id="begin-btn" class="btn primary hidden" disabled>Begin Interview</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============== INTERVIEW ============== -->
+    <section id="interview-section" class="card hidden">
+      <div class="q-head">
+        <span id="q-type" class="pill">Question</span>
+        <span id="q-followup" class="pill subtle hidden">Follow-up 0/2</span>
+      </div>
+      <h2 id="question-text">Loading…</h2>
+      <p id="question-rationale" class="muted small"></p>
+
+      <div class="record-panel">
+        <button id="record-btn" class="rec-btn" aria-label="Record answer" aria-pressed="false">
+          <span class="rec-inner"></span>
         </button>
-    </div>
-    
-    <div class="status-text" id="statusText">
-        <i class="fas fa-headphones"></i> Listen to the AI, then click the mic to answer
-    </div>
-</div>
+        <div class="record-info">
+          <div id="timer" class="timer">00:00</div>
+          <div id="record-status" class="muted small">Tap the mic to record your answer.</div>
+        </div>
+      </div>
 
-<!-- ═══════════════ SCREEN 3: Completion ═══════════════ -->
-<div class="container" id="completionUI" style="display:none">
-    <div class="ai-avatar" style="background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 0 30px rgba(16,185,129,0.6)">
-        <i class="fas fa-check"></i>
-    </div>
-    <h2 style="font-size:28px;margin-bottom:12px">Interview Completed</h2>
-    <p style="color:#a5b4fc;font-size:15px;line-height:1.6">
-        Thank you for your time. Your responses have been recorded and will be reviewed by HR.
-    </p>
-</div>
+      <div class="chunks-panel">
+        Audio chunks gathered: <strong id="chunk-count">0</strong> ·
+        <span id="chunk-bytes">0 B</span>
+      </div>
 
-<!-- Hidden Proctoring Camera Overlay -->
-<div class="proctor-cam" id="proctorCam">
-    <video id="proctorVideo" autoplay muted playsinline></video>
-    <div class="proctor-info" id="proctorInfo">Monitoring Active...</div>
+      <div id="transcript-panel" class="transcript hidden">
+        <h3>Last answer</h3>
+        <p id="transcript-text"></p>
+      </div>
+
+      <div class="row end">
+        <button id="submit-anyway" class="btn ghost hidden">Submit anyway</button>
+      </div>
+    </section>
+
+    <!-- ============== SUMMARY ============== -->
+    <section id="summary-section" class="card hidden">
+      <h2>Interview complete</h2>
+      <p class="muted">Thanks — your responses have been submitted.</p>
+      <div class="row">
+        <button id="restart-btn" class="btn primary">Start a new interview</button>
+      </div>
+    </section>
+  </main>
 </div>
+<div id="toast" class="toast hidden"></div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════
-//  GLOBAL STATE
-// ═══════════════════════════════════════════════════════════════
-const urlParams = new URLSearchParams(window.location.search);
-const applicationId = parseInt(urlParams.get('app_id'), 10);
-const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
+(function () {
+  'use strict';
 
-let stream = null;
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
-let currentAudio = null;
-let interviewId = null;
-let mainQCount = 1;
-let maxQCount = 5;
-let isCompleted = false;
-let recordInterval = null;
-let recordSeconds = 0;
-let audioContext = null;
-let analyser = null;
-let voiceMonitorInterval = null;
-let faceDetectTimer = null;
-let headAwayStart = null;
-const CFG = { HEAD_OFFSET_THRESHOLD: 0.25, HEAD_SUSTAIN_MS: 1000, WARNING_COOLDOWN_MS: 5000 };
-let lastCamWarn = 0;
+  /* =========================================================================
+     API CONTRACT (must be implemented by your backend around ai_service.py)
 
-if (!applicationId || isNaN(applicationId)) {
-    document.body.innerHTML = '<div style="text-align:center;padding:40px"><h1>Invalid Interview Link</h1><p>Missing Application ID</p></div>';
-}
+     POST {API_BASE}/api/interview/start
+       body (JSON): { job_description: string, skills: string[] }
+       → { question: string,
+           type?: 'main' | 'followup',
+           follow_up_count?: number,
+           max_follow_ups?: number,
+           rationale?: string }
 
-// ═══════════════════════════════════════════════════════════════
-//  1. HARDWARE CHECK
-// ═══════════════════════════════════════════════════════════════
-async function enableHardware() {
-    const btn = document.getElementById('enableCamBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Requesting access...';
+     POST {API_BASE}/api/interview/answer   (multipart/form-data)
+       fields:
+         audio              : Blob (webm / ogg / mp4)
+         job_description    : string
+         skills             : JSON string  (string[])
+         main_question      : string       (main question this answer belongs to)
+         current_question   : string       (exact question being answered)
+         follow_up_count    : number       (follow-ups already asked on this main Q)
+         max_follow_ups     : number
+         is_follow_up       : "true" | "false"
+         previous_questions : JSON string  (string[])
+       → { transcript?: string,
+           next_question?: { question, type, follow_up_count, max_follow_ups, rationale } | null,
+           is_complete?: boolean }
 
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        const videoEl = document.getElementById('previewVideo');
-        videoEl.srcObject = stream;
-        videoEl.style.display = 'block';
-        
-        btn.style.display = 'none';
-        document.getElementById('startBtn').style.display = 'block';
-        document.getElementById('errorMsg').style.display = 'none';
-    } catch(e) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-video"></i> Enable Camera & Mic';
-        document.getElementById('errorMsg').style.display = 'block';
-        document.getElementById('errorMsg').innerText = 'Camera/Mic access denied. Please allow permissions in your browser settings.';
-    }
-}
+     Set CONFIG.DEMO_MODE = true to test the page (and the audio fix) without a backend.
+     ========================================================================= */
 
-// ═══════════════════════════════════════════════════════════════
-//  2. LOCKDOWN MODE (Anti-Cheat)
-// ═══════════════════════════════════════════════════════════════
-function lockdown() {
-    document.documentElement.requestFullscreen().catch(() => {});
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden && !isCompleted) autoSubmit("Tab switch detected. Interview terminated.");
-    });
-    document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && !isCompleted) autoSubmit("Exited fullscreen mode. Interview terminated.");
-    });
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    document.addEventListener('copy', e => e.preventDefault());
-    document.addEventListener('paste', e => e.preventDefault());
-}
+  const CONFIG = {
+    API_BASE: '',               // '' = same origin, or e.g. 'http://localhost:8000'
+    DEMO_MODE: false,           // true = simulate a backend in the browser
+    MAX_RECORD_SECONDS: 180,    // auto-stop a single answer at 3 min
+    MIN_BLOB_BYTES: 1000,       // below this we warn / offer "Submit anyway"
+    MIC_THRESHOLD: 0.045,       // RMS threshold to consider "speaking"
+    MIC_HOLD_MS: 700,           // how long above threshold before enabling Begin
+    TIMESLICE_MS: 1000,         // MediaRecorder timeslice (deliver a chunk every 1s)
+  };
 
-// ═══════════════════════════════════════════════════════════════
-//  3. PROCTORING (Face Detection + Voice Detection)
-// ═══════════════════════════════════════════════════════════════
-async function startProctoring() {
-    try {
-        const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-        await Promise.all([
-            faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
-            faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath)
-        ]);
-        
-        document.getElementById('proctorCam').style.display = 'block';
-        document.getElementById('proctorVideo').srcObject = stream;
-        
-        // 1. Face & Head Detection
-        faceDetectTimer = setInterval(async () => {
-            if (isCompleted) return;
-            const video = document.getElementById('proctorVideo');
-            if (!video || video.readyState < 2) return;
-            
-            try {
-                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks(true);
-                const now = Date.now();
-                const infoEl = document.getElementById('proctorInfo');
-                
-                if (detections.length === 0) {
-                    infoEl.innerHTML = `Faces: 0 | No Face`;
-                    infoEl.style.color = '#ef4444';
-                    if (headAwayStart === null) headAwayStart = now;
-                    if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
-                        issueWarning('Face not detected in frame');
-                        headAwayStart = null;
-                    }
-                    return;
-                }
-                
-                if (detections.length > 1) {
-                    infoEl.innerHTML = `Faces: ${detections.length} | Multiple!`;
-                    infoEl.style.color = '#ef4444';
-                    if (headAwayStart === null) headAwayStart = now;
-                    if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
-                        issueWarning('Multiple people detected');
-                        headAwayStart = null;
-                    }
-                    return;
-                }
-                
-                const p = detections[0].landmarks.positions;
-                const noseTip = p[30], leftFace = p[16], rightFace = p[0];
-                const centerX = (leftFace.x + rightFace.x) / 2, halfW = Math.abs(leftFace.x - rightFace.x) / 2;
-                const offset = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
-                
-                infoEl.innerHTML = `Offset: ${offset.toFixed(2)} | Face: 1`;
-                infoEl.style.color = '#10b981';
-                
-                if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
-                    infoEl.style.color = '#f59e0b';
-                    if (headAwayStart === null) headAwayStart = now;
-                    if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
-                        issueWarning('Head turned away from screen');
-                        headAwayStart = null;
-                    }
-                } else {
-                    headAwayStart = null;
-                }
-            } catch(e) { /* ignore */ }
-        }, 500);
+  const state = {
+    // context
+    jd: '',
+    skills: [],
 
-        // 2. Voice/Background Noise Detection
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 512;
-        source.connect(analyser);
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        let voiceStart = null;
-        let lastVoiceWarn = 0;
-        
-        voiceMonitorInterval = setInterval(() => {
-            if (isCompleted || isRecording) return; // Don't warn while the candidate is supposed to be speaking
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            const average = sum / dataArray.length;
-            
-            const now = Date.now();
-            if (average > 50) {
-                if (voiceStart === null) voiceStart = now;
-                if (now - voiceStart > 2000 && now - lastVoiceWarn > CFG.WARNING_COOLDOWN_MS) {
-                    issueWarning('Loud background noise / voices detected');
-                    lastVoiceWarn = now;
-                    voiceStart = null;
-                }
-            } else {
-                voiceStart = null;
-            }
-        }, 500);
-        
-    } catch(e) { console.error("Proctoring init failed:", e); }
-}
+    // audio — the hardware-check stream lives here and is reused by MediaRecorder
+    mediaStream: null,
+    recorder: null,
+    chunks: [],
+    isRecording: false,
+    timerStart: 0,
+    timerInterval: null,
+    pendingBlob: null,
+    cancelled: false,
+    finished: false,
 
-function issueWarning(reason) {
-    lastCamWarn = Date.now();
-    const t = document.createElement('div');
-    t.className = 'warning-toast';
-    t.innerText = `⚠️ Warning: ${reason}`;
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 4000);
-}
+    // question flow
+    currentQuestion: null,
+    mainQuestion: null,
+    followUpCount: 0,
+    maxFollowUps: 2,
+    previousQuestions: [],
+    mainNumber: 0,
 
-// ═══════════════════════════════════════════════════════════════
-//  4. START INTERVIEW
-// ═══════════════════════════════════════════════════════════════
-async function verifyCodeAndStart() {
-    const code = document.getElementById('appCodeInput').value.trim().toUpperCase();
-    if (!code) return showError('Please enter your application code');
+    // demo backend
+    demo: { mainIndex: 0, followIndex: 0 },
+  };
 
-    const btn = document.getElementById('startBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Verifying...';
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    setupSection:        $('setup-section'),
+    setupJd:             $('setup-jd'),
+    setupSkills:         $('setup-skills'),
+    setupContinue:       $('setup-continue'),
 
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/ai-interviews/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ application_id: applicationId, application_code: code })
-        });
-        const data = await res.json();
+    hardwareSection:     $('hardware-section'),
+    preview:             $('preview'),
+    previewPlaceholder:  $('preview-placeholder'),
+    hwStatus:            $('hw-status'),
+    hwStatusDot:         $('hw-status-dot'),
+    meter:               $('meter'),
+    checkDevices:        $('check-devices'),
+    beginBtn:            $('begin-btn'),
 
-        if (!res.ok) {
-            showError(data.detail || 'Invalid application code');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-play"></i> Verify & Start Interview';
-            return;
-        }
+    interviewSection:    $('interview-section'),
+    qType:               $('q-type'),
+    qFollowup:           $('q-followup'),
+    questionText:        $('question-text'),
+    questionRationale:   $('question-rationale'),
+    recordBtn:           $('record-btn'),
+    timer:               $('timer'),
+    recordStatus:        $('record-status'),
+    chunkCount:          $('chunk-count'),
+    chunkBytes:          $('chunk-bytes'),
+    transcriptPanel:     $('transcript-panel'),
+    transcriptText:      $('transcript-text'),
+    submitAnyway:        $('submit-anyway'),
 
-        interviewId = data.interview_id;
-        mainQCount = data.main_q_count || 1;
-        maxQCount = data.max_questions || 5;
-        
-        document.getElementById('setupScreen').style.display = 'none';
-        document.getElementById('interviewUI').style.display = 'block';
-        
-        lockdown();
-        startProctoring();
-        updateProgressUI(mainQCount, maxQCount, false);
-        playQuestion(data.question, data.audio);
-        
-    } catch(e) {
-        showError('Network error. Please try again.');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-play"></i> Verify & Start Interview';
-    }
-}
+    summarySection:      $('summary-section'),
+    restartBtn:          $('restart-btn'),
 
-function showError(msg) {
-    document.getElementById('errorMsg').style.display = 'block';
-    document.getElementById('errorMsg').innerText = msg;
-}
+    roleBadge:           $('role-badge'),
+    endBtn:              $('end-btn'),
+    toast:               $('toast'),
+  };
 
-function updateProgressUI(main, max, isFollowUp) {
-    document.getElementById('qIndex').innerText = main;
-    document.getElementById('qTotal').innerText = max;
-    document.getElementById('followUpBadge').style.display = isFollowUp ? 'inline-block' : 'none';
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  5. AUDIO PLAYBACK (TTS)
-// ═══════════════════════════════════════════════════════════════
-function playQuestion(text, base64Audio) {
-    document.getElementById('questionText').innerText = text;
-    
-    if (currentAudio) currentAudio.pause();
-    
-    if (!base64Audio) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.onstart = () => document.getElementById('aiAvatar').classList.add('speaking');
-        utterance.onend = () => document.getElementById('aiAvatar').classList.remove('speaking');
-        window.speechSynthesis.speak(utterance);
-        return;
-    }
-    
-    try {
-        const byteCharacters = atob(base64Audio);
-        const byteNumbers = new Array(byteCharacters.length);
-        for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
-        const blob = new Blob([new Uint8Array(byteNumbers)], {type: 'audio/wav'});
-        
-        currentAudio = new Audio(URL.createObjectURL(blob));
-        document.getElementById('aiAvatar').classList.add('speaking');
-        currentAudio.onended = () => {
-            document.getElementById('aiAvatar').classList.remove('speaking');
-        };
-        
-        currentAudio.play().catch(e => {
-            document.getElementById('statusText').innerHTML = '<i class="fas fa-volume-up"></i> Click anywhere to hear the question.';
-            document.body.addEventListener('click', () => currentAudio.play(), { once: true });
-        });
-    } catch(e) { console.error("Audio decoding error:", e); }
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  6. RECORDING (STT)
-// ═══════════════════════════════════════════════════════════════
-async function toggleRecording() {
-    if (!isRecording) {
-        try {
-            const audioStream = await navigator.mediaDevices.getUserMedia({ 
-                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
-            });
-            
-            // ✅ FIX: Explicitly set mimeType and chunk every 1s to prevent empty blobs
-            let options = { mimeType: 'audio/webm' };
-            if (!MediaRecorder.isTypeSupported('audio/webm')) {
-                options = {}; // Fallback to default
-            }
-            
-            mediaRecorder = new MediaRecorder(audioStream, options);
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = e => { 
-                if (e.data.size > 0) {
-                    audioChunks.push(e.data); 
-                }
-            };
-            
-            mediaRecorder.onstop = () => {
-                if (audioChunks.length === 0) {
-                    alert("Error: No audio was recorded. Please try again and speak clearly into the mic.");
-                    document.getElementById('statusText').innerText = "Click mic to answer";
-                    return;
-                }
-                sendAnswer();
-            };
-            
-            // ✅ FIX: Pass 1000ms so it gathers chunks constantly
-            mediaRecorder.start(1000); 
-            
-            isRecording = true;
-            recordSeconds = 0;
-            document.getElementById('recordBtn').classList.add('recording');
-            document.getElementById('recordTimer').style.display = 'block';
-            document.getElementById('recordTimer').innerText = '00:00';
-            document.getElementById('aiAvatar').classList.remove('speaking');
-            document.getElementById('statusText').innerHTML = '<i class="fas fa-circle" style="color:#ef4444"></i> Recording... Click to stop.';
-            
-            recordInterval = setInterval(() => {
-                recordSeconds++;
-                const m = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
-                const s = String(recordSeconds % 60).padStart(2, '0');
-                document.getElementById('recordTimer').innerText = `${m}:${s}`;
-            }, 1000);
-            
-        } catch(e) { 
-            alert("Microphone access denied or unsupported browser.");
-            console.error(e);
-        }
+  /* ============================ BOOT ============================ */
+  function init() {
+    loadContext();
+    bindEvents();
+    if (!state.jd) {
+      el.setupSection.classList.remove('hidden');
+      el.hardwareSection.classList.add('hidden');
     } else {
-        if (recordSeconds < 2) {
-            if (!confirm("Recording is very short. Are you sure?")) return;
-        }
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(t => t.stop());
-        isRecording = false;
-        clearInterval(recordInterval);
-        document.getElementById('recordBtn').classList.remove('recording');
-        document.getElementById('recordTimer').style.display = 'none';
-        document.getElementById('statusText').innerHTML = '<span class="spinner"></span> Processing your answer...';
+      el.hardwareSection.classList.remove('hidden');
     }
-}
+  }
 
-async function sendAnswer() {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-    const formData = new FormData();
-    formData.append("file", audioBlob, "answer.webm");
+  function loadContext() {
+    let jd = '';
+    let skillsRaw = '';
+    try {
+      jd = sessionStorage.getItem('interview_jd') || '';
+      skillsRaw = sessionStorage.getItem('interview_skills') || '';
+    } catch (_) { /* storage may be blocked */ }
+
+    const params = new URLSearchParams(location.search);
+    if (!jd && params.get('jd')) jd = params.get('jd');
+    if (!skillsRaw && params.get('skills')) skillsRaw = params.get('skills');
+
+    state.jd = String(jd || '').trim();
+    state.skills = parseSkills(skillsRaw);
+
+    if (state.skills.length) {
+      el.roleBadge.textContent = state.skills.length + ' skills';
+      el.roleBadge.classList.remove('hidden');
+    }
+  }
+
+  function parseSkills(raw) {
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(String).map(s => s.trim()).filter(Boolean);
+    } catch (_) { /* not JSON */ }
+    return String(raw).split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function bindEvents() {
+    el.setupContinue.addEventListener('click', onSetupContinue);
+    el.checkDevices.addEventListener('click', startHardwareCheck);
+    el.beginBtn.addEventListener('click', beginInterview);
+    el.recordBtn.addEventListener('click', onRecordClick);
+    el.submitAnyway.addEventListener('click', onSubmitAnyway);
+    el.endBtn.addEventListener('click', endInterview);
+    el.restartBtn.addEventListener('click', () => location.reload());
+
+    // Resume AudioContext on any user gesture (some browsers start it suspended).
+    document.addEventListener('pointerdown', () => {
+      if (meterState.ctx && meterState.ctx.state === 'suspended') {
+        meterState.ctx.resume().catch(() => {});
+      }
+    }, { passive: true });
+
+    window.addEventListener('beforeunload', cleanupAll);
+  }
+
+  function onSetupContinue() {
+    const jd = el.setupJd.value.trim();
+    const skills = el.setupSkills.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!jd) { toast('Please paste the job description.', 'error'); return; }
+    if (!skills.length) { toast('Please list at least one skill.', 'error'); return; }
+
+    state.jd = jd;
+    state.skills = skills;
+    try {
+      sessionStorage.setItem('interview_jd', jd);
+      sessionStorage.setItem('interview_skills', JSON.stringify(skills));
+    } catch (_) { /* ignore */ }
+
+    el.roleBadge.textContent = skills.length + ' skills';
+    el.roleBadge.classList.remove('hidden');
+    el.setupSection.classList.add('hidden');
+    el.hardwareSection.classList.remove('hidden');
+  }
+
+  /* ======================= HARDWARE CHECK =======================
+     This is the ONLY place that calls getUserMedia. The resulting
+     stream is stored in state.mediaStream and reused later by
+     MediaRecorder — that is the fix for the "no audio captured" bug.
+     ============================================================== */
+  async function startHardwareCheck() {
+    el.beginBtn.disabled = true;
+    el.beginBtn.classList.add('hidden');
+    el.checkDevices.classList.remove('hidden');
+    el.checkDevices.textContent = 'Retry devices';
+    setHwStatus('pending', 'Requesting camera and microphone…');
+
+    stopMeter();
+    releaseStream();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setHwStatus('error', 'This browser does not support camera/microphone access.');
+      toast('getUserMedia is not supported in this browser.', 'error');
+      return;
+    }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/ai-interviews/${interviewId}/process`, {
-            method: 'POST',
-            body: formData
-        });
-        const data = await res.json();
-        
-        if (data.status === "completed") {
-            isCompleted = true; // ✅ Prevents false auto-submit on exit
-            document.getElementById('interviewUI').style.display = 'none';
-            document.getElementById('completionUI').style.display = 'block';
-            document.getElementById('proctorCam').style.display = 'none';
-            clearInterval(faceDetectTimer);
-            clearInterval(voiceMonitorInterval);
-            if (audioContext) audioContext.close();
-            document.exitFullscreen().catch(() => {});
-        } else {
-            mainQCount = data.main_q_count || mainQCount;
-            updateProgressUI(mainQCount, maxQCount, data.is_follow_up);
-            playQuestion(data.next_question, data.audio);
-            document.getElementById('statusText').innerHTML = '<i class="fas fa-headphones"></i> Listen to the AI, then click the mic to answer';
-        }
-    } catch(e) { 
-        document.getElementById('statusText').innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#ef4444"></i> Error processing answer.';
-    }
-}
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
 
-// ═══════════════════════════════════════════════════════════════
-//  7. AUTO-SUBMIT (Anti-Cheat)
-// ═══════════════════════════════════════════════════════════════
-async function autoSubmit(reason) {
-    if (!interviewId || isCompleted) return;
-    isCompleted = true;
-    
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(t => t.stop());
+      // *** Save the stream. Everything downstream reuses it. ***
+      state.mediaStream = stream;
+
+      stream.getTracks().forEach((t) =>
+        console.log('[hw] ' + t.kind + ' track:', t.label || '(no label)', t.readyState)
+      );
+
+      el.preview.srcObject = stream;
+      el.preview.classList.remove('hidden');
+      el.previewPlaceholder.classList.add('hidden');
+      try { await el.preview.play(); } catch (_) { /* autoplay muted is fine */ }
+
+      setHwStatus('ok', 'Devices connected. Speak to test your microphone.');
+      startMeter(stream);
+
+      // Safety net: if the meter never crosses the threshold (e.g. quiet mic),
+      // don't leave the user stuck — enable Begin after a few seconds.
+      setTimeout(() => {
+        if (hasLiveAudio() && el.beginBtn.disabled) {
+          el.beginBtn.disabled = false;
+          el.beginBtn.classList.remove('hidden');
+          setHwStatus('ok', 'Microphone is live. You can begin the interview.');
+        }
+      }, 6000);
+    } catch (err) {
+      console.error('getUserMedia error:', err);
+      let msg = 'Could not access camera/microphone.';
+      if (err && err.name === 'NotAllowedError') {
+        msg = 'Permission denied. Allow camera and microphone access, then retry.';
+      } else if (err && err.name === 'NotFoundError') {
+        msg = 'No camera or microphone found.';
+      } else if (err && err.name === 'NotReadableError') {
+        msg = 'The device is busy. Close other apps using the camera/microphone.';
+      }
+      setHwStatus('error', msg);
+      toast(msg, 'error');
+      el.preview.classList.add('hidden');
+      el.previewPlaceholder.classList.remove('hidden');
     }
-    
+  }
+
+  /* ---------------- Mic level meter ---------------- */
+  const meterState = { ctx: null, analyser: null, raf: 0, speakStart: 0, unlocked: false };
+
+  function startMeter(stream) {
+    stopMeter();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+
+    meterState.ctx = new AC();
+    meterState.ctx.resume().catch(() => {});
+    const source = meterState.ctx.createMediaStreamSource(stream);
+    const analyser = meterState.ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    source.connect(analyser);
+    meterState.analyser = analyser;
+    meterState.speakStart = 0;
+    meterState.unlocked = false;
+
+    const buf = new Uint8Array(analyser.fftSize);
+    const bars = Array.from(el.meter.querySelectorAll('.meter-bar'));
+
+    const tick = () => {
+      analyser.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / buf.length);
+      const level = Math.min(1, rms * 5);
+      const active = Math.round(level * bars.length);
+      bars.forEach((b, i) => {
+        b.classList.toggle('on', i < active);
+        b.style.transform = 'scaleY(' + (0.25 + Math.min(1, level) * 0.75) + ')';
+      });
+
+      if (rms > CONFIG.MIC_THRESHOLD) {
+        if (!meterState.speakStart) meterState.speakStart = performance.now();
+        if (!meterState.unlocked && performance.now() - meterState.speakStart > CONFIG.MIC_HOLD_MS) {
+          meterState.unlocked = true;
+          el.beginBtn.disabled = false;
+          el.beginBtn.classList.remove('hidden');
+          setHwStatus('ok', 'Microphone detected. You can begin the interview.');
+        }
+      } else {
+        meterState.speakStart = 0;
+      }
+
+      meterState.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function stopMeter() {
+    if (meterState.raf) cancelAnimationFrame(meterState.raf);
+    meterState.raf = 0;
+    if (meterState.ctx) meterState.ctx.close().catch(() => {});
+    meterState.ctx = null;
+    meterState.analyser = null;
+    el.meter.querySelectorAll('.meter-bar').forEach((b) => {
+      b.classList.remove('on');
+      b.style.transform = 'scaleY(0.25)';
+    });
+  }
+
+  function setHwStatus(kind, text) {
+    el.hwStatus.textContent = text;
+    el.hwStatusDot.className = 'status-dot ' + kind;
+  }
+
+  /* ======================= BEGIN INTERVIEW ======================= */
+  async function beginInterview() {
+    if (!hasLiveAudio()) {
+      toast('Microphone is not available. Please retry the hardware check.', 'error');
+      return;
+    }
+
+    // Turn the camera off to save resources. The audio track stays live
+    // and MediaRecorder will reuse it from state.mediaStream.
+    state.mediaStream.getVideoTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+    stopMeter();
+
+    el.hardwareSection.classList.add('hidden');
+    el.interviewSection.classList.remove('hidden');
+    el.endBtn.classList.remove('hidden');
+    el.recordStatus.textContent = 'Loading question…';
+
     try {
-        await fetch(`${BACKEND_URL}/api/ai-interviews/${interviewId}/auto-submit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason: reason })
-        });
-    } catch(e) { console.error(e); }
-    
-    document.body.innerHTML = `
-        <div style="text-align:center;padding:60px;max-width:600px;margin:0 auto;color:white;font-family:sans-serif">
-            <div style="font-size:80px;margin-bottom:24px">⚠️</div>
-            <h1 style="font-size:28px;margin-bottom:16px;color:#ef4444">Interview Auto-Submitted</h1>
-            <p style="color:#a5b4fc;font-size:16px;line-height:1.6;margin-bottom:24px">${reason}</p>
-            <p style="color:rgba(255,255,255,0.4);font-size:13px">Your responses have been saved and sent to HR.</p>
-        </div>
-    `;
-}
+      const first = await apiStart();
+      if (!first || !first.question) throw new Error('No question returned');
+      showQuestion(first);
+    } catch (err) {
+      console.error('start failed:', err);
+      toast('Could not load the first question: ' + (err.message || err), 'error');
+      el.recordStatus.textContent = 'Failed to load question.';
+    }
+  }
+
+  function hasLiveAudio() {
+    const s = state.mediaStream;
+    return !!s && s.getAudioTracks().some((t) => t.readyState === 'live');
+  }
+
+  /* ======================= QUESTION DISPLAY ======================= */
+  function showQuestion(q) {
+    state.pendingBlob = null;
+    el.submitAnyway.classList.add('hidden');
+
+    state.currentQuestion = q;
+    state.followUpCount = Number(q.follow_up_count || 0);
+    state.maxFollowUps = Number(q.max_follow_ups || 2);
+
+    const isFollow = q.type === 'followup' || state.followUpCount > 0;
+    if (!isFollow) {
+      state.mainQuestion = q.question;
+      state.mainNumber += 1;
+    }
+
+    // Client-side safety net: warn if the backend repeats a question.
+    const norm = normalizeQ(q.question);
+    if (state.previousQuestions.some((p) => normalizeQ(p) === norm)) {
+      console.warn('[flow] backend returned a repeated question:', q.question);
+    }
+    if (isFollow && state.followUpCount > state.maxFollowUps) {
+      console.warn('[flow] follow-up count exceeds max:', state.followUpCount, '>', state.maxFollowUps);
+    }
+
+    el.questionText.textContent = q.question;
+    el.questionRationale.textContent = q.rationale ? 'Why we ask: ' + q.rationale : '';
+    el.qType.textContent = isFollow ? 'Follow-up' : 'Question ' + state.mainNumber;
+
+    if (isFollow) {
+      el.qFollowup.textContent = 'Follow-up ' + state.followUpCount + '/' + state.maxFollowUps;
+      el.qFollowup.classList.remove('hidden');
+    } else {
+      el.qFollowup.classList.add('hidden');
+    }
+
+    setRecordingUi(false);
+    el.transcriptPanel.classList.add('hidden');
+    el.transcriptText.textContent = '';
+    el.recordStatus.textContent = 'Tap the mic to record your answer.';
+    el.timer.textContent = '00:00';
+    state.chunks = [];
+    updateChunkInfo();
+  }
+
+  function normalizeQ(s) {
+    return String(s || '').toLowerCase().replace(/\s+/g, ' ').replace(/[^\w ?]/g, '').trim();
+  }
+
+  /* ======================= RECORDING ======================= */
+  function onRecordClick() {
+    if (state.isRecording) stopRecording();
+    else startRecording();
+  }
+
+  function startRecording() {
+    if (!hasLiveAudio()) {
+      toast('Microphone stream is not live. Please redo the hardware check.', 'error');
+      return;
+    }
+
+    state.cancelled = false;
+    state.pendingBlob = null;
+    el.submitAnyway.classList.add('hidden');
+
+    // *** Reuse the hardware-check stream. No second getUserMedia call. ***
+    const audioTracks = state.mediaStream.getAudioTracks().filter((t) => t.readyState === 'live');
+    if (audioTracks.length === 0) {
+      toast('Audio track is not live.', 'error');
+      return;
+    }
+    const audioStream = new MediaStream(audioTracks);
+
+    const mimeType = pickMimeType();
+    let recorder;
+    try {
+      recorder = new MediaRecorder(audioStream, mimeType ? { mimeType } : undefined);
+    } catch (err) {
+      console.error('MediaRecorder ctor failed:', err);
+      toast('Could not start the recorder: ' + err.message, 'error');
+      return;
+    }
+
+    state.chunks = [];
+    state.recorder = recorder;
+
+    recorder.ondataavailable = (e) => {
+      // IMPORTANT: empty chunks are the symptom of the old capture bug.
+      if (e.data && e.data.size > 0) {
+        state.chunks.push(e.data);
+        console.log('[rec] chunk ' + state.chunks.length + ': ' + e.data.size + ' bytes');
+      } else {
+        console.warn('[rec] empty data chunk received — ignored');
+      }
+      updateChunkInfo();
+    };
+
+    recorder.onerror = (e) => {
+      console.error('[rec] error', e);
+      toast('Recording error: ' + (e.error && e.error.message ? e.error.message : 'unknown'), 'error');
+    };
+
+    recorder.onstop = onRecordingStopped;
+
+    try {
+      recorder.start(CONFIG.TIMESLICE_MS);
+    } catch (err) {
+      console.error('recorder.start failed:', err);
+      toast('Could not start recording: ' + err.message, 'error');
+      state.recorder = null;
+      return;
+    }
+
+    state.isRecording = true;
+    state.timerStart = Date.now();
+    startTimer();
+    setRecordingUi(true);
+    updateChunkInfo();
+    el.recordStatus.textContent = 'Recording… tap again to stop.';
+    console.log('[rec] started', {
+      mimeType: recorder.mimeType,
+      audioTracks: audioTracks.length,
+      streamId: state.mediaStream.id,
+    });
+  }
+
+  function stopRecording() {
+    if (!state.isRecording || !state.recorder) return;
+    state.isRecording = false;
+    stopTimer();
+    setRecordingUi(false);
+    el.recordStatus.textContent = 'Processing your answer…';
+
+    // Flush any buffered data before stop.
+    try { state.recorder.requestData(); } catch (_) {}
+    try {
+      state.recorder.stop();
+    } catch (err) {
+      console.warn('recorder.stop threw:', err);
+      onRecordingStopped();
+    }
+  }
+
+  async function onRecordingStopped() {
+    const rec = state.recorder;
+    if (!rec) return;                 // guard against a double onstop
+    state.recorder = null;
+
+    if (state.cancelled) {            // user hit End Interview
+      state.cancelled = false;
+      state.chunks = [];
+      updateChunkInfo();
+      return;
+    }
+
+    const chunks = state.chunks.slice();
+    state.chunks = [];
+    const totalBytes = chunks.reduce((n, b) => n + b.size, 0);
+    console.log('[rec] stopped. chunks=' + chunks.length + ' bytes=' + totalBytes);
+
+    // ---- The original bug: no chunks were actually gathered. ----
+    if (chunks.length === 0 || totalBytes === 0) {
+      updateChunkInfo();
+      el.recordStatus.textContent = 'No audio was captured — please try again.';
+      toast('No audio was captured. Check that your mic is not muted or blocked, then record again.', 'error');
+      return;
+    }
+
+    const mimeType = (rec && rec.mimeType) || 'audio/webm';
+    const blob = new Blob(chunks, { type: mimeType });
+
+    if (totalBytes < CONFIG.MIN_BLOB_BYTES) {
+      state.pendingBlob = blob;
+      el.submitAnyway.classList.remove('hidden');
+      el.recordStatus.textContent =
+        'Only ' + totalBytes + ' bytes recorded — very short. Re-record, or press “Submit anyway”.';
+      toast('The recording is very short. Re-record, or press “Submit anyway”.', 'warn');
+      return;
+    }
+
+    await submitAnswer(blob);
+  }
+
+  function onSubmitAnyway() {
+    const blob = state.pendingBlob;
+    if (!blob) return;
+    state.pendingBlob = null;
+    el.submitAnyway.classList.add('hidden');
+    submitAnswer(blob);
+  }
+
+  /* ======================= SUBMIT ANSWER ======================= */
+  async function submitAnswer(blob) {
+    el.recordStatus.textContent = 'Uploading answer…';
+    try {
+      const data = CONFIG.DEMO_MODE ? await demoAnswer() : await apiSubmit(blob);
+
+      if (state.currentQuestion && state.currentQuestion.question) {
+        state.previousQuestions.push(state.currentQuestion.question);
+      }
+
+      if (data && data.transcript) {
+        el.transcriptText.textContent = data.transcript;
+        el.transcriptPanel.classList.remove('hidden');
+      }
+
+      if (data && data.is_complete) { finishInterview(); return; }
+
+      const next = data && data.next_question;
+      if (!next || !next.question) { finishInterview(); return; }
+
+      showQuestion(next);
+    } catch (err) {
+      console.error('submit failed:', err);
+      state.pendingBlob = blob;
+      el.submitAnyway.classList.remove('hidden');
+      el.recordStatus.textContent = 'Upload failed. Press “Submit anyway” to retry, or record again.';
+      toast('Failed to submit answer: ' + (err.message || err), 'error');
+      setRecordingUi(false);
+    }
+  }
+
+  async function apiStart() {
+    const res = await fetch(joinUrl(CONFIG.API_BASE, '/api/interview/start'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_description: state.jd, skills: state.skills }),
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error('HTTP ' + res.status + ' ' + txt);
+    }
+    return res.json();
+  }
+
+  async function apiSubmit(blob) {
+    const fd = new FormData();
+    const ext = /mp4/.test(blob.type) ? 'mp4' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
+    fd.append('audio', blob, 'answer.' + ext);
+    fd.append('job_description', state.jd);
+    fd.append('skills', JSON.stringify(state.skills));
+    fd.append('main_question', state.mainQuestion || '');
+    fd.append('current_question', state.currentQuestion ? state.currentQuestion.question : '');
+    fd.append('follow_up_count', String(state.followUpCount));
+    fd.append('max_follow_ups', String(state.maxFollowUps));
+    fd.append('is_follow_up', String(state.followUpCount > 0));
+    fd.append('previous_questions', JSON.stringify(state.previousQuestions));
+
+    const res = await fetch(joinUrl(CONFIG.API_BASE, '/api/interview/answer'), {
+      method: 'POST',
+      body: fd,
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error('HTTP ' + res.status + ' ' + txt);
+    }
+    return res.json();
+  }
+
+  function joinUrl(base, path) {
+    if (!base) return path;
+    return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+  }
+
+  /* ======================= DEMO BACKEND ======================= */
+  const DEMO_MAIN = [
+    'Walk me through your experience with the core skills listed for this role.',
+    'Describe a challenging project you delivered and how you resolved the hardest part.',
+    'How do you keep your skills current with the technologies in this job description?',
+  ];
+  const DEMO_FOLLOW = [
+    'Can you give a concrete example of that?',
+    'What trade-offs did you consider, and why did you choose that path?',
+  ];
+
+  async function demoStart() {
+    state.demo.mainIndex = 0;
+    state.demo.followIndex = 0;
+    await sleep(250);
+    return {
+      question: DEMO_MAIN[0],
+      type: 'main',
+      follow_up_count: 0,
+      max_follow_ups: 2,
+      rationale: 'Demo question 1',
+    };
+  }
+
+  async function demoAnswer() {
+    await sleep(400);
+    const transcript = '(demo transcript — audio was captured and would be sent to the backend)';
+    const d = state.demo;
+
+    if (d.followIndex < 2) {
+      const q = DEMO_FOLLOW[d.followIndex];
+      d.followIndex += 1;
+      return {
+        transcript,
+        next_question: {
+          question: q,
+          type: 'followup',
+          follow_up_count: d.followIndex,
+          max_follow_ups: 2,
+        },
+      };
+    }
+
+    d.mainIndex += 1;
+    d.followIndex = 0;
+    if (d.mainIndex >= DEMO_MAIN.length) {
+      return { transcript, is_complete: true };
+    }
+    return {
+      transcript,
+      next_question: {
+        question: DEMO_MAIN[d.mainIndex],
+        type: 'main',
+        follow_up_count: 0,
+        max_follow_ups: 2,
+      },
+    };
+  }
+
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+  /* ======================= UI HELPERS ======================= */
+  function setRecordingUi(recording) {
+    el.recordBtn.classList.toggle('recording', recording);
+    el.recordBtn.setAttribute('aria-pressed', String(recording));
+    el.recordBtn.title = recording ? 'Stop recording' : 'Start recording';
+  }
+
+  function startTimer() {
+    stopTimer();
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - state.timerStart) / 1000);
+      el.timer.textContent = fmt(elapsed);
+      if (elapsed >= CONFIG.MAX_RECORD_SECONDS && state.isRecording) {
+        el.recordStatus.textContent = 'Maximum length reached — stopping…';
+        stopRecording();
+      }
+    };
+    tick();
+    state.timerInterval = setInterval(tick, 250);
+  }
+
+  function stopTimer() {
+    if (state.timerInterval) clearInterval(state.timerInterval);
+    state.timerInterval = null;
+  }
+
+  function fmt(s) {
+    const m = Math.floor(s / 60).toString().padStart(2, '0');
+    const ss = Math.floor(s % 60).toString().padStart(2, '0');
+    return m + ':' + ss;
+  }
+
+  function updateChunkInfo() {
+    const n = state.chunks.length;
+    const bytes = state.chunks.reduce((a, b) => a + b.size, 0);
+    el.chunkCount.textContent = String(n);
+    el.chunkBytes.textContent = humanBytes(bytes);
+  }
+
+  function humanBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  function pickMimeType() {
+    if (typeof MediaRecorder === 'undefined') return '';
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/mp4',   // Safari
+      'audio/aac',
+    ];
+    for (const t of candidates) {
+      try { if (MediaRecorder.isTypeSupported(t)) return t; } catch (_) {}
+    }
+    return '';
+  }
+
+  function toast(msg, kind) {
+    el.toast.textContent = msg;
+    el.toast.className = 'toast ' + (kind || 'info');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.toast.classList.add('hidden'), 5500);
+  }
+
+  /* ======================= END / CLEANUP ======================= */
+  function finishInterview() {
+    if (state.finished) return;
+    state.finished = true;
+
+    state.cancelled = true;
+    if (state.isRecording) stopRecording();
+    stopTimer();
+    stopMeter();
+    releaseStream();
+
+    el.interviewSection.classList.add('hidden');
+    el.hardwareSection.classList.add('hidden');
+    el.endBtn.classList.add('hidden');
+    el.summarySection.classList.remove('hidden');
+  }
+
+  function endInterview() {
+    if (state.isRecording) state.cancelled = true;
+    finishInterview();
+  }
+
+  function releaseStream() {
+    const s = state.mediaStream;
+    if (s) s.getTracks().forEach((t) => { try { t.stop(); } catch (_) {} });
+    state.mediaStream = null;
+    if (el.preview.srcObject) {
+      try { el.preview.srcObject = null; } catch (_) {}
+    }
+  }
+
+  function cleanupAll() {
+    try {
+      if (state.recorder && state.recorder.state !== 'inactive') {
+        state.cancelled = true;
+        state.recorder.stop();
+      }
+    } catch (_) {}
+    stopMeter();
+    stopTimer();
+    releaseStream();
+  }
+
+  /* GO */
+  init();
+})();
 </script>
 </body>
 </html>
