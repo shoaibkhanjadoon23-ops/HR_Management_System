@@ -211,11 +211,11 @@
   </div>
 </div>
 
-<!-- Interview Schedule Modal -->
+<!-- Interview Schedule Modal (Custom) -->
 <div id="interviewModal" class="modal-overlay" style="display:none">
   <div class="modal">
     <div class="modal-header">
-      <h3><i class="fas fa-calendar"></i> Schedule Interview</h3>
+      <h3><i class="fas fa-calendar"></i> Schedule Custom Interview</h3>
       <button class="modal-close" onclick="closeModal('interviewModal')"><i class="fas fa-times"></i></button>
     </div>
     <div class="modal-body">
@@ -235,7 +235,7 @@
         <label>Office Location</label>
         <input type="text" id="iLocation" placeholder="Room 301, HQ Building">
       </div>
-      <div class="alert alert-info mt-2" id="meetingInfo">Online interview will automatically generate a Jitsi meeting link.</div>
+      <div class="alert alert-info mt-2" id="meetingInfo">Online interview will automatically generate a Jitsi meeting link and email it to the candidate.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('interviewModal')">Cancel</button>
@@ -629,28 +629,40 @@ async function viewApp(id) {
   } catch (e) { showToast('Error loading details: ' + e.message, 'error'); }
 }
 
-// NEW: Launch Interview Handler
+// ─── Launch Interview Logic ──────────────────────────────────────────────────
 async function launchInterview(applicationId) {
     const mode = document.getElementById('interviewModeSelect').value;
     
     if (mode === 'ai') {
+        // Prompt HR for Date, Time, and Question Count
+        const defaultDate = new Date(Date.now() + 86400000).toISOString().slice(0,16); // Tomorrow
+        const scheduled_date = prompt("Enter Date & Time for the AI Interview (YYYY-MM-DDTHH:MM):", defaultDate);
+        if (!scheduled_date) return;
+        
+        const questions_count = prompt("How many questions should the AI ask?", "5");
+        if (!questions_count) return;
+
         try {
-            const res = await API.post('/api/ai-interviews/create-link', { application_id: applicationId });
-            const link = res.interview_link;
-            copyToClipboard(link);
-            showToast(`AI Interview link copied: ${link}`, 'success', 6000);
+            const res = await API.post('/api/ai-interviews/create-link', { 
+                application_id: applicationId, 
+                scheduled_date: scheduled_date, 
+                questions_count: parseInt(questions_count) 
+            });
+            
+            // Copy link to clipboard
+            copyToClipboard(res.interview_link);
+            showToast(`AI Interview Scheduled! Link copied to clipboard.`, 'success', 6000);
+            
+            // Optionally close the modal
+            closeModal('appDetailModal');
+            
         } catch(e) { showToast('Error creating AI link: ' + e.message, 'error'); }
     } else {
-        // Open the custom interview scheduling modal
+        // Open the custom schedule modal
         const a = await API.get(`/api/applications/${applicationId}`);
         closeModal('appDetailModal');
         openInterviewModal(applicationId, a.job_title);
     }
-}
-
-// NEW: Download AI Interview PDF
-function downloadAIInterviewPDF(interviewId) {
-    API.download(`/api/ai-interviews/${interviewId}/pdf`, `ai_interview_${interviewId}.pdf`);
 }
 
 function openInterviewModal(appId, jobTitle) {
@@ -669,10 +681,14 @@ async function scheduleInterview() {
       duration_minutes: parseInt(document.getElementById('iDuration').value) || 60,
       location: document.getElementById('iLocation').value,
     });
-    showToast(`Interview scheduled! ${res.meeting_link ? 'Link: ' + res.meeting_link : ''}`, 'success', 5000);
+    showToast(`Interview scheduled! Link: ${res.meeting_link || 'N/A'}`, 'success', 5000);
     closeModal('interviewModal');
     loadApps();
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function downloadAIInterviewPDF(interviewId) {
+    API.download(`/api/ai-interviews/${interviewId}/pdf`, `ai_interview_${interviewId}.pdf`);
 }
 
 function openOfferModal(appId, jobTitle) {
@@ -745,6 +761,7 @@ async function sendOffer() {
     await API.post(`/api/offers/${currentOfferId}/send`, {});
     showToast('Offer letter sent to applicant!', 'success');
     closeModal('offerModal');
+    closeModal('appDetailModal');
     loadApps();
   } catch (e) { showToast('Error sending offer: ' + e.message, 'error'); }
 }
