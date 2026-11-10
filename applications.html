@@ -6,7 +6,6 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
-/* Small style helpers for the application-code cells */
 .code-pill {
   display: inline-block;
   background: #eef2ff;
@@ -376,16 +375,9 @@ document.getElementById('iType').onchange = function() {
 
 async function loadApps() {
   const params = new URLSearchParams();
-  
-  // Global search (Name, Email, Phone)
   const globalSearch = document.getElementById('fGlobal').value;
-  if (globalSearch) {
-    params.append('search', globalSearch);
-    // If the input looks like an 8-character code, also filter by app_code
-    if (/^[A-Z0-9]{8}$/i.test(globalSearch)) {
-      params.append('app_code', globalSearch);
-    }
-  }
+  if (globalSearch) params.append('search', globalSearch);
+  if (globalSearch && /^[A-Z0-9]{8}$/i.test(globalSearch)) params.append('app_code', globalSearch);
 
   const jobTitle = document.getElementById('fJobTitle').value;
   const jobType = document.getElementById('fJobType').value;
@@ -438,8 +430,6 @@ function renderApps() {
   }
 
   document.getElementById('appsBody').innerHTML = apps.map(a => {
-    const match = a.skill_gap_analysis?.match_percentage || 0;
-    const matchColor = match >= 70 ? 'var(--success)' : match >= 40 ? 'var(--warning)' : 'var(--danger)';
     return `<tr>
       <td><input type="checkbox" class="app-check" value="${a.id}" onchange="toggleSelect(${a.id})"></td>
       <td>
@@ -578,6 +568,17 @@ async function viewApp(id) {
                 </div>`).join('')}
             </div>
           </div>` : ''}
+
+          ${a.ai_interview ? `
+          <div class="card mb-4">
+            <div class="card-header"><h3><i class="fas fa-robot"></i> AI Interview</h3></div>
+            <div class="card-body text-sm">
+              <div><b>Status:</b> ${a.ai_interview.status.toUpperCase()}</div>
+              <button class="btn btn-sm btn-info mt-3" onclick="downloadAIInterviewPDF(${a.ai_interview.id})">
+                <i class="fas fa-file-pdf"></i> Download Transcript PDF
+              </button>
+            </div>
+          </div>` : ''}
         </div>
 
         <div style="flex:1;min-width:280px">
@@ -596,7 +597,7 @@ async function viewApp(id) {
 
           ${a.interview ? `
           <div class="card mb-4">
-            <div class="card-header"><h3><i class="fas fa-video"></i> Interview</h3></div>
+            <div class="card-header"><h3><i class="fas fa-video"></i> Custom Interview</h3></div>
             <div class="card-body text-sm">
               <div><b>Type:</b> ${a.interview.type}</div>
               <div><b>Date:</b> ${fmtDateTime(a.interview.date)}</div>
@@ -609,14 +610,47 @@ async function viewApp(id) {
 
     document.getElementById('appDetailFooter').innerHTML = `
       <button class="btn btn-secondary" onclick="closeModal('appDetailModal')">Close</button>
-      <button class="btn btn-info" onclick="openCustomEmailModal('${a.applicant_email}', '${a.applicant_name}')"><i class="fas fa-envelope"></i> Send Custom Email</button>
-      <button class="btn btn-warning" onclick="quickStatus(${a.id},'shortlisted');closeModal('appDetailModal')" ${['interview_scheduled','hired','rejected'].includes(a.status) ? 'disabled' : ''}>Shortlist</button>
-      <button class="btn btn-info" onclick="openInterviewModal(${a.id},'${a.job_title}')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-calendar"></i> Schedule Interview</button>
+      
+      <div style="display:flex;gap:8px;align-items:center;margin-right:auto;margin-left:16px">
+        <select id="interviewModeSelect" style="padding:8px;border-radius:6px;border:1px solid var(--border)">
+            <option value="ai">AI Interview</option>
+            <option value="custom">Custom (Human) Interview</option>
+        </select>
+        <button class="btn btn-primary" onclick="launchInterview(${a.id})">
+            <i class="fas fa-play"></i> Launch Interview
+        </button>
+      </div>
+
+      <button class="btn btn-info" onclick="openCustomEmailModal('${a.applicant_email}', '${a.applicant_name}')"><i class="fas fa-envelope"></i> Send Email</button>
       <button class="btn btn-success" onclick="openOfferModal(${a.id},'${a.job_title}')" ${!['interview_passed','shortlisted'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
       <button class="btn btn-danger" onclick="openReject(${a.id});closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
 
     openModal('appDetailModal');
   } catch (e) { showToast('Error loading details: ' + e.message, 'error'); }
+}
+
+// NEW: Launch Interview Handler
+async function launchInterview(applicationId) {
+    const mode = document.getElementById('interviewModeSelect').value;
+    
+    if (mode === 'ai') {
+        try {
+            const res = await API.post('/api/ai-interviews/create-link', { application_id: applicationId });
+            const link = res.interview_link;
+            copyToClipboard(link);
+            showToast(`AI Interview link copied: ${link}`, 'success', 6000);
+        } catch(e) { showToast('Error creating AI link: ' + e.message, 'error'); }
+    } else {
+        // Open the custom interview scheduling modal
+        const a = await API.get(`/api/applications/${applicationId}`);
+        closeModal('appDetailModal');
+        openInterviewModal(applicationId, a.job_title);
+    }
+}
+
+// NEW: Download AI Interview PDF
+function downloadAIInterviewPDF(interviewId) {
+    API.download(`/api/ai-interviews/${interviewId}/pdf`, `ai_interview_${interviewId}.pdf`);
 }
 
 function openInterviewModal(appId, jobTitle) {
@@ -635,9 +669,8 @@ async function scheduleInterview() {
       duration_minutes: parseInt(document.getElementById('iDuration').value) || 60,
       location: document.getElementById('iLocation').value,
     });
-    showToast(`Interview scheduled! ${res.meeting_link ? 'Meeting link: ' + res.meeting_link : ''}`, 'success', 5000);
+    showToast(`Interview scheduled! ${res.meeting_link ? 'Link: ' + res.meeting_link : ''}`, 'success', 5000);
     closeModal('interviewModal');
-    closeModal('appDetailModal');
     loadApps();
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
@@ -712,7 +745,6 @@ async function sendOffer() {
     await API.post(`/api/offers/${currentOfferId}/send`, {});
     showToast('Offer letter sent to applicant!', 'success');
     closeModal('offerModal');
-    closeModal('appDetailModal');
     loadApps();
   } catch (e) { showToast('Error sending offer: ' + e.message, 'error'); }
 }
