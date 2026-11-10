@@ -27,6 +27,16 @@
   .btn:hover{border-color:#33476d}.btn:active{transform:translateY(1px)}.btn:disabled{opacity:.5;cursor:not-allowed}
   .btn.primary{background:linear-gradient(135deg,var(--accent),#2f6fe0);border-color:transparent}
   .btn.ghost{background:transparent}
+  .btn.ghost.attention{
+    background:rgba(245,158,11,.15);
+    border-color:#f59e0b;
+    color:#fde68a;
+    animation:replay-pulse 1.4s infinite;
+  }
+  @keyframes replay-pulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}
+    50%{box-shadow:0 0 0 8px rgba(245,158,11,0)}
+  }
   .field{display:block;margin:14px 0}
   .field span{display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:#cdd9ee}
   input[type="text"]{width:100%;background:#0c1526;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font:inherit;font-size:20px;letter-spacing:4px;text-align:center;font-weight:700;text-transform:uppercase}
@@ -37,7 +47,7 @@
   .alert.error{border-color:rgba(239,68,68,.5);color:#fecaca;background:rgba(239,68,68,.08)}
   .alert.success{border-color:rgba(34,197,94,.5);color:#bbf7d0;background:rgba(34,197,94,.08)}
 
-  /* HW check */
+  /* Hardware check */
   .hw-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:14px}
   @media (max-width:760px){.hw-grid{grid-template-columns:1fr}}
   .video-wrap{position:relative;aspect-ratio:4/3;background:#0a1220;border:1px solid var(--border);border-radius:12px;overflow:hidden}
@@ -249,18 +259,17 @@
   const params = new URLSearchParams(location.search);
   const applicationId = parseInt(params.get('app_id'), 10);
 
-  /* ─── State ────────────────────────────────────────────────────────── */
+  /* ═══════════ State ═══════════ */
   const state = {
     interviewId: null,
     currentQuestion: '',
     isFollowUp: false,
-    mainQCount: 1,       // current MAIN question number (1-based)
-    maxQ: 5,             // total main questions requested
-    followUpCounter: 0,  // how many follow-ups on the current main question
-    pendingAudioB64: null,  // audio to play after Begin Interview (first Q only)
-    lastAudioB64: null,     // audio for the current question (for replay)
+    mainQCount: 1,
+    maxQ: 5,
+    followUpCounter: 0,
+    pendingAudioB64: null,
+    lastAudioB64: null,
 
-    // hardware + recording
     mediaStream: null,
     recorder: null,
     chunks: [],
@@ -268,7 +277,6 @@
     timerStart: 0,
     timerInterval: null,
 
-    // proctoring
     submitted: false,
     camWarnings: 0,
     lastCamWarn: 0,
@@ -320,7 +328,7 @@
     MAX_RECORD_SECONDS: 180,
   };
 
-  /* ─── Boot ─────────────────────────────────────────────────────────── */
+  /* ═══════════ Boot ═══════════ */
   function boot() {
     if (!applicationId || isNaN(applicationId)) {
       el.gateSection.classList.remove('hidden');
@@ -341,6 +349,7 @@
     el.beginBtn.addEventListener('click', beginInterview);
     el.recordBtn.addEventListener('click', onRecordClick);
     el.replayBtn.addEventListener('click', () => {
+      el.replayBtn.classList.remove('attention');
       if (state.lastAudioB64) playAudio(state.lastAudioB64, true);
     });
     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -384,6 +393,9 @@
       state.followUpCounter = 0;
       state.pendingAudioB64 = data.audio || null;
       state.lastAudioB64    = data.audio || null;
+
+      console.log('[interview] first question received, audio bytes ≈',
+        data.audio ? Math.round(data.audio.length * 0.75) : 0);
 
       el.gateSection.classList.add('hidden');
       el.hardwareSection.classList.remove('hidden');
@@ -511,17 +523,11 @@
   async function beginInterview() {
     if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
 
-    // Fullscreen request must be inside the click handler (user gesture).
-    await enterFullscreen();
-
+    // Switch to interview UI first.
     el.hardwareSection.classList.add('hidden');
     el.interviewSection.classList.remove('hidden');
     el.proctorBar.style.display = 'flex';
     el.cameraPreview.style.display = 'block';
-
-    el.camera.srcObject = state.mediaStream;
-    try { await el.camera.play(); } catch (_) {}
-    stopMeter();
 
     // Show the first question.
     showQuestion({
@@ -532,15 +538,21 @@
       followUpCounter: 0,
     });
 
-    // Play the first question's audio IMMEDIATELY — still inside the user-gesture
-    // window, BEFORE we kick off the slow face-api model download. If we wait
-    // for the model, browsers block autoplay.
+    // ── IMPORTANT: play the first audio synchronously, BEFORE any `await`. ──
+    // Awaiting (e.g. `await enterFullscreen()`) breaks the user-gesture chain
+    // that Chrome/Safari require for autoplay. Do it now, in the click handler.
     if (state.pendingAudioB64) {
+      state.lastAudioB64 = state.pendingAudioB64;
+      el.replayBtn.style.display = 'inline-flex';
       playAudio(state.pendingAudioB64, true);
       state.pendingAudioB64 = null;
     }
 
-    // Slow parts run in the background.
+    // Now the slow/async work.
+    el.camera.srcObject = state.mediaStream;
+    try { await el.camera.play(); } catch (_) {}
+    stopMeter();
+    await enterFullscreen();
     startProctoring().catch(e => console.error('[proctor] init failed:', e));
   }
 
@@ -747,7 +759,7 @@
       `Your interview was auto-submitted because: <strong>${escapeHtml(reason)}</strong>`;
   }
 
-  /* ═══════════ Normal completion (5 main questions done) ═══════════ */
+  /* ═══════════ Normal completion ═══════════ */
   function finishNormally() {
     if (state.submitted) return;
     state.submitted = true;
@@ -781,10 +793,10 @@
 
     el.questionText.textContent = text;
 
-    // Big "Question X of Y" header.
+    // Big "Question X of Y" header for MAIN questions.
     el.qType.textContent = `Question ${state.mainQCount} of ${state.maxQ}`;
 
-    // Show follow-up badge only when the current question IS a follow-up.
+    // Follow-up badge only when the current question is a follow-up.
     if (isFollowUp) {
       el.qFollowup.classList.remove('hidden');
       const n = state.followUpCounter > 0
@@ -795,8 +807,8 @@
       el.qFollowup.classList.add('hidden');
     }
 
-    // Small "Main questions remaining" indicator on the right.
-    const remaining = Math.max(0, state.maxQ - state.mainQCount + (isFollowUp ? 0 : 1));
+    // "N main questions remaining" mini indicator.
+    const remaining = Math.max(0, state.maxQ - state.mainQCount + (isFollowUp ? 1 : 0));
     el.qProgressMini.textContent = remaining > 0
       ? `${remaining} main question${remaining === 1 ? '' : 's'} remaining`
       : '';
@@ -808,8 +820,9 @@
     el.timer.textContent = '00:00';
     setRecordingUi(false);
     state.chunks = [];
-    state.lastAudioB64 = null;
-    el.replayBtn.style.display = 'none';
+    el.replayBtn.classList.remove('attention');
+    // Note: do NOT clear lastAudioB64 here — the next question's audio will
+    // overwrite it, and keeping it lets the candidate replay the current one.
   }
 
   /* ═══════════ Recording ═══════════ */
@@ -885,7 +898,7 @@
 
     const ext = /mp4/.test(blob.type) ? 'mp4' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
     const fd = new FormData();
-    fd.append('file', blob, 'answer.' + ext);   // backend signature: file: UploadFile = File(...)
+    fd.append('file', blob, 'answer.' + ext);
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/ai-interviews/${state.interviewId}/process`, {
@@ -900,7 +913,6 @@
 
       if (state.submitted) return;
 
-      // Show the transcript of the answer we just submitted.
       if (data.transcript) {
         el.transcriptText.textContent = data.transcript;
         el.transcriptPanel.classList.remove('hidden');
@@ -911,16 +923,12 @@
         }
       }
 
-      // 5 main questions complete → backend returns status "completed".
       if (data.status === 'completed') {
         finishNormally();
         return;
       }
 
-      // Advance to next question (main OR follow-up).
-      // followUpCounter logic:
-      //   - if the NEXT question is a follow-up, increment the counter
-      //   - if it's a new main question, reset to 0
+      // Compute followUpCounter for the next question.
       let nextFollowUpCounter = 0;
       if (data.is_follow_up) {
         nextFollowUpCounter = state.followUpCounter + 1;
@@ -934,11 +942,16 @@
         followUpCounter: nextFollowUpCounter,
       });
 
-      // Play the new question audio as soon as we have it.
+      // Play the new question audio.
       if (data.audio) {
         state.lastAudioB64 = data.audio;
         el.replayBtn.style.display = 'inline-flex';
         playAudio(data.audio, true);
+      } else {
+        // No audio came back — at least give the candidate the replay button
+        // so they can retry if the backend manages to generate audio later.
+        el.replayBtn.style.display = 'none';
+        console.warn('[interview] next question returned no audio');
       }
     } catch (e) {
       console.error('Submit error:', e);
@@ -950,7 +963,7 @@
   /* ═══════════ Audio playback ═══════════ */
   let currentAudioEl = null;
   function playAudio(b64, allowFallback) {
-    if (!b64) return;
+    if (!b64) { console.warn('[audio] empty base64'); return; }
     try {
       const binary = atob(b64);
       const bytes = new Uint8Array(binary.length);
@@ -966,15 +979,18 @@
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(err => {
-          console.warn('Audio autoplay blocked:', err);
-          if (allowFallback && !state.isRecording && !state.submitted) {
-            el.replayBtn.style.display = 'inline-flex';
-            toast('Question audio could not autoplay — tap "Replay Question" to hear it.', 'info');
+          console.warn('[audio] autoplay blocked:', err);
+          // Show the replay button prominently so the candidate can click it
+          // — the same click satisfies the browser's gesture requirement.
+          el.replayBtn.style.display = 'inline-flex';
+          el.replayBtn.classList.add('attention');
+          if (allowFallback) {
+            toast('Click "Replay Question" to hear the question.', 'info');
           }
         });
       }
     } catch (e) {
-      console.error('Audio decode error:', e);
+      console.error('[audio] decode error:', e);
     }
   }
 
@@ -1039,6 +1055,28 @@
     return String(s ?? '').replace(/[&<>"']/g, m =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
   }
+
+  /* ═══════════ Audio-context unlock ═══════════ */
+  // Browsers block autoplay until the page has received at least one user
+  // gesture. We create and resume an AudioContext on the very first
+  // pointerdown — usually the "Continue" click on the code screen — so by
+  // the time "Begin Interview" is clicked, audio playback is already
+  // permitted and the very first question plays reliably.
+  let _audioUnlocked = false;
+  document.addEventListener('pointerdown', function _unlock() {
+    if (_audioUnlocked) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        const ctx = new AC();
+        ctx.resume().then(() => {
+          _audioUnlocked = true;
+          console.log('[audio] context unlocked');
+        }).catch(() => {});
+      }
+    } catch (_) {}
+    document.removeEventListener('pointerdown', _unlock);
+  });
 
   boot();
 })();
