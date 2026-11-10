@@ -16,7 +16,7 @@
     <div class="nav-section">
       <div class="nav-section-title">Main</div>
       <a href="/dashboard.html" class="nav-item" data-path="/dashboard"><i class="fas fa-home"></i> Dashboard</a>
-      <a href="/jobs.html" class="nav-item" data-path="/jobs"><i class="fas fa-briefcase"></i> Job Postings</a>
+      <a href="/jobs.html" class="nav-item active" data-path="/jobs"><i class="fas fa-briefcase"></i> Job Postings</a>
       <a href="/applications.html" class="nav-item" data-path="/applications"><i class="fas fa-file-alt"></i> Applications</a>
     </div>
     <div class="nav-section">
@@ -90,12 +90,24 @@
       <div class="form-group"><label>Job Description *</label><textarea id="jDesc" rows="4" placeholder="Describe the role..."></textarea></div>
       <div class="form-group"><label>Requirements</label><textarea id="jReq" rows="3" placeholder="List requirements..."></textarea></div>
       <div class="form-group"><label>Required Skills (press Enter or comma to add)</label><input type="text" id="skillInput" placeholder="e.g. React, Node.js, Python"><div id="skillTags" class="tags-wrap mt-2"></div><input type="hidden" id="skillsHidden"></div>
+      
+      <!-- Form Builder Section -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
-        <div class="flex justify-between items-center mb-4"><h4><i class="fas fa-magic"></i> Application Form <span class="ai-badge"><i class="fas fa-robot"></i> AI Generated</span></h4><button class="btn btn-secondary" id="genFormBtn" onclick="generateAIForm()"><i class="fas fa-magic"></i> Generate AI Form</button></div>
-        <div id="formPreview" style="display:none"><div class="alert alert-success"><i class="fas fa-check-circle"></i> Form generated! Applicants will see this form when applying.</div><div id="formFieldsList"></div></div>
+        <div class="flex justify-between items-center mb-4">
+          <h4><i class="fas fa-magic"></i> Application Form <span class="ai-badge"><i class="fas fa-robot"></i> AI Generated</span></h4>
+          <button class="btn btn-secondary" id="genFormBtn" onclick="generateAIForm()"><i class="fas fa-magic"></i> Generate AI Form</button>
+        </div>
+        
+        <div id="formPreview" style="display:none">
+          <div class="alert alert-success"><i class="fas fa-check-circle"></i> Form generated! Tick the fields you want to include and mark them as required.</div>
+          <div id="formFieldsList" style="display:flex;flex-direction:column;gap:16px"></div>
+        </div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('jobModal')">Cancel</button><button class="btn btn-primary" onclick="saveJob()"><i class="fas fa-save"></i> Save Job</button></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('jobModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJob()"><i class="fas fa-save"></i> Save Job</button>
+    </div>
   </div>
 </div>
 
@@ -175,7 +187,10 @@ function openEditJob(id) {
   document.getElementById('jRemote').checked = job.is_remote;
   if (job.deadline) document.getElementById('jDeadline').value = job.deadline.slice(0,16);
   window['setTags_skillsHidden'](job.skills_required || []);
-  if (job.form_fields) { document.getElementById('formPreview').style.display = 'block'; renderFormPreview(job.form_fields); }
+  if (job.form_fields) { 
+    document.getElementById('formPreview').style.display = 'block'; 
+    renderFormPreview(job.form_fields); 
+  }
   openModal('jobModal');
 }
 
@@ -199,14 +214,56 @@ async function generateAIForm() {
 
 function renderFormPreview(formData) {
   const sections = formData?.sections || [];
-  let html = sections.map(s => `<div style="margin-bottom:16px"><h4 style="font-size:13px;font-weight:700;color:var(--primary-dark);margin-bottom:8px">${s.title}</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${(s.fields || []).map(f => `<div style="padding:8px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;font-size:12px"><b>${f.label}</b> ${f.required ? '<span style="color:red">*</span>' : ''}<br><span style="color:var(--text-light)">Type: ${f.type}</span>${f.options?.length ? `<br><span style="color:var(--text-light)">${f.options.slice(0,3).join(', ')}${f.options.length > 3 ? '...' : ''}</span>` : ''}</div>`).join('')}</div></div>`).join('');
+  let html = sections.map(s => `
+    <div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:14px;">
+      <h4 style="font-size:14px;font-weight:700;color:var(--primary-dark);margin-bottom:12px">${s.title}</h4>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${(s.fields || []).map(f => `
+          <div style="display:flex;align-items:center;justify-content:space-between; padding:10px 14px; background:white; border:1px solid var(--border); border-radius:6px;">
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;flex:1">
+              <input type="checkbox" class="form-field-check" data-section="${s.title}" data-field='${JSON.stringify(f)}' checked onchange="updateFormJson()" style="width:auto">
+              <div>
+                <b style="font-size:13px">${f.label}</b>
+                <div style="font-size:11px;color:var(--text-light)">Type: ${f.type} ${f.options ? `| Options: ${f.options.join(', ')}` : ''}</div>
+              </div>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;cursor:pointer">
+              <input type="checkbox" class="form-field-req" data-section="${s.title}" data-field='${JSON.stringify(f)}' ${f.required ? 'checked' : ''} onchange="updateFormJson()" style="width:auto"> Required
+            </label>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
   document.getElementById('formFieldsList').innerHTML = html;
+}
+
+function updateFormJson() {
+  const newSections = {};
+  
+  document.querySelectorAll('.form-field-check:checked').forEach(chk => {
+    const sectionTitle = chk.dataset.section;
+    const field = JSON.parse(chk.dataset.field);
+    
+    // Check the corresponding "Required" toggle
+    const reqChk = document.querySelector(`.form-field-req[data-section="${sectionTitle}"][data-field='${chk.dataset.field}']`);
+    field.required = reqChk ? reqChk.checked : false;
+
+    if (!newSections[sectionTitle]) newSections[sectionTitle] = { title: sectionTitle, fields: [] };
+    newSections[sectionTitle].fields.push(field);
+  });
+
+  generatedFormFields = { sections: Object.values(newSections) };
 }
 
 async function saveJob() {
   const title = document.getElementById('jTitle').value;
   const dept = document.getElementById('jDept').value;
   if (!title || !dept) { showToast('Title and department are required', 'warning'); return; }
+  
+  // Final call to ensure JSON is up to date with toggles
+  updateFormJson();
+
   const payload = {
     title, department: dept,
     job_type: document.getElementById('jType').value,
