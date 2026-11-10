@@ -78,6 +78,27 @@
 
   <!-- Tab 1: Directory -->
   <div id="directoryTab" class="tab-content active">
+    
+    <!-- Advanced Search & Filters -->
+    <div class="filters-bar" style="margin-bottom:16px">
+      <div class="filter-group" style="flex: 2;">
+        <label>Search Employee</label>
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" id="fEmpSearch" placeholder="Search Name, Email, Phone or Employee ID..." oninput="debounce(loadEmployees,400)()">
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Department</label>
+        <select id="fEmpDept" onchange="loadEmployees()">
+          <option value="">All Departments</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="clearEmpFilters()"><i class="fas fa-times"></i> Clear</button>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header">
         <h3><i class="fas fa-users"></i> Employee Directory <span id="empCount" class="nav-badge">0</span></h3>
@@ -246,24 +267,37 @@ document.getElementById('attDate').value = new Date().toISOString().split('T')[0
 document.getElementById('attMarkDate').value = new Date().toISOString().split('T')[0];
 
 async function loadEmployees() {
-  const dept = document.getElementById('fDept')?.value || '';
-  const status = document.getElementById('fStatus')?.value || '';
+  const search = document.getElementById('fEmpSearch').value;
+  const dept = document.getElementById('fEmpDept').value;
   const params = new URLSearchParams();
+  
+  if (search) params.append('search', search);
   if (dept) params.append('department', dept);
   
   try {
     employees = await API.get('/api/employees?' + params);
     
+    // Populate department filter (only if it's currently empty to avoid resetting selection)
+    const deptSel = document.getElementById('fEmpDept');
+    if (deptSel.options.length <= 1) {
+      // Fetch all employees to get the full list of departments (ignoring current filter)
+      const allEmps = search ? await API.get('/api/employees') : employees;
+      const depts = [...new Set(allEmps.map(e => e.department))];
+      const curVal = deptSel.value;
+      deptSel.innerHTML = '<option value="">All Departments</option>' + depts.map(d => `<option value="${d}" ${d===curVal?'selected':''}>${d}</option>`).join('');
+    }
+
     // Populate attendance selectors
     const attFilter = document.getElementById('attEmpFilter');
     const markSelect = document.getElementById('attEmployeeSelect');
-    if (attFilter) attFilter.innerHTML = '<option value="">All Employees</option>' + employees.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
-    if (markSelect) markSelect.innerHTML = employees.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+    if (attFilter && attFilter.options.length <= 1) {
+      const allEmps = await API.get('/api/employees');
+      if (attFilter) attFilter.innerHTML = '<option value="">All Employees</option>' + allEmps.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+      if (markSelect) markSelect.innerHTML = allEmps.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+    }
 
-    const filtered = status ? employees.filter(e => e.status === status) : employees;
-    
-    document.getElementById('empCount').textContent = filtered.length;
-    document.getElementById('empBody').innerHTML = filtered.length ? filtered.map(e => `
+    document.getElementById('empCount').textContent = employees.length;
+    document.getElementById('empBody').innerHTML = employees.length ? employees.map(e => `
       <tr>
         <td><span class="badge badge-shortlisted">${e.employee_id}</span></td>
         <td><div class="font-bold">${e.full_name}</div><div class="text-xs text-light">${e.email}</div><div class="text-xs text-light">${e.phone || ''}</div></td>
@@ -277,8 +311,14 @@ async function loadEmployees() {
           <button class="btn btn-sm btn-info" onclick="openCustomEmailModal('${e.email}', '${e.full_name}')"><i class="fas fa-envelope"></i> Email</button>
         </div></td>
       </tr>`).join('') :
-      '<tr><td colspan="8"><div class="empty-state"><i class="fas fa-users"></i><h3>No employees found</h3></div></td></tr>';
+      '<tr><td colspan="8"><div class="empty-state"><i class="fas fa-users"></i><h3>No employees found</h3><p>Try a different search</p></div></td></tr>';
   } catch(e) { showToast('Error loading employees: ' + e.message, 'error'); }
+}
+
+function clearEmpFilters() {
+  document.getElementById('fEmpSearch').value = '';
+  document.getElementById('fEmpDept').value = '';
+  loadEmployees();
 }
 
 function openAddModal() {
@@ -354,11 +394,10 @@ async function loadAttendance() {
     }
     tbody.innerHTML = attendanceData.map(r => {
       const emp = employees.find(e => e.id === r.employee_id);
-      const badgeClass = r.status === 'present' ? 'badge-active' : r.status === 'absent' ? 'badge-rejected' : r.status === 'leave' ? 'badge-pending' : 'badge-interview';
       return `<tr>
         <td>${fmtDate(r.date)}</td>
         <td class="font-bold">${emp ? emp.full_name : 'Unknown'}</td>
-        <td><span class="badge ${badgeClass}">${r.status.replace('_', ' ').toUpperCase()}</span></td>
+        <td>${statusBadge(r.status)}</td>
         <td>${r.check_in || '-'}</td>
         <td>${r.check_out || '-'}</td>
         <td class="text-xs text-light">${r.notes || ''}</td>
