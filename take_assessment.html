@@ -139,6 +139,7 @@
     </span>
   </div>
 
+  <!-- Guidelines Card (Updated with Plagiarism Warning) -->
   <div class="guidelines-card">
     <h3><i class="fas fa-exclamation-triangle"></i> Rules & Guidelines — Read Carefully</h3>
     <ul>
@@ -146,6 +147,7 @@
       <li><i class="fas fa-check-circle"></i> <div><b>No Tab Switching:</b> Do not switch tabs, minimize the window, or open other apps. Doing so will instantly auto-submit your assessment.</div></li>
       <li><i class="fas fa-check-circle"></i> <div><b>Stay in Frame:</b> Ensure your face is clearly visible in the camera. Looking away for too long or having multiple people in the frame will result in warnings.</div></li>
       <li><i class="fas fa-check-circle"></i> <div><b>No Talking:</b> The microphone will monitor for loud voices or background help. 3 warnings in any category will auto-submit your test.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>Zero Tolerance for Plagiarism:</b> All written answers are automatically scanned. Copy-pasting the question text or using predictable AI-generated language will result in <b>immediate mark deductions</b>.</div></li>
       <li><i class="fas fa-check-circle"></i> <div><b>Stable Connection:</b> Ensure you have a stable internet connection before starting.</div></li>
     </ul>
   </div>
@@ -238,7 +240,7 @@
 </div>
 
 <script>
-console.log("✅ HRPro Proctoring Script V9.0 Loaded");
+console.log("✅ HRPro Proctoring Script V10.0 Loaded");
 
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 const pathSegments = window.location.pathname.split('/').filter(Boolean);
@@ -449,15 +451,12 @@ async function startAssessment() {
   if (assessment.anti_cheat) {
     document.getElementById('proctorBar').style.display = 'flex';
   } else {
-    // If anti-cheat is off, we still need to show the timer bar (without warning counters)
     document.getElementById('proctorBar').style.display = 'flex';
     document.getElementById('camWarnItem').style.display = 'none';
     document.getElementById('voiceWarnItem').style.display = 'none';
   }
 
   renderQuestions();
-  
-  // FIX: Timer always starts regardless of anti-cheat
   startTimer();
   state.startTime = Date.now();
 
