@@ -122,6 +122,7 @@
         <option value="under_review">Under Review</option>
         <option value="shortlisted">Shortlisted</option>
         <option value="interview_scheduled">Interview Scheduled</option>
+        <option value="interview_completed">Interview Completed</option>
         <option value="interview_passed">Interview Passed</option>
         <option value="offer_sent">Offer Sent</option>
         <option value="hired">Hired</option>
@@ -555,6 +556,7 @@ async function viewApp(id) {
     
     const skillGap = a.skill_gap_analysis || {};
     const skills = a.skills || [];
+    const aiCompleted = a.ai_interview && ['completed', 'auto_submitted'].includes(a.ai_interview.status);
     
     document.getElementById('appDetailBody').innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">
@@ -599,10 +601,25 @@ async function viewApp(id) {
           <div class="card mb-4">
             <div class="card-header"><h3><i class="fas fa-robot"></i> AI Interview</h3></div>
             <div class="card-body text-sm">
-              <div><b>Status:</b> ${a.ai_interview.status.toUpperCase()}</div>
-              <button class="btn btn-sm btn-info mt-3" onclick="downloadAIInterviewPDF(${a.ai_interview.id})">
-                <i class="fas fa-file-pdf"></i> Download Transcript PDF
-              </button>
+              <div class="flex justify-between items-center">
+                <div><b>Status:</b> ${a.ai_interview.status.replace('_', ' ').toUpperCase()}</div>
+                ${aiCompleted
+                  ? '<span class="badge badge-active" style="background:#d1fae5;color:#059669"><i class="fas fa-check-circle"></i> Finished</span>'
+                  : '<span class="badge badge-pending" style="background:#fef3c7;color:#d97706"><i class="fas fa-hourglass-half"></i> In Progress</span>'}
+              </div>
+              ${aiCompleted ? `
+                <div class="alert" style="margin-top:10px;background:#ecfdf5;border-color:#10b981;color:#065f46;font-size:13px">
+                  <i class="fas fa-info-circle"></i> The AI interview has finished. You can review the transcript below, then generate an offer.
+                </div>
+              ` : ''}
+              <div class="flex gap-2 mt-3" style="flex-wrap:wrap">
+                <button class="btn btn-sm btn-info" onclick="downloadAIInterviewPDF(${a.ai_interview.id})">
+                  <i class="fas fa-file-pdf"></i> Download Transcript PDF
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="window.open('/interviews.html', '_blank')">
+                  <i class="fas fa-external-link-alt"></i> View on Interviews Page
+                </button>
+              </div>
             </div>
           </div>` : ''}
         </div>
@@ -634,21 +651,27 @@ async function viewApp(id) {
         </div>
       </div>`;
 
+    // ── Footer: Launch Interview / Send Email / Generate Offer / Reject ──
+    // NOTE: 'interview_completed' was added to the enabled list for Generate Offer
+    // so HR can proceed to send an offer as soon as an AI interview finishes.
+    const offerEnabled = ['interview_passed', 'interview_completed', 'shortlisted'].includes(a.status);
+    const launchDisabled = aiCompleted;
+
     document.getElementById('appDetailFooter').innerHTML = `
       <button class="btn btn-secondary" onclick="closeModal('appDetailModal')">Close</button>
       
       <div style="display:flex;gap:8px;align-items:center;margin-right:auto;margin-left:16px">
-        <select id="interviewModeSelect" style="padding:8px;border-radius:6px;border:1px solid var(--border)">
+        <select id="interviewModeSelect" ${launchDisabled ? 'disabled' : ''} style="padding:8px;border-radius:6px;border:1px solid var(--border)">
             <option value="ai">AI Interview</option>
             <option value="custom">Custom (Human) Interview</option>
         </select>
-        <button class="btn btn-primary" onclick="launchInterview(${a.id})">
+        <button class="btn btn-primary" onclick="launchInterview(${a.id})" ${launchDisabled ? 'disabled title="An AI interview has already been completed for this candidate"' : ''}>
             <i class="fas fa-play"></i> Launch Interview
         </button>
       </div>
 
       <button class="btn btn-info" onclick="openCustomEmailModal('${a.applicant_email}', '${a.applicant_name}')"><i class="fas fa-envelope"></i> Send Email</button>
-      <button class="btn btn-success" onclick="openOfferModal(${a.id},'${a.job_title}')" ${!['interview_passed','shortlisted'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
+      <button class="btn btn-success" onclick="openOfferModal(${a.id},'${a.job_title}')" ${!offerEnabled ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
       <button class="btn btn-danger" onclick="openReject(${a.id});closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
 
     openModal('appDetailModal');
