@@ -46,7 +46,7 @@
       <div class="nav-section-title">Main</div>
       <a href="/dashboard.html" class="nav-item" data-path="/dashboard"><i class="fas fa-home"></i> Dashboard</a>
       <a href="/jobs.html" class="nav-item" data-path="/jobs"><i class="fas fa-briefcase"></i> Job Postings</a>
-      <a href="/applications.html" class="nav-item" data-path="/applications"><i class="fas fa-file-alt"></i> Applications</a>
+      <a href="/applications.html" class="nav-item active" data-path="/applications"><i class="fas fa-file-alt"></i> Applications</a>
     </div>
     <div class="nav-section">
       <div class="nav-section-title">Recruitment</div>
@@ -65,6 +65,7 @@
   </nav>
   <div class="sidebar-user" id="sidebarUser"></div>
 </div>
+
 <div class="main-content">
 <header class="header">
   <div style="display:flex;align-items:center;gap:12px">
@@ -81,6 +82,7 @@
     </button>
   </div>
 </header>
+
 <div class="page-content">
   <div class="page-header">
     <div><h1>Applications</h1><p>Review and manage candidate applications</p></div>
@@ -90,12 +92,29 @@
     </div>
   </div>
 
-  <!-- Filters -->
-  <div class="filters-bar">
-    <div class="filter-group">
-      <label>Search</label>
-      <div class="search-box"><i class="fas fa-search"></i><input type="text" id="fSearch" placeholder="Name or email" oninput="debounce(loadApps,400)()"></div>
+  <!-- Advanced Filters -->
+  <div class="filters-bar" style="flex-wrap: wrap;">
+    <div class="filter-group" style="flex: 1 1 100%;">
+      <label>Global Search (Name, Email, Phone, or Application Code)</label>
+      <div class="search-box"><i class="fas fa-search"></i><input type="text" id="fGlobal" placeholder="Search candidates..." oninput="debounce(loadApps,400)()"></div>
     </div>
+    
+    <div class="filter-group">
+      <label>Job Title</label>
+      <input type="text" id="fJobTitle" placeholder="e.g. React Developer" oninput="debounce(loadApps,400)()">
+    </div>
+    
+    <div class="filter-group">
+      <label>Job Type</label>
+      <select id="fJobType" onchange="loadApps()">
+        <option value="">All Types</option>
+        <option value="full_time">Full Time</option>
+        <option value="part_time">Part Time</option>
+        <option value="contract">Contract</option>
+        <option value="internship">Internship</option>
+      </select>
+    </div>
+
     <div class="filter-group">
       <label>Status</label>
       <select id="fStatus" onchange="loadApps()">
@@ -110,23 +129,18 @@
         <option value="rejected">Rejected</option>
       </select>
     </div>
+
     <div class="filter-group">
       <label>Min Experience (yrs)</label>
       <input type="number" id="fMinExp" min="0" step="0.5" oninput="loadApps()">
     </div>
+
     <div class="filter-group">
       <label>Min CGPA</label>
       <input type="number" id="fMinCgpa" min="0" max="4" step="0.1" oninput="loadApps()">
     </div>
-    <div class="filter-group">
-      <label>Max Experience (yrs)</label>
-      <input type="number" id="fMaxExp" min="0" step="0.5" oninput="loadApps()">
-    </div>
-    <div class="filter-group">
-      <label>Max CGPA</label>
-      <input type="number" id="fMaxCgpa" min="0" max="4" step="0.1" oninput="loadApps()">
-    </div>
-    <div style="display:flex;align-items:flex-end">
+
+    <div style="display:flex;align-items:flex-end; padding-bottom:2px;">
       <button class="btn btn-secondary btn-sm" onclick="clearFilters()"><i class="fas fa-times"></i> Clear</button>
     </div>
   </div>
@@ -148,18 +162,17 @@
           <tr>
             <th><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
             <th>Applicant</th>
-            <th>Job</th>
+            <th>Job Details</th>
             <th>App Code</th>
             <th>Experience</th>
             <th>CGPA</th>
-            <th>Skills Match</th>
             <th>Applied</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody id="appsBody">
-          <tr><td colspan="10" style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+          <tr><td colspan="9" style="text-align:center;padding:40px"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
         </tbody>
       </table>
     </div>
@@ -342,10 +355,7 @@
 
 <script src="/static/app.js"></script>
 <script>
-// Must match the Hugging Face backend URL defined in app.js
-const APPLICATIONS_BACKEND_URL = typeof BACKEND_URL !== 'undefined'
-  ? BACKEND_URL
-  : 'https://hrhiringpro-hrpro.hf.space';
+const APPLICATIONS_BACKEND_URL = typeof BACKEND_URL !== 'undefined' ? BACKEND_URL : 'https://hrhiringpro-hrpro.hf.space';
 
 requireAuth();
 renderSidebarUser();
@@ -360,56 +370,54 @@ let currentOfferId = null;
 let currentOfferAppTitle = '';
 
 document.getElementById('iType').onchange = function() {
-  document.getElementById('officeLocationGroup').style.display =
-    this.value === 'office' ? 'block' : 'none';
-  document.getElementById('meetingInfo').style.display =
-    this.value === 'online' ? 'block' : 'none';
+  document.getElementById('officeLocationGroup').style.display = this.value === 'office' ? 'block' : 'none';
+  document.getElementById('meetingInfo').style.display = this.value === 'online' ? 'block' : 'none';
 };
 
 async function loadApps() {
   const params = new URLSearchParams();
-  const s = document.getElementById('fStatus').value;
-  const minExp = document.getElementById('fMinExp').value;
-  const maxExp = document.getElementById('fMaxExp').value;
-  const minCgpa = document.getElementById('fMinCgpa').value;
-  const maxCgpa = document.getElementById('fMaxCgpa').value;
-  const search = document.getElementById('fSearch').value;
+  
+  // Global search (Name, Email, Phone)
+  const globalSearch = document.getElementById('fGlobal').value;
+  if (globalSearch) {
+    params.append('search', globalSearch);
+    // If the input looks like an 8-character code, also filter by app_code
+    if (/^[A-Z0-9]{8}$/i.test(globalSearch)) {
+      params.append('app_code', globalSearch);
+    }
+  }
 
-  if (s) params.append('status', s);
+  const jobTitle = document.getElementById('fJobTitle').value;
+  const jobType = document.getElementById('fJobType').value;
+  const status = document.getElementById('fStatus').value;
+  const minExp = document.getElementById('fMinExp').value;
+  const minCgpa = document.getElementById('fMinCgpa').value;
+
+  if (jobTitle) params.append('job_title', jobTitle);
+  if (jobType) params.append('job_type', jobType);
+  if (status) params.append('status', status);
   if (minExp) params.append('min_experience', minExp);
-  if (maxExp) params.append('max_experience', maxExp);
   if (minCgpa) params.append('min_cgpa', minCgpa);
-  if (maxCgpa) params.append('max_cgpa', maxCgpa);
-  if (search) params.append('search', search);
 
   try {
     apps = await API.get('/api/applications?' + params);
     document.getElementById('appCount').textContent = apps.length;
     renderApps();
-  } catch (e) {
-    showToast('Error loading applications', 'error');
-  }
+  } catch(e) { showToast('Error loading applications: ' + e.message, 'error'); }
 }
 
-/** Render a code pill with copy button (or muted placeholder when absent). */
 function renderAppCode(code) {
   if (!code) return '<span class="code-pill muted">—</span>';
   const safe = String(code).replace(/[^A-Z0-9]/gi, '');
   return `<span class="code-pill">${safe}
-    <i class="fas fa-copy copy"
-       title="Copy application code"
-       onclick="event.stopPropagation();copyCode('${safe}')"></i>
+    <i class="fas fa-copy copy" title="Copy application code" onclick="event.stopPropagation();copyCode('${safe}')"></i>
   </span>`;
 }
 
 function copyCode(code) {
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(code)
-      .then(() => showToast(`Copied: ${code}`, 'success', 2000))
-      .catch(() => copyFallback(code));
-  } else {
-    copyFallback(code);
-  }
+    navigator.clipboard.writeText(code).then(() => showToast(`Copied: ${code}`, 'success', 2000)).catch(() => copyFallback(code));
+  } else { copyFallback(code); }
 }
 
 function copyFallback(code) {
@@ -419,23 +427,19 @@ function copyFallback(code) {
   tmp.style.opacity = '0';
   document.body.appendChild(tmp);
   tmp.select();
-  try { document.execCommand('copy'); showToast(`Copied: ${code}`, 'success', 2000); }
-  catch (e) { showToast('Copy failed', 'error'); }
+  try { document.execCommand('copy'); showToast(`Copied: ${code}`, 'success', 2000); } catch (e) { showToast('Copy failed', 'error'); }
   document.body.removeChild(tmp);
 }
 
 function renderApps() {
   if (!apps.length) {
-    document.getElementById('appsBody').innerHTML =
-      '<tr><td colspan="10"><div class="empty-state"><i class="fas fa-inbox"></i><h3>No Applications Found</h3><p>Try adjusting your filters</p></div></td></tr>';
+    document.getElementById('appsBody').innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><h3>No Applications Found</h3><p>Try adjusting your filters</p></div></td></tr>';
     return;
   }
 
   document.getElementById('appsBody').innerHTML = apps.map(a => {
     const match = a.skill_gap_analysis?.match_percentage || 0;
-    const matchColor = match >= 70 ? 'var(--success)'
-                     : match >= 40 ? 'var(--warning)'
-                     : 'var(--danger)';
+    const matchColor = match >= 70 ? 'var(--success)' : match >= 40 ? 'var(--warning)' : 'var(--danger)';
     return `<tr>
       <td><input type="checkbox" class="app-check" value="${a.id}" onchange="toggleSelect(${a.id})"></td>
       <td>
@@ -443,16 +447,13 @@ function renderApps() {
         <div class="text-xs text-light">${a.applicant_email}</div>
         <div class="text-xs text-light">${a.applicant_phone || ''}</div>
       </td>
-      <td class="text-sm">${a.job_title}</td>
+      <td>
+        <div class="text-sm font-bold">${a.job_title}</div>
+        <div class="text-xs"><span class="badge badge-shortlisted" style="font-size:10px;padding:2px 6px">${a.job_type ? a.job_type.replace('_', ' ').toUpperCase() : 'FULL TIME'}</span></div>
+      </td>
       <td>${renderAppCode(a.application_code)}</td>
       <td class="text-sm">${a.experience_years} yrs</td>
       <td class="text-sm">${a.cgpa || '-'}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div class="progress-bar" style="width:80px"><div class="progress-fill" style="width:${match}%;background:${matchColor}"></div></div>
-          <span style="font-size:12px;color:${matchColor};font-weight:600">${match}%</span>
-        </div>
-      </td>
       <td class="text-xs text-light">${fmtDate(a.applied_at)}</td>
       <td>${statusBadge(a.status)}</td>
       <td>
@@ -498,20 +499,12 @@ function clearSelection() {
 async function bulkStatus(action) {
   if (!selectedIds.size) return;
   try {
-    const reason = action === 'rejected'
-      ? (prompt('Rejection reason:') || 'Application not selected')
-      : '';
-    await API.post('/api/applications/bulk-action', {
-      application_ids: [...selectedIds],
-      action,
-      rejection_reason: reason,
-    });
+    const reason = action === 'rejected' ? (prompt('Rejection reason:') || 'Application not selected') : '';
+    await API.post('/api/applications/bulk-action', { application_ids: [...selectedIds], action, rejection_reason: reason });
     showToast('Bulk action applied', 'success');
     clearSelection();
     loadApps();
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 async function quickStatus(id, status) {
@@ -519,17 +512,12 @@ async function quickStatus(id, status) {
     await API.put(`/api/applications/${id}/status`, { status });
     showToast(`Status updated to ${status}`, 'success');
     loadApps();
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 function openReject(id) {
   rejectingAppId = id;
-  const app = apps.find(a => a.id === id);
   document.getElementById('rejectReason').value = '';
-  window._rejectAppName = app?.applicant_name;
-  window._rejectJobTitle = app?.job_title;
   openModal('rejectModal');
 }
 
@@ -537,27 +525,21 @@ async function confirmReject() {
   const reason = document.getElementById('rejectReason').value;
   if (!reason) { showToast('Please enter a rejection reason', 'warning'); return; }
   try {
-    await API.put(`/api/applications/${rejectingAppId}/status`, {
-      status: 'rejected',
-      rejection_reason: reason,
-    });
+    await API.put(`/api/applications/${rejectingAppId}/status`, { status: 'rejected', rejection_reason: reason });
     showToast('Application rejected and email sent', 'success');
     closeModal('rejectModal');
     loadApps();
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 async function viewApp(id) {
   try {
     const a = await API.get(`/api/applications/${id}`);
-    document.getElementById('appDetailTitle').innerHTML =
-      `<i class="fas fa-user"></i> ${a.applicant_name} — ${a.job_title}`;
-
+    document.getElementById('appDetailTitle').innerHTML = `<i class="fas fa-user"></i> ${a.applicant_name} — ${a.job_title}`;
+    
     const skillGap = a.skill_gap_analysis || {};
     const skills = a.skills || [];
-
+    
     document.getElementById('appDetailBody').innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">
         <div style="flex:1;min-width:280px">
@@ -572,21 +554,12 @@ async function viewApp(id) {
                 <div><b>CGPA:</b> ${a.cgpa || '-'}</div>
                 <div><b>Applied:</b> ${fmtDate(a.applied_at)}</div>
                 <div style="grid-column:1/-1">
-                  <b>Application Code:</b>
-                  ${a.application_code
-                    ? `<span class="code-pill" style="margin-left:6px">${a.application_code}
-                        <i class="fas fa-copy copy" title="Copy" onclick="copyCode('${a.application_code}')"></i>
-                       </span>`
-                    : '<span class="text-light">—</span>'}
+                  <b>Application Code:</b> ${renderAppCode(a.application_code)}
                 </div>
               </div>
               <div class="mt-4"><b>Skills:</b><div class="tags-wrap mt-2">${skills.map(s => `<span class="tag">${s}</span>`).join('') || '<span class="text-light">None listed</span>'}</div></div>
               ${a.cover_letter ? `<div class="mt-4"><b>Cover Letter:</b><p class="text-sm mt-2" style="line-height:1.7;background:#f8fafc;padding:12px;border-radius:8px">${a.cover_letter}</p></div>` : ''}
-              ${a.cv_filename ? `
-                <div class="mt-4">
-                  <b>CV/Resume:</b><br>
-                  <button class="btn btn-sm btn-primary mt-2" onclick="downloadCV(${a.id})"><i class="fas fa-download"></i> Download CV</button>
-                </div>` : '<div class="mt-4 text-light">No CV uploaded</div>'}
+              ${a.cv_filename ? `<div class="mt-4"><b>CV/Resume:</b><br><button class="btn btn-sm btn-primary mt-2" onclick="downloadCV(${a.id})"><i class="fas fa-download"></i> Download CV</button></div>` : '<div class="mt-4 text-light">No CV uploaded</div>'}
             </div>
           </div>
 
@@ -598,16 +571,10 @@ async function viewApp(id) {
                 <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:8px">
                   <div class="flex justify-between items-center">
                     <div><b>${r.score}/${r.total_marks}</b> (${r.percentage}%)</div>
-                    <div class="flex gap-2">
-                      ${statusBadge(r.passed ? 'passed' : 'failed')}
-                      <span class="badge badge-shortlisted">Grade: ${r.grade}</span>
-                    </div>
+                    <div class="flex gap-2">${statusBadge(r.passed ? 'passed' : 'failed')}<span class="badge badge-shortlisted">Grade: ${r.grade}</span></div>
                   </div>
                   <div class="progress-bar mt-2"><div class="progress-fill" style="width:${r.percentage}%"></div></div>
                   ${r.ai_feedback ? `<p class="text-sm text-light mt-2">${r.ai_feedback}</p>` : ''}
-                  ${!r.mark_sheet_sent
-                    ? `<button class="btn btn-sm btn-info mt-2" onclick="sendMarksheet(${r.id})"><i class="fas fa-paper-plane"></i> Send Marksheet</button>`
-                    : '<span class="text-xs text-light mt-2">✓ Marksheet sent</span>'}
                 </div>`).join('')}
             </div>
           </div>` : ''}
@@ -624,7 +591,6 @@ async function viewApp(id) {
               <div class="progress-bar mb-4"><div class="progress-fill" style="width:${skillGap.match_percentage || 0}%"></div></div>
               <div style="font-size:13px"><b>Matching:</b><div class="tags-wrap mt-1 mb-2">${(skillGap.matching_skills || []).map(s => `<span class="tag" style="background:#d1fae5;color:#059669">${s}</span>`).join('') || '<span class="text-light">-</span>'}</div></div>
               <div style="font-size:13px"><b>Missing:</b><div class="tags-wrap mt-1">${(skillGap.missing_skills || []).map(s => `<span class="tag" style="background:#fee2e2;color:#dc2626">${s}</span>`).join('') || '<span class="text-light">None</span>'}</div></div>
-              ${skillGap.recommendation ? `<div class="alert alert-info mt-4 text-sm">${skillGap.recommendation}</div>` : ''}
             </div>
           </div>
 
@@ -636,26 +602,6 @@ async function viewApp(id) {
               <div><b>Date:</b> ${fmtDateTime(a.interview.date)}</div>
               ${a.interview.meeting_link ? `<div><b>Link:</b> <a href="${a.interview.meeting_link}" target="_blank" style="color:var(--primary)">${a.interview.meeting_link}</a></div>` : ''}
               <div class="mt-2">${statusBadge(a.interview.status)}</div>
-              ${a.interview.status === 'scheduled'
-                ? `<button class="btn btn-sm btn-success mt-2" onclick="markInterviewPassed(${a.interview.id})"><i class="fas fa-check"></i> Mark Passed</button>`
-                : ''}
-            </div>
-          </div>` : ''}
-
-          ${a.offers?.length ? `
-          <div class="card">
-            <div class="card-header"><h3><i class="fas fa-file-contract"></i> Offers</h3></div>
-            <div class="card-body text-sm">
-              ${a.offers.map(o => `<div style="padding:8px;background:#f8fafc;border-radius:8px;margin-bottom:6px"><b>${o.type}</b> — ${statusBadge(o.status)} — Salary: ${fmtCurrency(o.salary)}</div>`).join('')}
-            </div>
-          </div>` : ''}
-
-          ${a.company_rating ? `
-          <div class="card mt-4">
-            <div class="card-header"><h3><i class="fas fa-star"></i> Company Rating by Candidate</h3></div>
-            <div class="card-body text-sm">
-              <div class="star-rating">${[1,2,3,4,5].map(i => `<span class="star ${i <= a.company_rating ? 'active' : ''}">★</span>`).join('')}</div>
-              ${a.company_rating_feedback ? `<p class="mt-2 text-light">"${a.company_rating_feedback}"</p>` : ''}
             </div>
           </div>` : ''}
         </div>
@@ -670,9 +616,7 @@ async function viewApp(id) {
       <button class="btn btn-danger" onclick="openReject(${a.id});closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
 
     openModal('appDetailModal');
-  } catch (e) {
-    showToast('Error loading details: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error loading details: ' + e.message, 'error'); }
 }
 
 function openInterviewModal(appId, jobTitle) {
@@ -695,20 +639,7 @@ async function scheduleInterview() {
     closeModal('interviewModal');
     closeModal('appDetailModal');
     loadApps();
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-async function markInterviewPassed(interviewId) {
-  try {
-    await API.put(`/api/interviews/${interviewId}`, { status: 'passed' });
-    showToast('Interview marked as passed', 'success');
-    closeModal('appDetailModal');
-    loadApps();
-  } catch (e) {
-    showToast('Error', 'error');
-  }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 function openOfferModal(appId, jobTitle) {
@@ -745,9 +676,7 @@ async function generateOffer() {
     document.getElementById('offerPreview').style.display = 'block';
     document.getElementById('sendOfferBtn').style.display = 'inline-flex';
     showToast('Offer letter generated!', 'success');
-  } catch (e) {
-    showToast('Error generating offer: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error generating offer: ' + e.message, 'error'); }
 }
 
 async function sendOffer() {
@@ -765,18 +694,14 @@ async function sendOffer() {
         job_type: document.getElementById('offerJobType').value,
       });
       currentOfferId = data.id;
-      await API.put(`/api/offers/${currentOfferId}`, {
-        content: document.getElementById('offerContent').value,
-      });
+      await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
     } catch (e) {
       showToast('Error creating offer: ' + e.message, 'error');
       return;
     }
   } else {
     try {
-      await API.put(`/api/offers/${currentOfferId}`, {
-        content: document.getElementById('offerContent').value,
-      });
+      await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
     } catch (e) {
       showToast('Error saving changes: ' + e.message, 'error');
       return;
@@ -789,19 +714,7 @@ async function sendOffer() {
     closeModal('offerModal');
     closeModal('appDetailModal');
     loadApps();
-  } catch (e) {
-    showToast('Error sending offer: ' + e.message, 'error');
-  }
-}
-
-async function sendMarksheet(resultId) {
-  try {
-    await API.post(`/api/assessment-results/${resultId}/send-marksheet`, {});
-    showToast('Marksheet sent!', 'success');
-    closeModal('appDetailModal');
-  } catch (e) {
-    showToast('Error', 'error');
-  }
+  } catch (e) { showToast('Error sending offer: ' + e.message, 'error'); }
 }
 
 function bulkActionModal() { openModal('bulkModal'); }
@@ -834,7 +747,7 @@ async function applyBulkAction(action) {
 }
 
 function clearFilters() {
-  ['fStatus','fMinExp','fMaxExp','fMinCgpa','fMaxCgpa','fSearch'].forEach(id => {
+  ['fGlobal', 'fJobTitle', 'fJobType', 'fStatus', 'fMinExp', 'fMinCgpa'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -844,8 +757,7 @@ function clearFilters() {
 async function exportEmails() {
   try {
     const data = await API.get('/api/employees/export-emails');
-    const csv = 'Name,Email,Department\n' +
-      data.map(e => `${e.name},${e.email},${e.department}`).join('\n');
+    const csv = 'Name,Email,Department\n' + data.map(e => `${e.name},${e.email},${e.department}`).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
