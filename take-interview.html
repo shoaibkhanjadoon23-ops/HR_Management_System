@@ -19,10 +19,11 @@
     
     .question-box { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); padding: 24px; border-radius: 16px; margin-bottom: 30px; min-height: 100px; text-align: left; font-size: 16px; line-height: 1.6; display: flex; align-items: center; }
     
-    .btn-record { background: #dc2626; color: white; border: none; padding: 24px; border-radius: 50%; font-size: 28px; cursor: pointer; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin: 0 auto; transition: all 0.2s; box-shadow: 0 0 20px rgba(220,38,38,0.5); }
+    .btn-record { background: #dc2626; color: white; border: none; padding: 24px; border-radius: 50%; font-size: 28px; cursor: pointer; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin: 0 auto; transition: all 0.2s; box-shadow: 0 0 20px rgba(220,38,38,0.5); position: relative; }
     .btn-record:hover { transform: scale(1.05); }
     .btn-record.recording { animation: pulse-record 1.2s infinite; background: #ef4444; box-shadow: 0 0 40px rgba(239,68,68,0.8); }
     @keyframes pulse-record { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+    .record-timer { position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%); font-size: 14px; font-weight: bold; color: #ef4444; white-space: nowrap; }
     
     .verify-input { width: 100%; padding: 16px; font-size: 24px; text-align: center; letter-spacing: 6px; text-transform: uppercase; border-radius: 10px; border: 2px solid #6366f1; background: rgba(255,255,255,0.05); color: white; margin-bottom: 20px; font-weight: 700; outline: none; }
     .verify-input::placeholder { color: rgba(99,102,241,0.5); letter-spacing: 4px; }
@@ -38,7 +39,7 @@
     .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     
-    .status-text { margin-top: 15px; color: #a5b4fc; font-size: 14px; font-weight: 500; }
+    .status-text { margin-top: 30px; color: #a5b4fc; font-size: 14px; font-weight: 500; }
     
     .warning-toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #dc2626; color: white; padding: 16px 28px; border-radius: 12px; font-weight: 700; font-size: 15px; z-index: 2000; animation: slideDown 0.3s ease; box-shadow: 0 10px 30px rgba(220,38,38,0.5); max-width: 90vw; text-align: center; }
     @keyframes slideDown { from { top: -60px; opacity: 0; } to { top: 80px; opacity: 1; } }
@@ -78,16 +79,19 @@
         Preparing your first question...
     </div>
     
-    <button class="btn-record" id="recordBtn" onclick="toggleRecording()">
-        <i class="fas fa-microphone"></i>
-    </button>
+    <div style="position:relative;margin-bottom:40px">
+        <button class="btn-record" id="recordBtn" onclick="toggleRecording()">
+            <i class="fas fa-microphone"></i>
+            <div class="record-timer" id="recordTimer" style="display:none">00:00</div>
+        </button>
+    </div>
     
     <div class="status-text" id="statusText">
         <i class="fas fa-headphones"></i> Listen to the AI, then click the mic to answer
     </div>
     
-    <div style="margin-top:40px;font-size:12px;color:rgba(255,255,255,0.3)">
-        <i class="fas fa-lock"></i> Proctoring is active. Tab switching will end the interview.
+    <div style="margin-top:30px;font-size:12px;color:rgba(255,255,255,0.3)">
+        <i class="fas fa-lock"></i> Proctoring is active. Tab switching or looking away will issue warnings.
     </div>
 </div>
 
@@ -105,7 +109,7 @@
 <!-- Hidden Proctoring Camera Overlay -->
 <div class="proctor-cam" id="proctorCam">
     <video id="proctorVideo" autoplay muted playsinline></video>
-    <div class="proctor-info" id="proctorInfo">Monitoring Active</div>
+    <div class="proctor-info" id="proctorInfo">Monitoring Active...</div>
 </div>
 
 <script>
@@ -123,11 +127,17 @@ let isRecording = false;
 let currentAudio = null;
 let interviewId = null;
 let currentQIndex = 0;
+let isCompleted = false; // ✅ Prevents false auto-submit on completion
+let recordInterval = null;
+let recordSeconds = 0;
+let audioContext = null;
+let analyser = null;
+let voiceMonitorInterval = null;
 
-// Proctoring
+// Proctoring State
 let faceDetectTimer = null;
 let headAwayStart = null;
-const CFG = { HEAD_OFFSET_THRESHOLD: 0.35, HEAD_SUSTAIN_MS: 1500, WARNING_COOLDOWN_MS: 5000 };
+const CFG = { HEAD_OFFSET_THRESHOLD: 0.25, HEAD_SUSTAIN_MS: 1000, WARNING_COOLDOWN_MS: 5000 };
 let lastCamWarn = 0;
 
 // Redirect if link is invalid
@@ -136,7 +146,7 @@ if (!applicationId || isNaN(applicationId)) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  1. HARDWARE CHECK (Mandatory to open browser permissions)
+//  1. HARDWARE CHECK
 // ═══════════════════════════════════════════════════════════════
 async function enableHardware() {
     const btn = document.getElementById('enableCamBtn');
@@ -164,27 +174,29 @@ async function enableHardware() {
 //  2. LOCKDOWN MODE (Anti-Cheat)
 // ═══════════════════════════════════════════════════════════════
 function lockdown() {
-    // Force fullscreen
     document.documentElement.requestFullscreen().catch(() => {});
     
-    // Detect tab switching
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden) autoSubmit("Tab switch detected. Interview terminated.");
+        // ✅ Only auto-submit if the interview is NOT already completed
+        if (document.hidden && !isCompleted) {
+            autoSubmit("Tab switch detected. Interview terminated.");
+        }
     });
     
-    // Detect fullscreen exit
     document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement) autoSubmit("Exited fullscreen mode. Interview terminated.");
+        // ✅ Only auto-submit if the interview is NOT already completed
+        if (!document.fullscreenElement && !isCompleted) {
+            autoSubmit("Exited fullscreen mode. Interview terminated.");
+        }
     });
     
-    // Disable shortcuts
     document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('paste', e => e.preventDefault());
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  3. PROCTORING (Face Detection)
+//  3. PROCTORING (Face Detection + Voice Detection)
 // ═══════════════════════════════════════════════════════════════
 async function startProctoring() {
     try {
@@ -197,57 +209,92 @@ async function startProctoring() {
         document.getElementById('proctorCam').style.display = 'block';
         document.getElementById('proctorVideo').srcObject = stream;
         
+        // 1. Face & Head Detection
         faceDetectTimer = setInterval(async () => {
+            if (isCompleted) return;
             const video = document.getElementById('proctorVideo');
             if (!video || video.readyState < 2) return;
             
-            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks(true);
+            try {
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks(true);
+                const now = Date.now();
+                const infoEl = document.getElementById('proctorInfo');
+                
+                if (detections.length === 0) {
+                    infoEl.innerHTML = `Faces: 0 | No Face`;
+                    infoEl.style.color = '#ef4444';
+                    if (headAwayStart === null) headAwayStart = now;
+                    if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
+                        issueWarning('Face not detected in frame');
+                        headAwayStart = null;
+                    }
+                    return;
+                }
+                
+                if (detections.length > 1) {
+                    infoEl.innerHTML = `Faces: ${detections.length} | Multiple!`;
+                    infoEl.style.color = '#ef4444';
+                    if (headAwayStart === null) headAwayStart = now;
+                    if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
+                        issueWarning('Multiple people detected');
+                        headAwayStart = null;
+                    }
+                    return;
+                }
+                
+                const p = detections[0].landmarks.positions;
+                const noseTip = p[30], leftFace = p[16], rightFace = p[0];
+                const centerX = (leftFace.x + rightFace.x) / 2, halfW = Math.abs(leftFace.x - rightFace.x) / 2;
+                const offset = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
+                
+                infoEl.innerHTML = `Offset: ${offset.toFixed(2)} | Face: 1`;
+                infoEl.style.color = '#10b981';
+                
+                if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
+                    infoEl.style.color = '#f59e0b';
+                    if (headAwayStart === null) headAwayStart = now;
+                    if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
+                        issueWarning('Head turned away from screen');
+                        headAwayStart = null;
+                    }
+                } else {
+                    headAwayStart = null;
+                }
+            } catch(e) { /* ignore transient errors */ }
+        }, 500);
+
+        // 2. Voice/Background Noise Detection
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        let voiceStart = null;
+        let lastVoiceWarn = 0;
+        
+        voiceMonitorInterval = setInterval(() => {
+            if (isCompleted || isRecording) return; // Don't warn while the candidate is supposed to be speaking
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const average = sum / dataArray.length;
+            
             const now = Date.now();
-            const infoEl = document.getElementById('proctorInfo');
-            
-            if (detections.length === 0) {
-                infoEl.innerHTML = `Faces: 0 | No Face`;
-                infoEl.style.color = '#ef4444';
-                if (headAwayStart === null) headAwayStart = now;
-                if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
-                    issueWarning('Face not detected');
-                    headAwayStart = null;
-                }
-                return;
-            }
-            
-            if (detections.length > 1) {
-                infoEl.innerHTML = `Faces: ${detections.length} | Multiple!`;
-                infoEl.style.color = '#ef4444';
-                if (headAwayStart === null) headAwayStart = now;
-                if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
-                    issueWarning('Multiple people detected');
-                    headAwayStart = null;
-                }
-                return;
-            }
-            
-            const p = detections[0].landmarks.positions;
-            const noseTip = p[30], leftFace = p[16], rightFace = p[0];
-            const centerX = (leftFace.x + rightFace.x) / 2, halfW = Math.abs(leftFace.x - rightFace.x) / 2;
-            const offset = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
-            
-            infoEl.innerHTML = `Offset: ${offset.toFixed(2)} | Faces: 1`;
-            infoEl.style.color = '#10b981';
-            
-            if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
-                infoEl.style.color = '#f59e0b';
-                if (headAwayStart === null) headAwayStart = now;
-                if (now - headAwayStart > CFG.HEAD_SUSTAIN_MS && now - lastCamWarn > CFG.WARNING_COOLDOWN_MS) {
-                    issueWarning('Head turned away');
-                    headAwayStart = null;
+            if (average > 50) { // Threshold for loud background noise
+                if (voiceStart === null) voiceStart = now;
+                if (now - voiceStart > 2000 && now - lastVoiceWarn > CFG.WARNING_COOLDOWN_MS) {
+                    issueWarning('Loud background noise / voices detected');
+                    lastVoiceWarn = now;
+                    voiceStart = null;
                 }
             } else {
-                headAwayStart = null;
+                voiceStart = null;
             }
         }, 500);
         
-    } catch(e) { console.error("Proctoring failed:", e); }
+    } catch(e) { console.error("Proctoring failed to initialize:", e); }
 }
 
 function issueWarning(reason) {
@@ -288,7 +335,6 @@ async function verifyCodeAndStart() {
         interviewId = data.interview_id;
         currentQIndex = data.question_index || 0;
         
-        // Switch screens
         document.getElementById('setupScreen').style.display = 'none';
         document.getElementById('interviewUI').style.display = 'block';
         
@@ -318,7 +364,6 @@ function playQuestion(text, base64Audio) {
     if (currentAudio) currentAudio.pause();
     
     if (!base64Audio) {
-        // Fallback to browser SpeechSynthesis
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.onstart = () => document.getElementById('aiAvatar').classList.add('speaking');
         utterance.onend = () => document.getElementById('aiAvatar').classList.remove('speaking');
@@ -339,7 +384,6 @@ function playQuestion(text, base64Audio) {
         };
         
         currentAudio.play().catch(e => {
-            console.warn("Autoplay blocked. User must click to play audio.", e);
             document.getElementById('statusText').innerHTML = '<i class="fas fa-volume-up"></i> Click anywhere to hear the question.';
             document.body.addEventListener('click', () => currentAudio.play(), { once: true });
         });
@@ -357,22 +401,43 @@ async function toggleRecording() {
             const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(audioStream);
             audioChunks = [];
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
             mediaRecorder.onstop = sendAnswer;
             mediaRecorder.start();
             
             isRecording = true;
+            recordSeconds = 0;
             document.getElementById('recordBtn').classList.add('recording');
+            document.getElementById('recordTimer').style.display = 'block';
+            document.getElementById('recordTimer').innerText = '00:00';
             document.getElementById('aiAvatar').classList.remove('speaking');
             document.getElementById('statusText').innerHTML = '<i class="fas fa-circle" style="color:#ef4444"></i> Recording... Click to stop.';
+            
+            recordInterval = setInterval(() => {
+                recordSeconds++;
+                const m = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
+                const s = String(recordSeconds % 60).padStart(2, '0');
+                document.getElementById('recordTimer').innerText = `${m}:${s}`;
+            }, 1000);
+            
         } catch(e) {
             alert("Microphone access denied. Please allow mic access.");
         }
     } else {
+        // Stop recording
+        if (recordSeconds < 2) {
+            // Prevent sending extremely short empty blobs
+            if (!confirm("Recording is very short. Are you sure you want to submit?")) {
+                return;
+            }
+        }
+        
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach(t => t.stop());
         isRecording = false;
+        clearInterval(recordInterval);
         document.getElementById('recordBtn').classList.remove('recording');
+        document.getElementById('recordTimer').style.display = 'none';
         document.getElementById('statusText').innerHTML = '<span class="spinner"></span> Processing your answer...';
     }
 }
@@ -390,10 +455,13 @@ async function sendAnswer() {
         const data = await res.json();
         
         if (data.status === "completed") {
+            isCompleted = true; // ✅ Set flag before exiting fullscreen
             document.getElementById('interviewUI').style.display = 'none';
             document.getElementById('completionUI').style.display = 'block';
             document.getElementById('proctorCam').style.display = 'none';
             clearInterval(faceDetectTimer);
+            clearInterval(voiceMonitorInterval);
+            if (audioContext) audioContext.close();
             document.exitFullscreen().catch(() => {});
         } else {
             currentQIndex = (data.question_index || currentQIndex + 1);
@@ -410,7 +478,8 @@ async function sendAnswer() {
 //  7. AUTO-SUBMIT (Anti-Cheat)
 // ═══════════════════════════════════════════════════════════════
 async function autoSubmit(reason) {
-    if (!interviewId) return;
+    if (!interviewId || isCompleted) return;
+    isCompleted = true;
     
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
