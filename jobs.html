@@ -5,6 +5,28 @@
 <title>Job Postings - HRPro</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+/* Field Builder Styles */
+.field-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: white; border: 1px solid var(--border); border-radius: 6px;
+  transition: all 0.2s;
+}
+.field-row.disabled { opacity: 0.6; background: #f3f4f6; }
+.field-row .field-info { flex: 1; }
+.field-row .field-info b { font-size: 13px; }
+.field-row .field-info span { font-size: 11px; color: var(--text-light); display: block; }
+.field-row .field-controls { display: flex; align-items: center; gap: 12px; }
+.field-row .field-controls label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.field-row .field-controls input[type="checkbox"] { width: auto; }
+.field-builder-card {
+  background: #f8fafc; border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px; margin-bottom: 12px;
+}
+.field-builder-card h4 {
+  font-size: 14px; font-weight: 700; color: var(--primary-dark); margin-bottom: 12px;
+}
+</style>
 </head>
 <body>
 <div class="sidebar" id="sidebar">
@@ -91,15 +113,18 @@
       <div class="form-group"><label>Requirements</label><textarea id="jReq" rows="3" placeholder="List requirements..."></textarea></div>
       <div class="form-group"><label>Required Skills (press Enter or comma to add)</label><input type="text" id="skillInput" placeholder="e.g. React, Node.js, Python"><div id="skillTags" class="tags-wrap mt-2"></div><input type="hidden" id="skillsHidden"></div>
       
-      <!-- Form Builder Section -->
+      <!-- Form Builder Section (Updated) -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
         <div class="flex justify-between items-center mb-4">
           <h4><i class="fas fa-magic"></i> Application Form <span class="ai-badge"><i class="fas fa-robot"></i> AI Generated</span></h4>
-          <button class="btn btn-secondary" id="genFormBtn" onclick="generateAIForm()"><i class="fas fa-magic"></i> Generate AI Form</button>
+          <div class="flex gap-2">
+            <button class="btn btn-secondary" onclick="openAddCustomFieldModal()"><i class="fas fa-plus"></i> Add Custom Field</button>
+            <button class="btn btn-secondary" id="genFormBtn" onclick="generateAIForm()"><i class="fas fa-magic"></i> Generate AI Form</button>
+          </div>
         </div>
         
         <div id="formPreview" style="display:none">
-          <div class="alert alert-success"><i class="fas fa-check-circle"></i> Form generated! Tick the fields you want to include and mark them as required.</div>
+          <div class="alert alert-success"><i class="fas fa-check-circle"></i> Form ready! Tick the fields you want to include and mark them as required.</div>
           <div id="formFieldsList" style="display:flex;flex-direction:column;gap:16px"></div>
         </div>
       </div>
@@ -107,6 +132,41 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('jobModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveJob()"><i class="fas fa-save"></i> Save Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Custom Field Modal -->
+<div id="addCustomFieldModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fas fa-plus"></i> Add Custom Field</h3>
+      <button class="modal-close" onclick="closeModal('addCustomFieldModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Field Label *</label><input type="text" id="cfLabel" placeholder="e.g. Portfolio URL"></div>
+      <div class="form-group"><label>Field Type *</label>
+        <select id="cfType">
+          <option value="text">Text</option>
+          <option value="email">Email</option>
+          <option value="phone">Phone</option>
+          <option value="number">Number</option>
+          <option value="textarea">Text Area</option>
+          <option value="select">Dropdown</option>
+          <option value="checkbox">Checkbox</option>
+          <option value="file">File Upload</option>
+          <option value="date">Date</option>
+        </select>
+      </div>
+      <div class="form-group" id="cfOptionsGroup" style="display:none">
+        <label>Dropdown Options (comma separated)</label>
+        <input type="text" id="cfOptions" placeholder="Option 1, Option 2, Option 3">
+      </div>
+      <div class="form-group"><label><input type="checkbox" id="cfRequired" style="width:auto"> Mark as Required</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('addCustomFieldModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCustomField()">Add Field</button>
     </div>
   </div>
 </div>
@@ -212,30 +272,101 @@ async function generateAIForm() {
   finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Regenerate Form'; }
 }
 
+// NEW: Add Custom Field Logic
+function openAddCustomFieldModal() {
+  document.getElementById('cfLabel').value = '';
+  document.getElementById('cfType').value = 'text';
+  document.getElementById('cfOptionsGroup').style.display = 'none';
+  document.getElementById('cfOptions').value = '';
+  document.getElementById('cfRequired').checked = false;
+  openModal('addCustomFieldModal');
+}
+
+// Show options field for dropdown
+document.getElementById('cfType').addEventListener('change', function() {
+  document.getElementById('cfOptionsGroup').style.display = this.value === 'select' ? 'block' : 'none';
+});
+
+function saveCustomField() {
+  const label = document.getElementById('cfLabel').value.trim();
+  const type = document.getElementById('cfType').value;
+  const required = document.getElementById('cfRequired').checked;
+  const optionsStr = document.getElementById('cfOptions').value.trim();
+  
+  if (!label) { showToast('Field label is required', 'warning'); return; }
+  
+  const field = {
+    id: 'custom_' + Date.now(),
+    label: label,
+    type: type,
+    required: required,
+    placeholder: ''
+  };
+  
+  if (type === 'select') {
+    field.options = optionsStr.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  
+  // Add to existing form fields or create a new section
+  if (!generatedFormFields) {
+    generatedFormFields = { sections: [{ title: "Custom Fields", fields: [] }] };
+  }
+  
+  let customSection = generatedFormFields.sections.find(s => s.title === "Custom Fields");
+  if (!customSection) {
+    customSection = { title: "Custom Fields", fields: [] };
+    generatedFormFields.sections.push(customSection);
+  }
+  
+  customSection.fields.push(field);
+  
+  document.getElementById('formPreview').style.display = 'block';
+  renderFormPreview(generatedFormFields);
+  closeModal('addCustomFieldModal');
+  showToast('Custom field added!', 'success');
+}
+
 function renderFormPreview(formData) {
   const sections = formData?.sections || [];
   let html = sections.map(s => `
-    <div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:14px;">
-      <h4 style="font-size:14px;font-weight:700;color:var(--primary-dark);margin-bottom:12px">${s.title}</h4>
+    <div class="field-builder-card">
+      <h4>${s.title}</h4>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${(s.fields || []).map(f => `
-          <div style="display:flex;align-items:center;justify-content:space-between; padding:10px 14px; background:white; border:1px solid var(--border); border-radius:6px;">
+          <div class="field-row" id="row_${f.id}">
             <label style="display:flex;align-items:center;gap:12px;cursor:pointer;flex:1">
               <input type="checkbox" class="form-field-check" data-section="${s.title}" data-field='${JSON.stringify(f)}' checked onchange="updateFormJson()" style="width:auto">
-              <div>
-                <b style="font-size:13px">${f.label}</b>
-                <div style="font-size:11px;color:var(--text-light)">Type: ${f.type} ${f.options ? `| Options: ${f.options.join(', ')}` : ''}</div>
+              <div class="field-info">
+                <b>${f.label}</b>
+                <span>Type: ${f.type} ${f.options ? `| Options: ${f.options.join(', ')}` : ''}</span>
               </div>
             </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;cursor:pointer">
-              <input type="checkbox" class="form-field-req" data-section="${s.title}" data-field='${JSON.stringify(f)}' ${f.required ? 'checked' : ''} onchange="updateFormJson()" style="width:auto"> Required
-            </label>
+            <div class="field-controls">
+              <label>
+                <input type="checkbox" class="form-field-req" data-section="${s.title}" data-field='${JSON.stringify(f)}' ${f.required ? 'checked' : ''} onchange="updateFormJson()"> Required
+              </label>
+              <button class="btn btn-sm btn-danger" onclick="removeField('${f.id}', '${s.title}')" title="Delete Field" style="padding:2px 8px"><i class="fas fa-trash"></i></button>
+            </div>
           </div>
         `).join('')}
       </div>
     </div>
   `).join('');
   document.getElementById('formFieldsList').innerHTML = html;
+}
+
+function removeField(fieldId, sectionTitle) {
+  if (!generatedFormFields) return;
+  const section = generatedFormFields.sections.find(s => s.title === sectionTitle);
+  if (section) {
+    section.fields = section.fields.filter(f => f.id !== fieldId);
+    // If section is empty, remove it
+    if (section.fields.length === 0) {
+      generatedFormFields.sections = generatedFormFields.sections.filter(s => s.title !== sectionTitle);
+    }
+  }
+  renderFormPreview(generatedFormFields);
+  showToast('Field removed', 'info');
 }
 
 function updateFormJson() {
@@ -261,7 +392,6 @@ async function saveJob() {
   const dept = document.getElementById('jDept').value;
   if (!title || !dept) { showToast('Title and department are required', 'warning'); return; }
   
-  // Final call to ensure JSON is up to date with toggles
   updateFormJson();
 
   const payload = {
