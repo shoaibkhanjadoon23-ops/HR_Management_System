@@ -121,7 +121,6 @@
 
       <div class="form-group"><label>Description</label><textarea id="aDesc" rows="2"></textarea></div>
 
-      <!-- Code requirement explanation -->
       <div class="alert alert-info" style="font-size:13px">
         <i class="fas fa-info-circle"></i>
         <b>Require Application Code</b> — candidates must enter the code that was emailed to them when they applied.
@@ -249,7 +248,9 @@ let jobs = [];
 let currentMode = 'ai';
 let pendingDeleteAssessmentId = null;
 
+/* ================ Load & Render ================ */
 async function loadData() {
+  document.getElementById('assessmentsList').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
   try {
     [assessments, jobs] = await Promise.all([
       API.get('/api/assessments'),
@@ -257,7 +258,7 @@ async function loadData() {
     ]);
     const sel = document.getElementById('aJob');
     sel.innerHTML = '<option value="">Select job...</option>' +
-      jobs.map(j => `<option value="${j.id}" data-title="${j.title}">${j.title}</option>`).join('');
+      jobs.map(j => `<option value="${j.id}" data-title="${escapeAttr(j.title)}">${escapeHtml(j.title)}</option>`).join('');
     renderAssessments();
   } catch (e) {
     showToast('Error loading data: ' + e.message, 'error');
@@ -312,8 +313,8 @@ function renderAssessments() {
             </div>
             <div class="flex gap-2 justify-between">
               <div>
-                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${fixedLink}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
-                <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},'${escapeAttr(a.title)}')"><i class="fas fa-chart-bar"></i> Results</button>
+                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${escapeAttr(fixedLink)}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
+                <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},${JSON.stringify(a.title)})"><i class="fas fa-chart-bar"></i> Results</button>
               </div>
               <div style="display:flex;gap:6px">
                 <button class="btn btn-sm btn-secondary"
@@ -330,7 +331,7 @@ function renderAssessments() {
               </div>
             </div>
             <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11px">
-              <i class="fas fa-link"></i> <span style="color:var(--text-light)">${fixedLink}</span>
+              <i class="fas fa-link"></i> <span style="color:var(--text-light)">${escapeHtml(fixedLink)}</span>
             </div>
           </div>
         </div>`;
@@ -338,7 +339,7 @@ function renderAssessments() {
     </div>`;
 }
 
-/* ─── Mode switching ──────────────────────────────────────────── */
+/* ================ Mode switching ================ */
 function switchMode(mode) {
   currentMode = mode;
   document.getElementById('aiPanel').style.display     = mode === 'ai'     ? '' : 'none';
@@ -373,7 +374,7 @@ function prefillFromJob() {
   if (opt.value) document.getElementById('aTitle').value = `Assessment for ${opt.dataset.title}`;
 }
 
-/* ─── Custom question builder ─────────────────────────────────── */
+/* ================ Custom question builder ================ */
 let customQuestions = [];
 let customQIdCounter = 1;
 
@@ -488,7 +489,7 @@ function renderCustomQuestions() {
   }).join('');
 }
 
-/* ─── Submission dispatcher ───────────────────────────────────── */
+/* ================ Submission dispatcher ================ */
 async function submitCreateAssessment() {
   if (currentMode === 'ai') {
     await createAssessmentAI();
@@ -600,7 +601,7 @@ async function createAssessmentCustom() {
   }
 }
 
-/* ─── Results & answers ───────────────────────────────────────── */
+/* ================ Results & per-row actions ================ */
 async function viewResults(id, title) {
   document.getElementById('resultTitle').innerHTML =
     `<i class="fas fa-chart-bar"></i> Results: ${escapeHtml(title || '')}`;
@@ -652,15 +653,53 @@ async function viewResults(id, title) {
                 <td class="text-sm">${r.time_taken_minutes ? r.time_taken_minutes.toFixed(1) + ' min' : '-'}</td>
                 <td class="text-xs text-light">${fmtDate(r.submitted_at)}</td>
                 <td>
-                  <div class="table-actions">
-                    <button class="btn btn-sm btn-info" onclick="viewDetailedAnswers(${r.id}, '${escapeAttr(r.applicant_name || '')}')">
-                      <i class="fas fa-list"></i> Answers
+                  <div class="table-actions" style="flex-wrap:wrap">
+                    <button class="btn btn-sm btn-info"
+                            data-action="view-answers"
+                            data-result-id="${r.id}"
+                            data-name="${escapeAttr(r.applicant_name || '')}"
+                            onclick="viewDetailedAnswers(${r.id}, this.dataset.name)"
+                            title="View Answers">
+                      <i class="fas fa-list"></i>
                     </button>
                     <button class="btn btn-sm ${r.mark_sheet_sent ? 'btn-secondary' : 'btn-info'}"
                             onclick="sendMarksheet(${r.id})"
                             title="${r.mark_sheet_sent ? 'Resend' : 'Send'} Marksheet">
                       <i class="fas fa-paper-plane"></i>
                     </button>
+                    ${r.application_id ? `
+                      <button class="btn btn-sm btn-success"
+                              data-action="schedule-ai"
+                              data-application-id="${r.application_id}"
+                              onclick="scheduleFromResult(this.dataset.applicationId, 'ai')"
+                              title="Schedule AI Interview">
+                        <i class="fas fa-robot"></i> AI
+                      </button>
+                      <button class="btn btn-sm btn-primary"
+                              data-action="schedule-custom"
+                              data-application-id="${r.application_id}"
+                              onclick="scheduleFromResult(this.dataset.applicationId, 'custom')"
+                              title="Schedule Custom Interview">
+                        <i class="fas fa-calendar"></i> Custom
+                      </button>
+                      <button class="btn btn-sm btn-info"
+                              data-action="send-email"
+                              data-application-id="${r.application_id}"
+                              data-email="${escapeAttr(r.applicant_email || '')}"
+                              data-name="${escapeAttr(r.applicant_name || '')}"
+                              onclick="sendEmailForResult(this.dataset.applicationId, this.dataset.email, this.dataset.name)"
+                              title="Send Custom Email">
+                        <i class="fas fa-envelope"></i>
+                      </button>
+                      <button class="btn btn-sm btn-danger"
+                              data-action="reject-application"
+                              data-application-id="${r.application_id}"
+                              data-name="${escapeAttr(r.applicant_name || '')}"
+                              onclick="rejectFromResult(this.dataset.applicationId, this.dataset.name)"
+                              title="Reject Application">
+                        <i class="fas fa-times"></i>
+                      </button>
+                    ` : ''}
                   </div>
                 </td>
               </tr>
@@ -676,9 +715,8 @@ async function viewResults(id, title) {
 function renderSubmissionBadge(r) {
   if (r.submission_type === 'auto') {
     const reason = r.submission_reason || 'Auto-submitted';
-    const safeReason = escapeAttr(reason);
     return `
-      <span class="badge badge-rejected" title="${safeReason}">
+      <span class="badge badge-rejected" title="${escapeAttr(reason)}">
         <i class="fas fa-robot"></i> Auto-Submitted
       </span>
       <div class="text-xs text-light mt-1" style="max-width:180px">${escapeHtml(reason)}</div>`;
@@ -686,7 +724,45 @@ function renderSubmissionBadge(r) {
   return `<span class="badge badge-active"><i class="fas fa-check"></i> Submit Button</span>`;
 }
 
-/* ─── Answer Sheet & Manual Grading ───────────────────────────── */
+/* ================ Row actions from results table ================
+ * The Applications page already has fully-working modals for AI scheduling,
+ * custom scheduling, emailing, and rejecting. Rather than duplicate them
+ * here, we navigate the HR user to the Applications page with the target
+ * application pre-opened (?view=ID), where all four actions live. The only
+ * action we perform in-place is "reject" since it needs no modal.
+ * ================================================================ */
+
+function scheduleFromResult(applicationId, mode) {
+  // Both AI and Custom scheduling happen inside the Applications modal.
+  // Passing &action=hint lets the Applications page preselect the mode if
+  // it ever adds that feature; today it just opens the modal.
+  window.location.href = `/applications.html?view=${applicationId}`;
+}
+
+function sendEmailForResult(applicationId, email, name) {
+  // Same redirect strategy — the Applications page has the email composer.
+  window.location.href = `/applications.html?view=${applicationId}`;
+}
+
+async function rejectFromResult(applicationId, name) {
+  const reason = prompt(
+    `Rejection reason for ${name || 'this candidate'}:`,
+    'Thank you for your time. We have decided to move forward with other candidates.'
+  );
+  if (reason === null) return; // user cancelled
+  if (!reason.trim()) { showToast('Rejection reason required', 'warning'); return; }
+  try {
+    await API.put(`/api/applications/${applicationId}/status`, {
+      status: 'rejected',
+      rejection_reason: reason,
+    });
+    showToast('Application rejected & email sent', 'success');
+  } catch (e) {
+    showToast('Error rejecting application: ' + e.message, 'error');
+  }
+}
+
+/* ================ Answer sheet & manual grading ================ */
 let currentDetailedResult = null;
 let currentCandidateName = "";
 
@@ -697,7 +773,7 @@ async function viewDetailedAnswers(resultId, candidateName) {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    
+
     currentDetailedResult = data;
     currentCandidateName = candidateName;
     renderAnswersModal(resultId);
@@ -709,16 +785,16 @@ async function viewDetailedAnswers(resultId, candidateName) {
 function renderAnswersModal(resultId) {
     if (!currentDetailedResult) return;
     const data = currentDetailedResult;
-    
+
     document.getElementById('answersTitle').innerHTML = `<i class="fas fa-tasks"></i> Answers by ${escapeHtml(currentCandidateName)}`;
     let html = '';
-    
+
     for (const q of data.questions) {
       const typeLabel = { mcq: 'MCQ', fill_blank: 'Fill in the Blank', typing: 'Written Answer', practical: 'Practical' }[q.type] || q.type;
       const typeBg = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
       const typeColor = { mcq: '#2563eb', fill_blank: '#7c3aed', typing: '#059669', practical: '#d97706' }[q.type] || '#374151';
-      
-      const editBtn = `<button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${q.id}', ${q.marks}, ${q.obtained_marks}, '${escapeAttr(q.feedback || '').replace(/'/g, "&#39;")}')">Grade / Edit</button>`;
+
+      const editBtn = `<button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${escapeAttr(q.id)}', ${q.marks}, ${q.obtained_marks}, ${JSON.stringify(q.feedback || '')})">Grade / Edit</button>`;
 
       const correct = q.is_correct
         ? '<span style="color:#059669;font-weight:700"><i class="fas fa-check-circle"></i> Correct</span>'
@@ -726,7 +802,7 @@ function renderAnswersModal(resultId) {
 
       // PLAGIARISM WARNING DISPLAY LOGIC
       const isPlagiarized = q.feedback && q.feedback.includes('PLAGIARISM DETECTED');
-      const feedbackHtml = isPlagiarized 
+      const feedbackHtml = isPlagiarized
         ? `<div class="plagiarism-alert"><i class="fas fa-exclamation-triangle"></i><div>${escapeHtml(q.feedback)}</div></div>`
         : `<div><strong>AI Feedback:</strong> ${escapeHtml(q.feedback || 'Not graded yet')}</div>`;
 
@@ -805,7 +881,7 @@ async function saveEditedMarks() {
       obtained_marks: obtainedMarks,
       feedback: feedback
     });
-    
+
     showToast('Question marks updated!', 'success');
     closeModal('editMarksModal');
 
@@ -816,15 +892,7 @@ async function saveEditedMarks() {
             q.obtained_marks = obtainedMarks;
             q.feedback = feedback;
         }
-        // Re-render the modal with the new state
         renderAnswersModal(currentEditResultId);
-    }
-    
-    // Refresh the results table if it's open
-    if (document.getElementById('resultsModal').style.display === 'flex') {
-       const titleElem = document.getElementById('resultTitle');
-       const assessmentId = titleElem.innerHTML.match(/\d+/)?.[0];
-       if (assessmentId) await viewResults(parseInt(assessmentId), '');
     }
   } catch(e) {
     showToast('Error updating marks: ' + e.message, 'error');
@@ -840,7 +908,7 @@ async function sendMarksheet(resultId) {
   }
 }
 
-/* ─── Card actions ─────────────────────────────────────────────── */
+/* ================ Card actions ================ */
 async function toggleActive(id, active) {
   try {
     await API.put(`/api/assessments/${id}`, { is_active: active });
@@ -892,7 +960,7 @@ async function deleteAssessment() {
   }
 }
 
-/* ─── Utilities ────────────────────────────────────────────────── */
+/* ================ Helpers ================ */
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str).replace(/[&<>"']/g, m =>
