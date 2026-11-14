@@ -603,7 +603,7 @@ async function createAssessmentCustom() {
   }
 }
 
-/* ================ Results (with retake + attempt numbers) ================ */
+/* ================ Results with App Status column ================ */
 async function viewResults(assessmentId, title) {
   const id = parseInt(assessmentId, 10);
   if (isNaN(id)) { showToast('Invalid assessment ID', 'error'); return; }
@@ -633,7 +633,8 @@ async function viewResults(assessmentId, title) {
               <th>Score</th>
               <th>%</th>
               <th>Grade</th>
-              <th>Status</th>
+              <th>Assessment</th>
+              <th>App Status</th>
               <th>Submitted</th>
               <th>Actions</th>
             </tr>
@@ -660,6 +661,9 @@ async function viewResults(assessmentId, title) {
                 </td>
                 <td><span class="badge badge-shortlisted">Grade ${r.grade}</span></td>
                 <td>${statusBadge(r.passed ? 'passed' : 'failed')}</td>
+                <td>
+                  ${renderAppStatus(r)}
+                </td>
                 <td class="text-xs text-light">${fmtDate(r.submitted_at)}</td>
                 <td>
                   <div class="table-actions" style="flex-wrap:wrap">
@@ -724,7 +728,45 @@ async function viewResults(assessmentId, title) {
   }
 }
 
-/* ================ GIVE RETAKE from results modal ================ */
+/**
+ * Render the application's lifecycle status.
+ *
+ * The key distinction HR needs to see:
+ *   • Assessment failed  + App still pending  → HR hasn't acted yet
+ *   • Assessment failed  + App rejected       → HR already rejected this candidate
+ *   • Assessment passed  + App pending        → ready for interview
+ */
+function renderAppStatus(r) {
+  if (!r.application_id) {
+    return '<span class="text-light" title="This assessment is open-access; no application was linked">—</span>';
+  }
+  if (!r.application_status) {
+    return '<span class="text-light">—</span>';
+  }
+
+  const isRejected = r.application_status === 'rejected';
+  const isHired = r.application_status === 'hired';
+  const isPendingDecision = ['pending', 'under_review', 'shortlisted'].includes(r.application_status);
+
+  let hint = '';
+  if (isRejected && !r.passed) {
+    hint = '<div class="text-xs" style="color:#dc2626;margin-top:4px;font-weight:600"><i class="fas fa-times-circle"></i> Failed assessment</div>';
+  } else if (isRejected) {
+    hint = '<div class="text-xs text-light" style="margin-top:4px">Rejected for other reasons</div>';
+  } else if (isPendingDecision && !r.passed) {
+    hint = '<div class="text-xs" style="color:#d97706;margin-top:4px"><i class="fas fa-hourglass-half"></i> Decision pending</div>';
+  } else if (isHired) {
+    hint = '<div class="text-xs" style="color:#059669;margin-top:4px;font-weight:600"><i class="fas fa-check-circle"></i> Hired</div>';
+  }
+
+  const tooltip = r.application_rejection_reason
+    ? `Rejection reason: ${r.application_rejection_reason}`
+    : `Application status: ${r.application_status}`;
+
+  return `<div title="${escapeAttr(tooltip)}">${statusBadge(r.application_status)}${hint}</div>`;
+}
+
+/* ================ Give Retake ================ */
 async function giveRetakeFromResults(resultId) {
   if (!confirm('Give this candidate one more attempt?\n\n• Their current submission will be archived\n• Their application code will be reusable\n• A retake invitation email will be sent automatically')) {
     return;
@@ -758,12 +800,20 @@ async function rejectFromResult(applicationId, name) {
   );
   if (reason === null) return;
   if (!reason.trim()) { showToast('Rejection reason required', 'warning'); return; }
+
   try {
     await API.put(`/api/applications/${applicationId}/status`, {
       status: 'rejected',
       rejection_reason: reason,
     });
     showToast('Application rejected & email sent', 'success');
+
+    // Refresh the results table so the App Status column updates immediately
+    const assessmentId = window.__currentResultsAssessmentId;
+    if (assessmentId) {
+      closeModal('resultsModal');
+      setTimeout(() => viewResults(assessmentId, ''), 300);
+    }
   } catch (e) {
     showToast('Error rejecting application: ' + e.message, 'error');
   }
