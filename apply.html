@@ -7,29 +7,9 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
 /* ── Success screen ──────────────────────────────────────── */
-.success-hero {
-  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
-  border: 2px solid #10b981;
-  border-radius: 16px;
-  padding: 40px 28px 32px;
-  text-align: center;
-  margin-bottom: 20px;
-  animation: fadeInUp .5s ease;
-}
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.success-icon {
-  width: 80px; height: 80px;
-  background: #10b981; color: white;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 42px;
-  margin: 0 auto 20px;
-  box-shadow: 0 8px 24px rgba(16,185,129,.35);
-  animation: popIn .5s cubic-bezier(.34,1.56,.64,1);
-}
+.success-hero { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border: 2px solid #10b981; border-radius: 16px; padding: 40px 28px 32px; text-align: center; margin-bottom: 20px; animation: fadeInUp .5s ease; }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.success-icon { width: 80px; height: 80px; background: #10b981; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 42px; margin: 0 auto 20px; box-shadow: 0 8px 24px rgba(16,185,129,.35); animation: popIn .5s cubic-bezier(.34,1.56,.64,1); }
 @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
 .success-hero h1 { font-size: 26px; font-weight: 800; color: #065f46; margin-bottom: 8px; }
 .success-hero p.lead { font-size: 15px; color: #047857; line-height: 1.6; max-width: 540px; margin: 0 auto; }
@@ -71,45 +51,14 @@
 /* ── Rating card ── */
 .rating-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 20px; }
 
-/* ═══════════════════════════════════════════════════════════════
-   NEW: field error styling + error box
-   ═══════════════════════════════════════════════════════════════ */
-input.invalid, textarea.invalid, select.invalid {
-  border-color: #dc2626 !important;
-  background: #fef2f2 !important;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
-}
-.field-error {
-  color: #dc2626;
-  font-size: 12px;
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 600;
-}
+/* Validation */
+input.invalid, textarea.invalid, select.invalid { border-color: #dc2626 !important; background: #fef2f2 !important; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important; }
+.field-error { color: #dc2626; font-size: 12px; margin-top: 4px; display: flex; align-items: center; gap: 5px; font-weight: 600; }
 .field-error i { font-size: 11px; }
-#appError {
-  text-align: left;
-  margin-bottom: 16px;
-}
-#appError .err-title {
-  font-weight: 800;
-  font-size: 14px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-#appError ul {
-  margin: 6px 0 0 0;
-  padding-left: 20px;
-}
-#appError li {
-  font-size: 13px;
-  line-height: 1.7;
-  color: #7f1d1d;
-}
+#appError { text-align: left; margin-bottom: 16px; }
+#appError .err-title { font-weight: 800; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+#appError ul { margin: 6px 0 0 0; padding-left: 20px; }
+#appError li { font-size: 13px; line-height: 1.7; color: #7f1d1d; }
 #appError li strong { color: #991b1b; }
 </style>
 </head>
@@ -127,15 +76,13 @@ async function loadJob() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/jobs/${jobId}/public`);
     if (!res.ok) {
-      document.getElementById('applyPage').innerHTML =
-        '<div class="alert alert-error">Job not found or no longer active.</div>';
+      document.getElementById('applyPage').innerHTML = '<div class="alert alert-error">Job not found or no longer active.</div>';
       return;
     }
     job = await res.json();
     renderForm();
   } catch (e) {
-    document.getElementById('applyPage').innerHTML =
-      '<div class="alert alert-error">Error loading job. Please try again.</div>';
+    document.getElementById('applyPage').innerHTML = '<div class="alert alert-error">Error loading job. Please try again.</div>';
   }
 }
 
@@ -148,7 +95,6 @@ function renderForm() {
     return;
   }
 
-  // Use the JD's sections only if there's at least one non-empty one.
   const sections =
     (job.form_fields &&
      Array.isArray(job.form_fields.sections) &&
@@ -177,10 +123,6 @@ function renderForm() {
       </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════
-         novalidate disables the browser's native HTML5 validation.
-         Our own submitApp() below shows clear, specific errors instead.
-         ═══════════════════════════════════════════════════════════ -->
     <form id="applicationForm" enctype="multipart/form-data" novalidate>
       ${sections.map(section => `
         <div class="card" style="margin-bottom:16px">
@@ -215,7 +157,6 @@ function renderForm() {
 
   document.getElementById('applicationForm').addEventListener('submit', submitApp);
 
-  // Clear the "invalid" state as soon as the user types in a field
   document.querySelectorAll('#applicationForm input, #applicationForm textarea, #applicationForm select').forEach(el => {
     el.addEventListener('input', () => clearFieldError(el));
     el.addEventListener('change', () => clearFieldError(el));
@@ -278,14 +219,9 @@ function renderField(field) {
   </div>`;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Validation helpers
-   ═══════════════════════════════════════════════════════════════ */
-
 function escapeHtml(str) {
   if (str == null) return '';
-  return String(str).replace(/[&<>"']/g, m =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 function escapeAttr(str) { return escapeHtml(str); }
 
@@ -293,15 +229,12 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function getFieldLabel(input) {
   if (!input) return 'This field';
-  // 1. Try the wrapper's data-label
   const wrap = input.closest('.form-group');
   if (wrap && wrap.dataset.label) return wrap.dataset.label;
-  // 2. Try the associated <label>
   if (input.id) {
     const lbl = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
     if (lbl) return lbl.textContent.replace(/\*/g, '').trim();
   }
-  // 3. Fallback to name/id
   return input.name || input.id || 'This field';
 }
 
@@ -310,11 +243,8 @@ function markFieldInvalid(input, message) {
   input.classList.add('invalid');
   const wrap = input.closest('.form-group');
   if (!wrap) return;
-
-  // Remove any existing inline error for this field
   const existing = wrap.querySelector('.field-error');
   if (existing) existing.remove();
-
   const err = document.createElement('div');
   err.className = 'field-error';
   err.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHtml(message)}`;
@@ -338,13 +268,6 @@ function clearAllFieldErrors() {
   if (appErr) { appErr.style.display = 'none'; appErr.innerHTML = ''; }
 }
 
-/**
- * Find the email value the candidate entered, regardless of which field
- * id the AI/custom form used. Priority:
- *   1. form input with name="email"
- *   2. any input with type="email" that has a value
- *   3. any input whose name or id contains "email" that has a value
- */
 function findEmailValue(form, data) {
   let val = (data.email || '').toString().trim();
   if (val) return { value: val, input: form.querySelector('input[name="email"]') };
@@ -361,14 +284,9 @@ function findEmailValue(form, data) {
     if (v) return { value: v, input: inp };
   }
 
-  // Nothing filled — return the first email field for error display
   const anyEmail = form.querySelector('input[type="email"]') || form.querySelector('input[name="email"]');
   return { value: '', input: anyEmail };
 }
-
-/* ═══════════════════════════════════════════════════════════════
-   Submit handler
-   ═══════════════════════════════════════════════════════════════ */
 
 async function submitApp(e) {
   e.preventDefault();
@@ -378,7 +296,6 @@ async function submitApp(e) {
   const btn = document.getElementById('submitBtn');
   const appErr = document.getElementById('appError');
 
-  // ── 1. Build data payload from FormData ──
   const formData = new FormData(form);
   const data = {};
   for (const [key, val] of formData.entries()) {
@@ -391,22 +308,46 @@ async function submitApp(e) {
     }
   }
 
-  // ── 2. Find the email value ──
   const emailResult = findEmailValue(form, data);
   const emailValue = emailResult.value;
 
-  // ── 3. Collect validation errors ──
+  // ── Dynamic field extraction ──
+  const sections = (job.form_fields && Array.isArray(job.form_fields.sections) && job.form_fields.sections.length > 0)
+    ? job.form_fields.sections
+    : getDefaultSections();
+
+  let full_name = data.full_name || data.name || '';
+  let phone = data.phone || '';
+  let cover_letter = data.cover_letter || '';
+  let experience_years = data.experience_years || '0';
+  let cgpa = data.cgpa || '0';
+  let skills = data.skills || '';
+
+  for (const section of sections) {
+    for (const f of (section.fields || [])) {
+      const val = data[f.id];
+      if (!val || Array.isArray(val)) continue;
+      
+      const label = (f.label || '').toLowerCase();
+      const type = (f.type || '').toLowerCase();
+
+      if (!full_name && (label.includes('full name') || label === 'name')) full_name = val;
+      else if (!phone && (label.includes('phone') || type === 'tel')) phone = val;
+      else if (!cover_letter && label.includes('cover letter')) cover_letter = val;
+      else if (!experience_years && label.includes('experience')) experience_years = val;
+      else if (!cgpa && (label.includes('cgpa') || label.includes('gpa'))) cgpa = val;
+      else if (!skills && label.includes('skill')) skills = val;
+    }
+  }
+
   const errors = [];
 
-  // 3a. Required fields
   form.querySelectorAll('input[data-required="true"], textarea[data-required="true"], select[data-required="true"]').forEach(el => {
-    // Skip radio/checkbox groups — handled separately
     if (el.type === 'radio' || el.type === 'checkbox') return;
     const v = (el.value || '').trim();
     if (!v) errors.push({ input: el, label: getFieldLabel(el), message: 'This field is required' });
   });
 
-  // 3b. Required radio groups
   form.querySelectorAll('input[type="radio"][data-required="true"]').forEach(firstRadio => {
     const groupName = firstRadio.name;
     const group = form.querySelectorAll(`input[type="radio"][name="${CSS.escape(groupName)}"]`);
@@ -414,29 +355,23 @@ async function submitApp(e) {
     if (!anyChecked) errors.push({ input: firstRadio, label: getFieldLabel(firstRadio), message: 'Please select an option' });
   });
 
-  // 3c. Email format (only if a value is present)
   if (emailValue && !EMAIL_RE.test(emailValue)) {
     errors.push({ input: emailResult.input, label: 'Email Address', message: 'Please enter a valid email (e.g. name@example.com)' });
   }
 
-  // 3d. Email presence
   if (!emailValue) {
-    // Don't duplicate the "This field is required" error if the email field was already caught by 3a
     const alreadyFlagged = errors.some(err => err.input === emailResult.input);
     if (!alreadyFlagged) {
       errors.push({ input: emailResult.input, label: 'Email Address', message: 'Email address is required' });
     }
   }
 
-  // 3e. CV file
   const fileInput = document.getElementById('cv_file');
   if (!fileInput.files.length) {
     errors.push({ input: fileInput, label: 'CV/Resume', message: 'Please upload your CV/Resume (PDF or DOCX)' });
   }
 
-  // ── 4. If any errors, highlight them and show summary ──
   if (errors.length > 0) {
-    // Highlight each failing field
     const seen = new Set();
     errors.forEach(err => {
       if (err.input && !seen.has(err.input)) {
@@ -445,43 +380,33 @@ async function submitApp(e) {
       }
     });
 
-    // Build the summary box
     const listHtml = errors.map(err => `<li><strong>${escapeHtml(err.label)}</strong> — ${escapeHtml(err.message)}</li>`).join('');
-    appErr.innerHTML = `
-      <div class="err-title"><i class="fas fa-exclamation-triangle"></i> Please fix the following before submitting:</div>
-      <ul>${listHtml}</ul>`;
+    appErr.innerHTML = `<div class="err-title"><i class="fas fa-exclamation-triangle"></i> Please fix the following before submitting:</div><ul>${listHtml}</ul>`;
     appErr.style.display = 'block';
 
-    // Scroll to the first error and focus it
     const firstError = errors[0];
     if (firstError.input) {
       firstError.input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Delay focus until scroll settles
-      setTimeout(() => {
-        try { firstError.input.focus({ preventScroll: true }); } catch (_) {}
-      }, 350);
+      setTimeout(() => { try { firstError.input.focus({ preventScroll: true }); } catch (_) {} }, 350);
     } else {
       appErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     return;
   }
 
-  // ── 5. All valid — submit ──
   btn.querySelector('.btn-text').style.display = 'none';
   btn.querySelector('.btn-loader').style.display = 'inline';
   btn.disabled = true;
 
   const payload = {
     ...data,
-    full_name: data.full_name || data.name || '',
-    email: emailValue,                                    // ← always the resolved email
-    phone: data.phone || '',
-    experience_years: parseFloat(data.experience_years) || 0,
-    cgpa: parseFloat(data.cgpa) || 0,
-    skills: data.skills
-      ? (Array.isArray(data.skills) ? data.skills : data.skills.split(',').map(s => s.trim()).filter(Boolean))
-      : [],
-    cover_letter: data.cover_letter || ''
+    full_name: full_name,
+    email: emailValue,
+    phone: phone,
+    experience_years: parseFloat(experience_years) || 0,
+    cgpa: parseFloat(cgpa) || 0,
+    skills: skills ? (Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim()).filter(Boolean)) : [],
+    cover_letter: cover_letter
   };
 
   const submitData = new FormData();
@@ -516,18 +441,15 @@ async function submitApp(e) {
 }
 
 function renderSuccessScreen(result, payload) {
-  const code    = result.application_code || '—';
+  const code = result.application_code || '—';
   const hasCode = !!result.application_code;
-  const email   = payload.email || '';
+  const email = payload.email || '';
 
   document.getElementById('applyPage').innerHTML = `
     <div class="success-hero">
       <div class="success-icon"><i class="fas fa-check"></i></div>
       <h1>Congratulations, ${escapeHtml(payload.full_name || 'Candidate')}!</h1>
-      <p class="lead">
-        Your application for <strong>${escapeHtml(job.title)}</strong> has been submitted successfully.
-        Our team will review it and reach out within <strong>5–7 business days</strong>.
-      </p>
+      <p class="lead">Your application for <strong>${escapeHtml(job.title)}</strong> has been submitted successfully. Our team will review it and reach out within <strong>5–7 business days</strong>.</p>
     </div>
 
     ${hasCode ? `
@@ -536,27 +458,15 @@ function renderSuccessScreen(result, payload) {
       <div class="sub">Save this code — it's your key to the next step</div>
       <div class="code-display" id="appCode">${escapeHtml(code)}</div>
       <div class="code-actions">
-        <button class="primary" id="copyCodeBtn" onclick="copyAppCode()">
-          <i class="fas fa-copy"></i> Copy Code
-        </button>
-        <button onclick="downloadCode()">
-          <i class="fas fa-download"></i> Save as File
-        </button>
-        <button onclick="window.print()">
-          <i class="fas fa-print"></i> Print
-        </button>
+        <button class="primary" id="copyCodeBtn" onclick="copyAppCode()"><i class="fas fa-copy"></i> Copy Code</button>
+        <button onclick="downloadCode()"><i class="fas fa-download"></i> Save as File</button>
+        <button onclick="window.print()"><i class="fas fa-print"></i> Print</button>
       </div>
-      <p style="font-size:12px;color:#6b7280;margin:0">
-        <i class="fas fa-envelope"></i>
-        This code has also been emailed to <strong>${escapeHtml(email || 'your inbox')}</strong>
-      </p>
+      <p style="font-size:12px;color:#6b7280;margin:0"><i class="fas fa-envelope"></i> This code has also been emailed to <strong>${escapeHtml(email || 'your inbox')}</strong></p>
     </div>
 
     <div class="warning-card">
-      <div class="warn-head">
-        <i class="fas fa-exclamation-triangle"></i>
-        <h3>Keep This Code Safe — Read Carefully</h3>
-      </div>
+      <div class="warn-head"><i class="fas fa-exclamation-triangle"></i><h3>Keep This Code Safe — Read Carefully</h3></div>
       <ul>
         <li><span class="li-icon"><i class="fas fa-shield-alt"></i></span><div><strong>Do not share this code with anyone.</strong> Treat it like a password — anyone with it can take your assessment on your behalf.</div></li>
         <li><span class="li-icon"><i class="fas fa-key"></i></span><div><strong>This code is required to start the assessment</strong> if you are shortlisted. You will need it every time you access the assessment link we email you.</div></li>
@@ -565,23 +475,14 @@ function renderSuccessScreen(result, payload) {
       </ul>
       <div class="danger-note">
         <i class="fas fa-ban"></i>
-        <div class="txt">
-          <strong>If you lose this code, you will be disqualified</strong> from taking the assessment — and therefore from being considered for this position. We cannot issue a replacement code.
-        </div>
+        <div class="txt"><strong>If you lose this code, you will be disqualified</strong> from taking the assessment — and therefore from being considered for this position. We cannot issue a replacement code.</div>
       </div>
     </div>
     ` : `
     <div style="background:#fef2f2;border:3px solid #ef4444;border-radius:14px;padding:24px;margin-bottom:20px">
-      <h2 style="color:#991b1b;margin-bottom:10px">
-        <i class="fas fa-exclamation-triangle"></i>
-        Submission received — but no application code was returned
-      </h2>
-      <p style="color:#7f1d1d;line-height:1.7;margin-bottom:10px">
-        Your application <strong>was saved</strong> (ID: <strong>#${result.application_id}</strong>).
-      </p>
-      <p style="color:#7f1d1d;line-height:1.7;font-size:13px">
-        <strong>Please contact HR directly</strong> and quote your Application ID <strong>#${result.application_id}</strong>.
-      </p>
+      <h2 style="color:#991b1b;margin-bottom:10px"><i class="fas fa-exclamation-triangle"></i> Submission received — but no application code was returned</h2>
+      <p style="color:#7f1d1d;line-height:1.7;margin-bottom:10px">Your application <strong>was saved</strong> (ID: <strong>#${result.application_id}</strong>).</p>
+      <p style="color:#7f1d1d;line-height:1.7;font-size:13px"><strong>Please contact HR directly</strong> and quote your Application ID <strong>#${result.application_id}</strong>.</p>
     </div>
     `}
 
@@ -616,7 +517,6 @@ function renderSuccessScreen(result, payload) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/* ─── Code actions ────────────────────────────────────── */
 function copyAppCode() {
   const code = document.getElementById('appCode').textContent.trim();
   if (!code || code === '—') return;
@@ -674,7 +574,6 @@ function downloadCode() {
   URL.revokeObjectURL(a.href);
 }
 
-/* ─── Rating ──────────────────────────────────────────── */
 let selectedRating = 0;
 function rateCompany(appId, rating) {
   selectedRating = rating;
