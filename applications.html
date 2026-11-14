@@ -13,6 +13,11 @@
 .form-response-item{background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px}
 .form-response-item .q{font-size:12px;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
 .form-response-item .a{font-size:14px;color:var(--text);white-space:pre-wrap}
+.email-preview-box{background:#f8fafc;border:1.5px solid var(--border);border-radius:10px;padding:16px;margin-top:16px}
+.email-preview-box label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-light);display:block;margin-bottom:6px}
+.email-preview-box input,.email-preview-box textarea{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px;line-height:1.6;background:#fff}
+.email-preview-box textarea{resize:vertical;min-height:200px}
+.email-preview-box input:focus,.email-preview-box textarea:focus{outline:2px solid rgba(79,140,255,.4);border-color:var(--primary)}
 </style>
 </head>
 <body>
@@ -66,7 +71,6 @@
     </div>
   </div>
 
-  <!-- FILTERS — explicit Apply button -->
   <div class="filters-bar" style="flex-wrap:wrap">
     <div class="filter-group" style="flex:1 1 100%">
       <label>Global Search</label>
@@ -143,18 +147,46 @@
   </div>
 </div>
 
-<!-- Rejection Modal -->
+<!-- Reject Modal — AI-generated, editable preview + Send button -->
 <div id="rejectModal" class="modal-overlay" style="display:none">
-  <div class="modal">
-    <div class="modal-header"><h3><i class="fas fa-times-circle"></i> Reject Application</h3><button class="modal-close" onclick="closeModal('rejectModal')"><i class="fas fa-times"></i></button></div>
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3><i class="fas fa-times-circle"></i> Reject Application</h3>
+      <button class="modal-close" onclick="closeModal('rejectModal')"><i class="fas fa-times"></i></button>
+    </div>
     <div class="modal-body">
-      <div class="form-group"><label>Rejection Reason</label>
-        <textarea id="rejectReason" rows="4" placeholder="Write the reason for rejection..."></textarea>
+      <div id="rejectLoading" style="text-align:center;padding:40px">
+        <i class="fas fa-spinner fa-spin" style="font-size:32px;color:var(--primary)"></i>
+        <p style="margin-top:16px;color:var(--text-light)">Generating email preview with AI...</p>
+      </div>
+
+      <div id="rejectContent" style="display:none">
+        <div class="alert alert-info" style="font-size:13px">
+          <i class="fas fa-info-circle"></i>
+          The email below will be sent to the candidate. <strong>You can edit the subject, body, and internal reason before sending.</strong>
+        </div>
+        <div class="email-preview-box">
+          <label>Subject</label>
+          <input type="text" id="rejectSubject" placeholder="Email subject">
+        </div>
+        <div class="email-preview-box">
+          <label>Email Body</label>
+          <textarea id="rejectBody" placeholder="Email body..."></textarea>
+        </div>
+        <div class="form-group" style="margin-top:16px">
+          <label>Internal Rejection Reason <span class="text-xs text-light">(not shown to candidate — saved for your records)</span></label>
+          <input type="text" id="rejectInternalReason" placeholder="e.g. Did not meet experience requirement" style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:14px">
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('rejectModal')">Cancel</button>
-      <button class="btn btn-danger" onclick="confirmReject()"><i class="fas fa-times-circle"></i> Reject & Send Email</button>
+      <button class="btn btn-warning" onclick="regenerateRejectPreview()" id="regenerateRejectBtn" style="display:none">
+        <i class="fas fa-sync-alt"></i> Regenerate with AI
+      </button>
+      <button class="btn btn-danger" onclick="sendRejectionEmail()" id="sendRejectBtn" style="display:none">
+        <i class="fas fa-paper-plane"></i> Send Rejection Email
+      </button>
     </div>
   </div>
 </div>
@@ -203,8 +235,7 @@
     <div class="modal-header"><h3><i class="fas fa-file-contract"></i> Generate/Write Offer Letter</h3><button class="modal-close" onclick="closeModal('offerModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body">
       <div class="grid-2 mb-4">
-        <div class="form-group">
-          <label>Letter Type</label>
+        <div class="form-group"><label>Letter Type</label>
           <select id="offerType"><option value="offer">Offer Letter</option><option value="agreement">Employment Agreement</option><option value="contract">Contract</option></select>
         </div>
         <div class="form-group"><label>Position</label><input type="text" id="offerPosition"></div>
@@ -240,7 +271,7 @@
     <div class="modal-header"><h3><i class="fas fa-tasks"></i> Bulk Action</h3><button class="modal-close" onclick="closeModal('bulkModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body">
       <p class="text-sm text-light mb-4">Apply filters first, then reject or move all non-matching applications below the threshold.</p>
-      <div class="form-group"><label>Rejection Reason (for reject action)</label><textarea id="bulkReason" rows="3" placeholder="We have reviewed your application and unfortunately..."></textarea></div>
+      <div class="form-group"><label>Rejection Reason</label><textarea id="bulkReason" rows="3"></textarea></div>
       <div class="flex gap-2 mt-4">
         <button class="btn btn-danger" onclick="applyBulkAction('reject')"><i class="fas fa-times-circle"></i> Reject Non-Matching</button>
         <button class="btn btn-warning" onclick="applyBulkAction('pending')"><i class="fas fa-clock"></i> Move to Pending</button>
@@ -256,10 +287,8 @@
     <div class="modal-body">
       <div class="form-group"><label>To</label><input type="email" id="customEmailTo" readonly style="background:#f3f4f6"></div>
       <div class="form-group"><label>Subject *</label><input type="text" id="customEmailSubject" placeholder="Enter subject"></div>
-      <div class="form-group"><label>Message *</label><textarea id="customEmailBody" rows="8" placeholder="Write your message here..."></textarea></div>
-      <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i> Use {name} to insert the recipient's name. The email will be sent immediately.
-      </div>
+      <div class="form-group"><label>Message *</label><textarea id="customEmailBody" rows="8"></textarea></div>
+      <div class="alert alert-info"><i class="fas fa-info-circle"></i> Use {name} to insert the recipient's name.</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('customEmailModal')">Cancel</button>
@@ -388,8 +417,8 @@ function renderApps() {
           <button class="btn btn-sm btn-secondary" onclick="viewApp(${a.id})" title="View"><i class="fas fa-eye"></i></button>
           <button class="btn btn-sm btn-success" onclick="quickStatus(${a.id},'shortlisted')" title="Shortlist"><i class="fas fa-check"></i></button>
           <button class="btn btn-sm btn-danger" onclick="openReject(${a.id})" title="Reject"><i class="fas fa-times"></i></button>
-          <button class="btn btn-sm btn-info" onclick="openCustomEmailModal(${JSON.stringify(a.applicant_email)},${JSON.stringify(a.applicant_name)})" title="Send Custom Email"><i class="fas fa-envelope"></i></button>
-          <button class="btn btn-sm btn-secondary" onclick="confirmDeleteAppPrompt(${a.id},${JSON.stringify(a.applicant_name)})" title="Delete Application"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-sm btn-info" data-email="${escapeAttr(a.applicant_email)}" data-name="${escapeAttr(a.applicant_name)}" onclick="openCustomEmailModal(this.dataset.email, this.dataset.name)" title="Send Custom Email"><i class="fas fa-envelope"></i></button>
+          <button class="btn btn-sm btn-secondary" data-id="${a.id}" data-name="${escapeAttr(a.applicant_name)}" onclick="confirmDeleteAppPrompt(parseInt(this.dataset.id,10), this.dataset.name)" title="Delete Application"><i class="fas fa-trash"></i></button>
         </div>
       </td>
     </tr>`;
@@ -401,23 +430,18 @@ function toggleSelect(id) {
   selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
   updateSelectionBar();
 }
-
 function toggleAll(cb) {
   apps.forEach(a => cb.checked ? selectedIds.add(a.id) : selectedIds.delete(a.id));
   document.querySelectorAll('.app-check').forEach(c => (c.checked = cb.checked));
   updateSelectionBar();
 }
-
 function updateSelectionBar() {
   const bar = document.getElementById('selectionBar');
   if (selectedIds.size > 0) {
     bar.style.display = 'block';
     document.getElementById('selCount').textContent = selectedIds.size;
-  } else {
-    bar.style.display = 'none';
-  }
+  } else { bar.style.display = 'none'; }
 }
-
 function clearSelection() {
   selectedIds.clear();
   document.querySelectorAll('.app-check').forEach(c => (c.checked = false));
@@ -445,30 +469,12 @@ async function quickStatus(id, status) {
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-function openReject(id) {
-  rejectingAppId = id;
-  document.getElementById('rejectReason').value = '';
-  openModal('rejectModal');
-}
-
-async function confirmReject() {
-  const reason = document.getElementById('rejectReason').value;
-  if (!reason) { showToast('Please enter a rejection reason', 'warning'); return; }
-  try {
-    await API.put(`/api/applications/${rejectingAppId}/status`, { status: 'rejected', rejection_reason: reason });
-    showToast('Application rejected and email sent', 'success');
-    closeModal('rejectModal');
-    loadApps();
-  } catch (e) { showToast('Error: ' + e.message, 'error'); }
-}
-
 /* ================ DELETE ================ */
 function confirmDeleteAppPrompt(id, name) {
   pendingDeleteAppId = id;
   document.getElementById('deleteAppName').textContent = name;
   openModal('deleteConfirmModal');
 }
-
 async function confirmDeleteApp() {
   if (!pendingDeleteAppId) return;
   const btn = event.target;
@@ -485,7 +491,70 @@ async function confirmDeleteApp() {
   }
 }
 
-/* ================ VIEW modal with custom form fields ================ */
+/* ================ REJECT — AI preview + editable send ================ */
+async function openReject(id) {
+  rejectingAppId = id;
+
+  document.getElementById('rejectLoading').style.display = 'block';
+  document.getElementById('rejectContent').style.display = 'none';
+  document.getElementById('sendRejectBtn').style.display = 'none';
+  document.getElementById('regenerateRejectBtn').style.display = 'none';
+  document.getElementById('rejectSubject').value = '';
+  document.getElementById('rejectBody').value = '';
+  document.getElementById('rejectInternalReason').value = '';
+  openModal('rejectModal');
+
+  const thisFetchId = id;
+  try {
+    const preview = await API.post(`/api/applications/${id}/preview-rejection-email`, {});
+    if (rejectingAppId !== thisFetchId) return;
+
+    document.getElementById('rejectSubject').value = preview.subject || '';
+    document.getElementById('rejectBody').value = preview.body || '';
+    document.getElementById('rejectInternalReason').value = preview.reason || '';
+
+    document.getElementById('rejectLoading').style.display = 'none';
+    document.getElementById('rejectContent').style.display = 'block';
+    document.getElementById('sendRejectBtn').style.display = 'inline-flex';
+    document.getElementById('regenerateRejectBtn').style.display = 'inline-flex';
+  } catch (e) {
+    if (rejectingAppId !== thisFetchId) return;
+    showToast('Failed to generate preview: ' + e.message, 'error');
+    closeModal('rejectModal');
+  }
+}
+
+async function regenerateRejectPreview() {
+  if (!rejectingAppId) return;
+  if (!confirm('This will discard any edits and generate a fresh AI version. Continue?')) return;
+  await openReject(rejectingAppId);
+}
+
+async function sendRejectionEmail() {
+  const subject = document.getElementById('rejectSubject').value.trim();
+  const body = document.getElementById('rejectBody').value.trim();
+  const reason = document.getElementById('rejectInternalReason').value.trim();
+
+  if (!subject || !body) { showToast('Subject and body are required', 'warning'); return; }
+
+  const btn = document.getElementById('sendRejectBtn');
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+  try {
+    await API.post(`/api/applications/${rejectingAppId}/send-rejection-email`, { subject, body, reason });
+    showToast('Rejection email sent to the candidate', 'success');
+    closeModal('rejectModal');
+    loadApps();
+  } catch (e) {
+    showToast('Error sending rejection email: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+  }
+}
+
+/* ================ VIEW modal with custom form fields + retake button ================ */
 async function viewApp(id) {
   try {
     const a = await API.get(`/api/applications/${id}`);
@@ -494,10 +563,40 @@ async function viewApp(id) {
     const skillGap = a.skill_gap_analysis || {};
     const skills = a.skills || [];
     const aiCompleted = a.ai_interview && ['completed', 'auto_submitted'].includes(a.ai_interview.status);
-
-    // Build the custom-form-responses block from the JD's field definitions
-    // plus the applicant's submitted answers.
     const formResponses = renderFormResponses(a.job_form_fields, a.form_responses);
+
+    // ── Assessment Results with retake button ──
+    let assessmentHtml = '';
+    if (a.assessment_results && a.assessment_results.length) {
+      assessmentHtml = `
+        <div class="card mb-4">
+          <div class="card-header"><h3><i class="fas fa-clipboard-check"></i> Assessment Results</h3></div>
+          <div class="card-body">
+            ${a.assessment_results.map(r => {
+              const superseded = r.is_superseded;
+              const canRetake = !superseded;
+              return `
+                <div style="background:${superseded ? '#f3f4f6' : '#f8fafc'};border-radius:8px;padding:12px;margin-bottom:10px;${superseded ? 'opacity:.75' : ''}">
+                  <div class="flex justify-between items-center" style="flex-wrap:wrap;gap:8px">
+                    <div class="flex items-center gap-2" style="flex-wrap:wrap">
+                      <span class="badge" style="background:#e0e7ff;color:#4338ca">Attempt ${r.attempt_number}</span>
+                      ${superseded ? '<span class="badge" style="background:#e5e7eb;color:#6b7280"><i class="fas fa-archive"></i> Superseded</span>' : ''}
+                      <span style="font-weight:800">${r.score}/${r.total_marks}</span>
+                      <span class="text-sm text-light">(${r.percentage}%)</span>
+                      <span class="badge badge-shortlisted">Grade ${r.grade}</span>
+                      ${statusBadge(r.passed ? 'passed' : 'failed')}
+                    </div>
+                    <div class="flex gap-2">
+                      ${canRetake ? `<button class="btn btn-sm btn-warning" data-result-id="${r.id}" onclick="giveAssessmentRetake(parseInt(this.dataset.resultId,10))" title="Give this candidate one more attempt"><i class="fas fa-redo"></i> Give Retake</button>` : ''}
+                    </div>
+                  </div>
+                  <div class="progress-bar mt-2"><div class="progress-fill" style="width:${r.percentage}%"></div></div>
+                  ${r.ai_feedback ? `<p class="text-sm text-light mt-2" style="white-space:pre-wrap">${escapeHtml(r.ai_feedback)}</p>` : ''}
+                </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
 
     document.getElementById('appDetailBody').innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px">
@@ -512,9 +611,7 @@ async function viewApp(id) {
                 <div><b>Experience:</b> ${a.experience_years} years</div>
                 <div><b>CGPA:</b> ${a.cgpa || '-'}</div>
                 <div><b>Applied:</b> ${fmtDate(a.applied_at)}</div>
-                <div style="grid-column:1/-1">
-                  <b>Application Code:</b> ${renderAppCode(a.application_code)}
-                </div>
+                <div style="grid-column:1/-1"><b>Application Code:</b> ${renderAppCode(a.application_code)}</div>
               </div>
               <div class="mt-4"><b>Skills:</b><div class="tags-wrap mt-2">${skills.map(s => `<span class="tag">${escapeHtml(s)}</span>`).join('') || '<span class="text-light">None listed</span>'}</div></div>
               ${a.cover_letter ? `<div class="mt-4"><b>Cover Letter:</b><p class="text-sm mt-2" style="line-height:1.7;background:#f8fafc;padding:12px;border-radius:8px;white-space:pre-wrap">${escapeHtml(a.cover_letter)}</p></div>` : ''}
@@ -528,21 +625,7 @@ async function viewApp(id) {
             <div class="card-body">${formResponses}</div>
           </div>` : ''}
 
-          ${a.assessment_results?.length ? `
-          <div class="card mb-4">
-            <div class="card-header"><h3><i class="fas fa-clipboard-check"></i> Assessment Results</h3></div>
-            <div class="card-body">
-              ${a.assessment_results.map(r => `
-                <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:8px">
-                  <div class="flex justify-between items-center">
-                    <div><b>${r.score}/${r.total_marks}</b> (${r.percentage}%)</div>
-                    <div class="flex gap-2">${statusBadge(r.passed ? 'passed' : 'failed')}<span class="badge badge-shortlisted">Grade: ${r.grade}</span></div>
-                  </div>
-                  <div class="progress-bar mt-2"><div class="progress-fill" style="width:${r.percentage}%"></div></div>
-                  ${r.ai_feedback ? `<p class="text-sm text-light mt-2">${escapeHtml(r.ai_feedback)}</p>` : ''}
-                </div>`).join('')}
-            </div>
-          </div>` : ''}
+          ${assessmentHtml}
 
           ${a.ai_interview ? `
           <div class="card mb-4">
@@ -554,17 +637,9 @@ async function viewApp(id) {
                   ? '<span class="badge badge-active" style="background:#d1fae5;color:#059669"><i class="fas fa-check-circle"></i> Finished</span>'
                   : '<span class="badge badge-pending" style="background:#fef3c7;color:#d97706"><i class="fas fa-hourglass-half"></i> In Progress</span>'}
               </div>
-              ${aiCompleted ? `
-                <div class="alert" style="margin-top:10px;background:#ecfdf5;border-color:#10b981;color:#065f46;font-size:13px">
-                  <i class="fas fa-info-circle"></i> The AI interview has finished. You can review the transcript, then generate an offer.
-                </div>
-              ` : ''}
               <div class="flex gap-2 mt-3" style="flex-wrap:wrap">
                 <button class="btn btn-sm btn-info" onclick="downloadAIInterviewPDF(${a.ai_interview.id})">
                   <i class="fas fa-file-pdf"></i> Download Transcript PDF
-                </button>
-                <button class="btn btn-sm btn-secondary" onclick="window.open('/interviews.html', '_blank')">
-                  <i class="fas fa-external-link-alt"></i> View on Interviews Page
                 </button>
               </div>
             </div>
@@ -584,41 +659,28 @@ async function viewApp(id) {
               <div style="font-size:13px"><b>Missing:</b><div class="tags-wrap mt-1">${(skillGap.missing_skills || []).map(s => `<span class="tag" style="background:#fee2e2;color:#dc2626">${escapeHtml(s)}</span>`).join('') || '<span class="text-light">None</span>'}</div></div>
             </div>
           </div>
-
-          ${a.interview ? `
-          <div class="card mb-4">
-            <div class="card-header"><h3><i class="fas fa-video"></i> Custom Interview</h3></div>
-            <div class="card-body text-sm">
-              <div><b>Type:</b> ${escapeHtml(a.interview.type)}</div>
-              <div><b>Date:</b> ${fmtDateTime(a.interview.date)}</div>
-              ${a.interview.meeting_link ? `<div><b>Link:</b> <a href="${escapeHtml(a.interview.meeting_link)}" target="_blank" style="color:var(--primary)">${escapeHtml(a.interview.meeting_link)}</a></div>` : ''}
-              <div class="mt-2">${statusBadge(a.interview.status)}</div>
-            </div>
-          </div>` : ''}
         </div>
       </div>`;
 
-    // Footer: Launch / Send Email / Generate Offer / Reject
     const offerEnabled = ['interview_passed', 'interview_completed', 'shortlisted'].includes(a.status);
     const launchDisabled = aiCompleted;
 
     document.getElementById('appDetailFooter').innerHTML = `
       <button class="btn btn-secondary" onclick="closeModal('appDetailModal')">Close</button>
-
       <div style="display:flex;gap:8px;align-items:center;margin-right:auto;margin-left:16px">
         <select id="interviewModeSelect" ${launchDisabled ? 'disabled' : ''} style="padding:8px;border-radius:6px;border:1px solid var(--border)">
             <option value="ai">AI Interview</option>
             <option value="custom">Custom (Human) Interview</option>
         </select>
-        <button class="btn btn-primary" onclick="launchInterview(${a.id})" ${launchDisabled ? 'disabled title="An AI interview has already been completed for this candidate"' : ''}>
+        <button class="btn btn-primary" onclick="launchInterview(${a.id})" ${launchDisabled ? 'disabled' : ''}>
             <i class="fas fa-play"></i> Launch Interview
         </button>
       </div>
+      <button class="btn btn-info" data-email="${escapeAttr(a.applicant_email)}" data-name="${escapeAttr(a.applicant_name)}" onclick="openCustomEmailModal(this.dataset.email, this.dataset.name)"><i class="fas fa-envelope"></i> Send Email</button>
+      <button class="btn btn-success" data-app-id="${a.id}" data-title="${escapeAttr(a.job_title)}" onclick="openOfferModal(parseInt(this.dataset.appId,10), this.dataset.title)" ${!offerEnabled ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
+      <button class="btn btn-danger" data-app-id="${a.id}" onclick="openReject(parseInt(this.dataset.appId,10));closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
 
-      <button class="btn btn-info" onclick="openCustomEmailModal(${JSON.stringify(a.applicant_email)},${JSON.stringify(a.applicant_name)})"><i class="fas fa-envelope"></i> Send Email</button>
-      <button class="btn btn-success" onclick="openOfferModal(${a.id},${JSON.stringify(a.job_title)})" ${!offerEnabled ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
-      <button class="btn btn-danger" onclick="openReject(${a.id});closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
-
+    window.__currentAppId = a.id;
     openModal('appDetailModal');
   } catch (e) { showToast('Error loading details: ' + e.message, 'error'); }
 }
@@ -633,34 +695,41 @@ function renderFormResponses(jobFormFields, formResponses) {
   const sections = (jobFormFields.sections) || [];
   let anyShown = false;
   let html = '';
-
   for (const section of sections) {
     const fieldRows = [];
     for (const f of (section.fields || [])) {
       const val = formResponses[f.id];
       if (val === undefined || val === null || val === '') continue;
       const display = Array.isArray(val) ? val.join(', ') : String(val);
-      fieldRows.push(`
-        <div class="form-response-item">
-          <div class="q">${escapeHtml(f.label || f.id)}</div>
-          <div class="a">${escapeHtml(display)}</div>
-        </div>`);
+      fieldRows.push(`<div class="form-response-item"><div class="q">${escapeHtml(f.label || f.id)}</div><div class="a">${escapeHtml(display)}</div></div>`);
     }
     if (fieldRows.length) {
       anyShown = true;
-      html += `<div class="mb-3">
-        <div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${escapeHtml(section.title || 'Section')}</div>
-        ${fieldRows.join('')}
-      </div>`;
+      html += `<div class="mb-3"><div style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${escapeHtml(section.title || 'Section')}</div>${fieldRows.join('')}</div>`;
     }
   }
   return anyShown ? html : '';
 }
 
+/* ================ GIVE RETAKE ================ */
+async function giveAssessmentRetake(resultId) {
+  if (!confirm('Give this candidate one more chance to take the assessment?\n\n• Their current submission will be archived (kept for history)\n• Their application code will be reusable\n• A retake invitation email will be sent automatically')) {
+    return;
+  }
+  try {
+    const res = await API.post(`/api/assessment-results/${resultId}/allow-retake`, {});
+    showToast(res.message || 'Retake granted and email sent!', 'success', 6000);
+    const appId = window.__currentAppId;
+    closeModal('appDetailModal');
+    if (appId) setTimeout(() => viewApp(appId), 300);
+  } catch (e) {
+    showToast('Error granting retake: ' + e.message, 'error', 8000);
+  }
+}
+
 /* ================ Launch interview ================ */
 async function launchInterview(applicationId) {
   const mode = document.getElementById('interviewModeSelect').value;
-
   if (mode === 'ai') {
     currentAIAppId = applicationId;
     const tomorrow = new Date(Date.now() + 86400000);
@@ -679,13 +748,8 @@ async function submitAISchedule() {
   const date = document.getElementById('aiDate').value;
   const qCount = document.getElementById('aiQCount').value;
   if (!date) { showToast('Please select a date', 'warning'); return; }
-
   try {
-    const res = await API.post('/api/ai-interviews/create-link', {
-      application_id: currentAIAppId,
-      scheduled_date: date,
-      questions_count: parseInt(qCount)
-    });
+    const res = await API.post('/api/ai-interviews/create-link', { application_id: currentAIAppId, scheduled_date: date, questions_count: parseInt(qCount) });
     copyCode(res.interview_link);
     showToast('AI Interview Scheduled! Link copied to clipboard.', 'success', 6000);
     closeModal('aiScheduleModal');
@@ -714,7 +778,7 @@ function downloadAIInterviewPDF(interviewId) {
   API.download(`/api/ai-interviews/${interviewId}/pdf`, `ai_interview_${interviewId}.pdf`);
 }
 
-/* ================ Offer ================ */
+/* ================ OFFER ================ */
 function openOfferModal(appId, jobTitle) {
   offerAppId = appId;
   currentOfferId = null;
@@ -727,6 +791,7 @@ function openOfferModal(appId, jobTitle) {
 function clearOfferPreview() {
   document.getElementById('offerPreview').style.display = 'block';
   document.getElementById('offerContent').value = '';
+  document.getElementById('sendOfferBtn').style.display = 'inline-flex';
   currentOfferId = null;
   showToast('You can now write your own letter content', 'info');
 }
@@ -768,17 +833,11 @@ async function sendOffer() {
       });
       currentOfferId = data.id;
       await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
-    } catch (e) {
-      showToast('Error creating offer: ' + e.message, 'error');
-      return;
-    }
+    } catch (e) { showToast('Error creating offer: ' + e.message, 'error'); return; }
   } else {
     try {
       await API.put(`/api/offers/${currentOfferId}`, { content: document.getElementById('offerContent').value });
-    } catch (e) {
-      showToast('Error saving changes: ' + e.message, 'error');
-      return;
-    }
+    } catch (e) { showToast('Error saving changes: ' + e.message, 'error'); return; }
   }
 
   try {
@@ -798,12 +857,7 @@ async function applyBulkAction(action) {
   const minExp = parseFloat(document.getElementById('fMinExp').value) || 0;
   const minCgpa = parseFloat(document.getElementById('fMinCgpa').value) || 0;
   const nonMatching = apps.filter(a => a.experience_years < minExp || a.cgpa < minCgpa);
-
-  if (!nonMatching.length) {
-    showToast('No non-matching applications found with current filters', 'info');
-    return;
-  }
-
+  if (!nonMatching.length) { showToast('No non-matching applications found with current filters', 'info'); return; }
   try {
     await API.post('/api/applications/bulk-action', {
       application_ids: nonMatching.map(a => a.id),
@@ -813,9 +867,7 @@ async function applyBulkAction(action) {
     showToast(`${action} applied to ${nonMatching.length} applications`, 'success');
     closeModal('bulkModal');
     loadApps();
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 function clearFilters() {
@@ -838,11 +890,7 @@ function openCustomEmailModal(email, name) {
 async function sendCustomEmail() {
   const subject = document.getElementById('customEmailSubject').value;
   const body = document.getElementById('customEmailBody').value;
-  if (!subject || !body) {
-    showToast('Subject and message required', 'warning');
-    return;
-  }
-
+  if (!subject || !body) { showToast('Subject and message required', 'warning'); return; }
   try {
     await API.post('/api/send-custom-email', {
       to_email: currentCustomEmail.to,
@@ -852,19 +900,14 @@ async function sendCustomEmail() {
     });
     showToast('Email sent successfully!', 'success');
     closeModal('customEmailModal');
-  } catch (e) {
-    showToast('Error sending email: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error sending email: ' + e.message, 'error'); }
 }
 
 /* ================ CV download ================ */
 async function downloadCV(applicationId) {
   try {
     const token = localStorage.getItem('token');
-    if (!token) {
-      showToast('Please login first', 'error');
-      return;
-    }
+    if (!token) { showToast('Please login first', 'error'); return; }
     const response = await fetch(`${APPLICATIONS_BACKEND_URL}/api/applications/${applicationId}/cv`, {
       method: 'GET',
       headers: { 'Authorization': `Bearer ${token}` },
@@ -893,9 +936,7 @@ async function downloadCV(applicationId) {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
-  } catch (e) {
-    showToast('Error downloading CV: ' + e.message, 'error');
-  }
+  } catch (e) { showToast('Error downloading CV: ' + e.message, 'error'); }
 }
 
 /* ================ Helpers ================ */
@@ -903,25 +944,19 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, m =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
+function escapeAttr(s) { return escapeHtml(s); }
 
 /* ================ Boot ================ */
 loadApps();
 
-// ── URL parameter handling ──────────────────────────────────
-// ?view=ID   → open that application's detail modal (used by Interviews
-//              page "Move to Offer" and Assessments page "Schedule Interview")
-// ?ce=<b64>  → open the custom-email modal for that recipient (used by
-//              Assessments page "Send Email" action)
 (function handleUrlParams() {
   const params = new URLSearchParams(location.search);
-
   const viewId = params.get('view');
   if (viewId) {
     const id = parseInt(viewId, 10);
     if (!isNaN(id)) setTimeout(() => viewApp(id), 400);
     return;
   }
-
   const ceParam = params.get('ce');
   if (ceParam) {
     try {
@@ -930,9 +965,7 @@ loadApps();
       const email = ceParams.get('email');
       const name = ceParams.get('name') || '';
       if (email) setTimeout(() => openCustomEmailModal(email, name), 400);
-    } catch (e) {
-      console.warn('[applications] could not decode ?ce param:', e);
-    }
+    } catch (e) { console.warn('[applications] could not decode ?ce param:', e); }
   }
 })();
 </script>
