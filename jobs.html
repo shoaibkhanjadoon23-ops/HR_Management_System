@@ -113,7 +113,7 @@
       <div class="form-group"><label>Requirements</label><textarea id="jReq" rows="3" placeholder="List requirements..."></textarea></div>
       <div class="form-group"><label>Required Skills (press Enter or comma to add)</label><input type="text" id="skillInput" placeholder="e.g. React, Node.js, Python"><div id="skillTags" class="tags-wrap mt-2"></div><input type="hidden" id="skillsHidden"></div>
       
-      <!-- Form Builder Section (Updated) -->
+      <!-- Form Builder Section -->
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
         <div class="flex justify-between items-center mb-4">
           <h4><i class="fas fa-magic"></i> Application Form <span class="ai-badge"><i class="fas fa-robot"></i> AI Generated</span></h4>
@@ -192,6 +192,13 @@ let currentJobLink = '';
 let generatedFormFields = null;
 let jobs = [];
 
+/* ================ Utility ================ */
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+/* ================ Load ================ */
 async function loadJobs() {
   try {
     jobs = await API.get('/api/jobs');
@@ -207,15 +214,16 @@ function renderJobs() {
   document.getElementById('jobsList').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px">${jobs.map(j => `
     <div class="card" style="cursor:pointer">
       <div class="card-body">
-        <div class="flex justify-between items-center mb-4"><div><h3 style="font-size:16px;font-weight:700">${j.title}</h3><p class="text-sm text-light">${j.department}</p></div>${statusBadge(j.status)}</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"><span class="text-xs text-light"><i class="fas fa-map-marker-alt"></i> ${j.location || 'Remote'}</span><span class="text-xs text-light"><i class="fas fa-clock"></i> ${j.job_type?.replace('_',' ')}</span><span class="text-xs text-light"><i class="fas fa-briefcase"></i> ${j.experience_years}+ yrs</span>${j.is_remote ? '<span class="text-xs text-light"><i class="fas fa-home"></i> Remote OK</span>' : ''}</div>
-        <div class="tags-wrap mb-4">${(j.skills_required || []).slice(0,4).map(s => `<span class="tag">${s}</span>`).join('')}${(j.skills_required || []).length > 4 ? `<span class="tag">+${j.skills_required.length - 4}</span>` : ''}</div>
-        <div class="flex justify-between items-center"><div class="text-sm"><i class="fas fa-users text-light"></i> <b>${j.application_count}</b> Applications</div><div class="flex gap-2"><button class="btn btn-sm btn-secondary" onclick="showJobDetail(${j.id})"><i class="fas fa-eye"></i></button><button class="btn btn-sm btn-primary" onclick="openEditJob(${j.id})"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="deleteJob(${j.id})"><i class="fas fa-trash"></i></button></div></div>
-        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><div class="text-xs text-light"><i class="fas fa-link"></i> <a href="${j.apply_link}" target="_blank" style="color:var(--primary)">${j.apply_link}</a><button class="btn btn-sm" onclick="copyToClipboard('${j.apply_link}');event.stopPropagation()" style="padding:2px 6px;font-size:11px"><i class="fas fa-copy"></i></button></div></div>
+        <div class="flex justify-between items-center mb-4"><div><h3 style="font-size:16px;font-weight:700">${escapeHtml(j.title)}</h3><p class="text-sm text-light">${escapeHtml(j.department)}</p></div>${statusBadge(j.status)}</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px"><span class="text-xs text-light"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(j.location || 'Remote')}</span><span class="text-xs text-light"><i class="fas fa-clock"></i> ${(j.job_type||'full_time').replace('_',' ')}</span><span class="text-xs text-light"><i class="fas fa-briefcase"></i> ${j.experience_years}+ yrs</span>${j.is_remote ? '<span class="text-xs text-light"><i class="fas fa-home"></i> Remote OK</span>' : ''}</div>
+        <div class="tags-wrap mb-4">${(j.skills_required || []).slice(0,4).map(s => `<span class="tag">${escapeHtml(s)}</span>`).join('')}${(j.skills_required || []).length > 4 ? `<span class="tag">+${j.skills_required.length - 4}</span>` : ''}</div>
+        <div class="flex justify-between items-center"><div class="text-sm"><i class="fas fa-users text-light"></i> <b>${j.application_count}</b> Applications</div><div class="flex gap-2"><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();showJobDetail(${j.id})"><i class="fas fa-eye"></i></button><button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openEditJob(${j.id})"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteJob(${j.id})"><i class="fas fa-trash"></i></button></div></div>
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><div class="text-xs text-light"><i class="fas fa-link"></i> <a href="${escapeHtml(j.apply_link)}" target="_blank" style="color:var(--primary)">${escapeHtml(j.apply_link)}</a><button class="btn btn-sm" onclick="event.stopPropagation();copyToClipboard('${escapeHtml(j.apply_link)}')" style="padding:2px 6px;font-size:11px"><i class="fas fa-copy"></i></button></div></div>
       </div>
     </div>`).join('')}</div>`;
 }
 
+/* ================ Create / Edit ================ */
 function openCreateJobModal() {
   editingJobId = null;
   generatedFormFields = null;
@@ -231,7 +239,8 @@ function openEditJob(id) {
   const job = jobs.find(j => j.id === id);
   if (!job) return;
   editingJobId = id;
-  generatedFormFields = job.form_fields;
+  // Deep-clone form_fields so edits don't mutate the object in `jobs` until save.
+  generatedFormFields = job.form_fields ? JSON.parse(JSON.stringify(job.form_fields)) : null;
   document.getElementById('jobModalTitle').textContent = 'Edit Job';
   document.getElementById('jTitle').value = job.title;
   document.getElementById('jDept').value = job.department;
@@ -247,13 +256,16 @@ function openEditJob(id) {
   document.getElementById('jRemote').checked = job.is_remote;
   if (job.deadline) document.getElementById('jDeadline').value = job.deadline.slice(0,16);
   window['setTags_skillsHidden'](job.skills_required || []);
-  if (job.form_fields) { 
-    document.getElementById('formPreview').style.display = 'block'; 
-    renderFormPreview(job.form_fields); 
+  if (generatedFormFields && generatedFormFields.sections && generatedFormFields.sections.length) {
+    document.getElementById('formPreview').style.display = 'block';
+    renderFormPreview(generatedFormFields);
+  } else {
+    document.getElementById('formPreview').style.display = 'none';
   }
   openModal('jobModal');
 }
 
+/* ================ AI Form Generation ================ */
 async function generateAIForm() {
   const title = document.getElementById('jTitle').value;
   const desc = document.getElementById('jDesc').value;
@@ -264,15 +276,99 @@ async function generateAIForm() {
   btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
   try {
     const data = await API.post('/api/jobs/generate-form', { title, description: desc, skills });
-    generatedFormFields = data;
+    // Deep-clone what the backend returned so later edits don't affect the raw response.
+    generatedFormFields = JSON.parse(JSON.stringify(data));
     document.getElementById('formPreview').style.display = 'block';
-    renderFormPreview(data);
+    renderFormPreview(generatedFormFields);
     showToast('AI form generated!', 'success');
   } catch(e) { showToast('Error generating form: ' + e.message, 'error'); }
   finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-magic"></i> Regenerate Form'; }
 }
 
-// NEW: Add Custom Field Logic
+/* ================ Form preview rendering ================
+ * The original version put raw JSON.stringify(f) inside data-field='…'.
+ * If a label contained a single quote (e.g. "What's your name?"),
+ * the attribute broke and the field was silently dropped on save.
+ * escapeHtml() around JSON.stringify fixes that.
+ * ========================================================= */
+function renderFormPreview(formData) {
+  const sections = formData?.sections || [];
+  let html = sections.map(s => `
+    <div class="field-builder-card">
+      <h4>${escapeHtml(s.title)}</h4>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${(s.fields || []).map(f => `
+          <div class="field-row" id="row_${escapeHtml(f.id)}">
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;flex:1">
+              <input type="checkbox" class="form-field-check"
+                     data-section="${escapeHtml(s.title)}"
+                     data-field="${escapeHtml(JSON.stringify(f))}"
+                     checked onchange="updateFormJson()" style="width:auto">
+              <div class="field-info">
+                <b>${escapeHtml(f.label)}</b>
+                <span>Type: ${escapeHtml(f.type)} ${f.options ? `| Options: ${escapeHtml(f.options.join(', '))}` : ''}</span>
+              </div>
+            </label>
+            <div class="field-controls">
+              <label>
+                <input type="checkbox" class="form-field-req"
+                       data-section="${escapeHtml(s.title)}"
+                       data-field="${escapeHtml(JSON.stringify(f))}"
+                       ${f.required ? 'checked' : ''} onchange="updateFormJson()"> Required
+              </label>
+              <button class="btn btn-sm btn-danger" onclick="removeField('${escapeHtml(f.id)}', '${escapeHtml(s.title)}')" title="Delete Field" style="padding:2px 8px"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('formFieldsList').innerHTML = html;
+}
+
+function removeField(fieldId, sectionTitle) {
+  if (!generatedFormFields) return;
+  const section = generatedFormFields.sections.find(s => s.title === sectionTitle);
+  if (section) {
+    section.fields = section.fields.filter(f => f.id !== fieldId);
+    if (section.fields.length === 0) {
+      generatedFormFields.sections = generatedFormFields.sections.filter(s => s.title !== sectionTitle);
+    }
+  }
+  renderFormPreview(generatedFormFields);
+  showToast('Field removed', 'info');
+}
+
+/* ================ Sync preview → generatedFormFields ================
+ * Only reconstruct the form if it already exists. Previously this ran on
+ * every render and — when the AI hadn't generated a form yet, or when the
+ * form was null — it silently overwrote `generatedFormFields` with an
+ * empty object, wiping the user's work before save.
+ * ================================================================= */
+function updateFormJson() {
+  if (!generatedFormFields) return;
+
+  const newSections = {};
+
+  document.querySelectorAll('.form-field-check:checked').forEach(chk => {
+    const sectionTitle = chk.dataset.section;
+    let field;
+    try { field = JSON.parse(chk.dataset.field); }
+    catch (e) { console.warn('[form-builder] skipping malformed field:', e); return; }
+
+    const reqChk = document.querySelector(
+      `.form-field-req[data-section="${CSS.escape(sectionTitle)}"][data-field="${CSS.escape(chk.dataset.field)}"]`
+    );
+    field.required = reqChk ? reqChk.checked : false;
+
+    if (!newSections[sectionTitle]) newSections[sectionTitle] = { title: sectionTitle, fields: [] };
+    newSections[sectionTitle].fields.push(field);
+  });
+
+  generatedFormFields = { sections: Object.values(newSections) };
+}
+
+/* ================ Add Custom Field ================ */
 function openAddCustomFieldModal() {
   document.getElementById('cfLabel').value = '';
   document.getElementById('cfType').value = 'text';
@@ -282,7 +378,6 @@ function openAddCustomFieldModal() {
   openModal('addCustomFieldModal');
 }
 
-// Show options field for dropdown
 document.getElementById('cfType').addEventListener('change', function() {
   document.getElementById('cfOptionsGroup').style.display = this.value === 'select' ? 'block' : 'none';
 });
@@ -307,7 +402,6 @@ function saveCustomField() {
     field.options = optionsStr.split(',').map(s => s.trim()).filter(Boolean);
   }
   
-  // Add to existing form fields or create a new section
   if (!generatedFormFields) {
     generatedFormFields = { sections: [{ title: "Custom Fields", fields: [] }] };
   }
@@ -326,72 +420,13 @@ function saveCustomField() {
   showToast('Custom field added!', 'success');
 }
 
-function renderFormPreview(formData) {
-  const sections = formData?.sections || [];
-  let html = sections.map(s => `
-    <div class="field-builder-card">
-      <h4>${s.title}</h4>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${(s.fields || []).map(f => `
-          <div class="field-row" id="row_${f.id}">
-            <label style="display:flex;align-items:center;gap:12px;cursor:pointer;flex:1">
-              <input type="checkbox" class="form-field-check" data-section="${s.title}" data-field='${JSON.stringify(f)}' checked onchange="updateFormJson()" style="width:auto">
-              <div class="field-info">
-                <b>${f.label}</b>
-                <span>Type: ${f.type} ${f.options ? `| Options: ${f.options.join(', ')}` : ''}</span>
-              </div>
-            </label>
-            <div class="field-controls">
-              <label>
-                <input type="checkbox" class="form-field-req" data-section="${s.title}" data-field='${JSON.stringify(f)}' ${f.required ? 'checked' : ''} onchange="updateFormJson()"> Required
-              </label>
-              <button class="btn btn-sm btn-danger" onclick="removeField('${f.id}', '${s.title}')" title="Delete Field" style="padding:2px 8px"><i class="fas fa-trash"></i></button>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `).join('');
-  document.getElementById('formFieldsList').innerHTML = html;
-}
-
-function removeField(fieldId, sectionTitle) {
-  if (!generatedFormFields) return;
-  const section = generatedFormFields.sections.find(s => s.title === sectionTitle);
-  if (section) {
-    section.fields = section.fields.filter(f => f.id !== fieldId);
-    // If section is empty, remove it
-    if (section.fields.length === 0) {
-      generatedFormFields.sections = generatedFormFields.sections.filter(s => s.title !== sectionTitle);
-    }
-  }
-  renderFormPreview(generatedFormFields);
-  showToast('Field removed', 'info');
-}
-
-function updateFormJson() {
-  const newSections = {};
-  
-  document.querySelectorAll('.form-field-check:checked').forEach(chk => {
-    const sectionTitle = chk.dataset.section;
-    const field = JSON.parse(chk.dataset.field);
-    
-    // Check the corresponding "Required" toggle
-    const reqChk = document.querySelector(`.form-field-req[data-section="${sectionTitle}"][data-field='${chk.dataset.field}']`);
-    field.required = reqChk ? reqChk.checked : false;
-
-    if (!newSections[sectionTitle]) newSections[sectionTitle] = { title: sectionTitle, fields: [] };
-    newSections[sectionTitle].fields.push(field);
-  });
-
-  generatedFormFields = { sections: Object.values(newSections) };
-}
-
+/* ================ Save Job ================ */
 async function saveJob() {
   const title = document.getElementById('jTitle').value;
   const dept = document.getElementById('jDept').value;
   if (!title || !dept) { showToast('Title and department are required', 'warning'); return; }
   
+  // Sync the visible checkbox/required state into generatedFormFields before save.
   updateFormJson();
 
   const payload = {
@@ -411,25 +446,36 @@ async function saveJob() {
     deadline: document.getElementById('jDeadline').value || null
   };
   try {
-    if (editingJobId) { await API.put(`/api/jobs/${editingJobId}`, payload); showToast('Job updated!', 'success'); }
-    else { const res = await API.post('/api/jobs', payload); showToast(`Job created! Apply link: ${res.apply_link}`, 'success', 5000); }
+    if (editingJobId) {
+      await API.put(`/api/jobs/${editingJobId}`, payload);
+      showToast('Job updated!', 'success');
+    } else {
+      const res = await API.post('/api/jobs', payload);
+      showToast(`Job created! Apply link: ${res.apply_link}`, 'success', 5000);
+    }
     closeModal('jobModal');
     loadJobs();
   } catch(e) { showToast('Error saving job: ' + e.message, 'error'); }
 }
 
+/* ================ Job Detail ================ */
 function showJobDetail(id) {
   const job = jobs.find(j => j.id === id);
   if (!job) return;
   currentJobLink = job.apply_link;
-  document.getElementById('detailJobTitle').innerHTML = `<i class="fas fa-briefcase"></i> ${job.title}`;
+  document.getElementById('detailJobTitle').innerHTML = `<i class="fas fa-briefcase"></i> ${escapeHtml(job.title)}`;
   document.getElementById('editJobBtn').onclick = () => { closeModal('jobDetailModal'); openEditJob(id); };
-  document.getElementById('jobDetailBody').innerHTML = `<div class="grid-2 mb-4"><div><b>Department:</b> ${job.department}</div><div><b>Type:</b> ${job.job_type?.replace('_',' ')}</div><div><b>Location:</b> ${job.location || 'N/A'}</div><div><b>Experience:</b> ${job.experience_years}+ years</div><div><b>Min CGPA:</b> ${job.min_cgpa}</div><div><b>Remote:</b> ${job.is_remote ? 'Yes' : 'No'}</div>${job.salary_min ? `<div><b>Salary Range:</b> $${job.salary_min} - $${job.salary_max}</div>` : ''}<div><b>Applications:</b> ${job.application_count}</div><div><b>Deadline:</b> ${fmtDate(job.deadline)}</div><div><b>Status:</b> ${statusBadge(job.status)}</div></div><div class="mb-4"><b>Description:</b><p class="mt-2 text-sm" style="line-height:1.7">${job.description}</p></div>${job.requirements ? `<div class="mb-4"><b>Requirements:</b><p class="mt-2 text-sm" style="line-height:1.7">${job.requirements}</p></div>` : ''}<div class="mb-4"><b>Required Skills:</b><div class="tags-wrap mt-2">${(job.skills_required || []).map(s => `<span class="tag">${s}</span>`).join('')}</div></div><div class="alert alert-info"><i class="fas fa-link"></i> Apply Link: <a href="${job.apply_link}" target="_blank" style="color:var(--info)">${job.apply_link}</a></div>`;
+  document.getElementById('jobDetailBody').innerHTML = `<div class="grid-2 mb-4"><div><b>Department:</b> ${escapeHtml(job.department)}</div><div><b>Type:</b> ${(job.job_type||'full_time').replace('_',' ')}</div><div><b>Location:</b> ${escapeHtml(job.location || 'N/A')}</div><div><b>Experience:</b> ${job.experience_years}+ years</div><div><b>Min CGPA:</b> ${job.min_cgpa}</div><div><b>Remote:</b> ${job.is_remote ? 'Yes' : 'No'}</div>${job.salary_min ? `<div><b>Salary Range:</b> $${job.salary_min} - $${job.salary_max}</div>` : ''}<div><b>Applications:</b> ${job.application_count}</div><div><b>Deadline:</b> ${fmtDate(job.deadline)}</div><div><b>Status:</b> ${statusBadge(job.status)}</div></div><div class="mb-4"><b>Description:</b><p class="mt-2 text-sm" style="line-height:1.7">${escapeHtml(job.description)}</p></div>${job.requirements ? `<div class="mb-4"><b>Requirements:</b><p class="mt-2 text-sm" style="line-height:1.7">${escapeHtml(job.requirements)}</p></div>` : ''}<div class="mb-4"><b>Required Skills:</b><div class="tags-wrap mt-2">${(job.skills_required || []).map(s => `<span class="tag">${escapeHtml(s)}</span>`).join('')}</div></div><div class="alert alert-info"><i class="fas fa-link"></i> Apply Link: <a href="${escapeHtml(job.apply_link)}" target="_blank" style="color:var(--info)">${escapeHtml(job.apply_link)}</a></div>`;
   openModal('jobDetailModal');
 }
 
 function copyJobLink() { copyToClipboard(currentJobLink); }
-async function deleteJob(id) { if (!confirm('Delete this job posting?')) return; try { await API.delete(`/api/jobs/${id}`); showToast('Job deleted', 'success'); loadJobs(); } catch(e) { showToast('Error deleting job', 'error'); } }
+
+async function deleteJob(id) {
+  if (!confirm('Delete this job posting? All applications, assessments and interviews for it will also be deleted.')) return;
+  try { await API.delete(`/api/jobs/${id}`); showToast('Job deleted', 'success'); loadJobs(); }
+  catch(e) { showToast('Error deleting job', 'error'); }
+}
 
 loadJobs();
 </script>
