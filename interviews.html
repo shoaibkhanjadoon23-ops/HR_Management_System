@@ -6,67 +6,45 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <style>
-  .plagiarism-alert {
-    background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
-    border-radius: 8px; padding: 10px 14px; font-size: 13px;
-    margin-top: 8px; display: flex; gap: 10px; align-items: flex-start;
-  }
-  .plagiarism-alert i { font-size: 16px; margin-top: 1px; }
-  .qa-box {
-    background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px;
-  }
-  .qa-box .q-text { font-weight: 700; font-size: 14px; margin-bottom: 8px; padding-right: 100px; }
-  .qa-box .a-text { font-size: 14px; color: var(--text); background: white; padding: 12px; border-radius: 8px; border: 1px solid var(--border); white-space: pre-wrap; }
-  .qa-box .score-badge {
-    float: right; background: var(--primary); color: white;
-    padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-    display: inline-flex; align-items: center; gap: 6px;
-    font-variant-numeric: tabular-nums;
-  }
-  .qa-box .score-badge.muted {
-    background: #6b7280; opacity: 0.75; font-weight: 600;
-  }
-  .qa-box .score-badge .edit-icon {
-    cursor: pointer; opacity: 0.85; transition: opacity 0.15s, transform 0.15s;
-    font-size: 11px;
-  }
-  .qa-box .score-badge .edit-icon:hover { opacity: 1; transform: scale(1.15); }
-  .qa-box .score-edit {
-    float: right; display: flex; align-items: center; gap: 6px;
-  }
-  .qa-box .score-edit input {
-    width: 58px; padding: 4px 6px; border-radius: 6px;
-    border: 1px solid var(--border); text-align: center;
-    font-weight: 700; font-size: 13px;
-    font-variant-numeric: tabular-nums;
-  }
-  .qa-box .score-edit button {
-    padding: 5px 10px; font-size: 11px; border-radius: 6px;
-    border: none; cursor: pointer; font-weight: 700;
-  }
-  .qa-box .score-edit .save-btn { background: var(--success); color: white; }
-  .qa-box .score-edit .cancel-btn { background: #6b7280; color: white; }
-  .qa-box .q-intro-badge {
-    background: rgba(245,158,11,.18); color: #b45309;
-    padding: 1px 7px; border-radius: 4px; font-size: 10px;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    margin-left: 6px; vertical-align: middle;
-  }
-  .qa-box .q-followup-badge {
-    background: rgba(245,158,11,.18); color: #b45309;
-    padding: 1px 7px; border-radius: 4px; font-size: 10px;
-    margin-left: 6px; vertical-align: middle;
-  }
+  .plagiarism-alert { background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:8px;padding:10px 14px;font-size:13px;margin-top:8px;display:flex;gap:10px;align-items:flex-start }
+  .plagiarism-alert i { font-size:16px;margin-top:1px }
+  .qa-box { background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px }
+  .qa-box .q-text { font-weight:700;font-size:14px;margin-bottom:8px;padding-right:110px }
+  .qa-box .a-text { font-size:14px;color:var(--text);background:white;padding:12px;border-radius:8px;border:1px solid var(--border);white-space:pre-wrap }
+  .qa-box .score-badge { float:right;background:var(--primary);color:white;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums }
+  .qa-box .score-badge.muted { background:#6b7280;opacity:0.75;font-weight:600 }
+  .qa-box .score-badge .edit-icon { cursor:pointer;opacity:.85;font-size:11px }
+  .qa-box .score-badge .edit-icon:hover { opacity:1;transform:scale(1.15) }
+  .qa-box .score-edit { float:right;display:flex;align-items:center;gap:6px }
+  .qa-box .score-edit input { width:58px;padding:4px 6px;border-radius:6px;border:1px solid var(--border);text-align:center;font-weight:700;font-size:13px }
+  .qa-box .score-edit button { padding:5px 10px;font-size:11px;border-radius:6px;border:none;cursor:pointer;font-weight:700 }
+  .qa-box .score-edit .save-btn { background:var(--success);color:white }
+  .qa-box .score-edit .cancel-btn { background:#6b7280;color:white }
+  .qa-box .q-intro-badge { background:rgba(245,158,11,.18);color:#b45309;padding:1px 7px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;margin-left:6px;vertical-align:middle }
+  .qa-box .q-followup-badge { background:rgba(245,158,11,.18);color:#b45309;padding:1px 7px;border-radius:4px;font-size:10px;margin-left:6px;vertical-align:middle }
+  .int-card-actions { display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end }
 </style>
 </head>
 <body>
 <div class="sidebar" id="sidebar">
   <div class="sidebar-logo"><div class="logo-icon"><i class="fas fa-users-cog"></i></div><h2>HR<span>Pro</span></h2></div>
   <nav class="sidebar-nav">
-    <div class="nav-section"><div class="nav-section-title">Main</div><a href="/dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard</a><a href="/jobs.html" class="nav-item"><i class="fas fa-briefcase"></i> Job Postings</a><a href="/applications.html" class="nav-item"><i class="fas fa-file-alt"></i> Applications</a></div>
-    <div class="nav-section"><div class="nav-section-title">Recruitment</div><a href="/assessments.html" class="nav-item"><i class="fas fa-clipboard-check"></i> Assessments</a><a href="/interviews.html" class="nav-item active"><i class="fas fa-video"></i> Interviews</a></div>
-    <div class="nav-section"><div class="nav-section-title">HR</div><a href="/employees.html" class="nav-item"><i class="fas fa-users"></i> Employees</a><a href="/payroll.html" class="nav-item"><i class="fas fa-dollar-sign"></i> Payroll</a></div>
-    <div class="nav-section"><div class="nav-section-title">Account</div><a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a></div>
+    <div class="nav-section"><div class="nav-section-title">Main</div>
+      <a href="/dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard</a>
+      <a href="/jobs.html" class="nav-item"><i class="fas fa-briefcase"></i> Job Postings</a>
+      <a href="/applications.html" class="nav-item"><i class="fas fa-file-alt"></i> Applications</a>
+    </div>
+    <div class="nav-section"><div class="nav-section-title">Recruitment</div>
+      <a href="/assessments.html" class="nav-item"><i class="fas fa-clipboard-check"></i> Assessments</a>
+      <a href="/interviews.html" class="nav-item active"><i class="fas fa-video"></i> Interviews</a>
+    </div>
+    <div class="nav-section"><div class="nav-section-title">HR</div>
+      <a href="/employees.html" class="nav-item"><i class="fas fa-users"></i> Employees</a>
+      <a href="/payroll.html" class="nav-item"><i class="fas fa-dollar-sign"></i> Payroll</a>
+    </div>
+    <div class="nav-section"><div class="nav-section-title">Account</div>
+      <a href="#" class="nav-item" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
   </nav>
   <div class="sidebar-user" id="sidebarUser"></div>
 </div>
@@ -74,12 +52,12 @@
 <div class="main-content">
 <header class="header">
   <div style="display:flex;align-items:center;gap:12px"><button class="sidebar-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button><div class="header-title"><h2 id="pageTitle">HRPro</h2><p id="pageSubtitle">Human Resource Management System</p></div></div>
-  <div class="header-actions"><button class="header-btn" title="Notifications"><i class="fas fa-bell"></i></button><button class="header-btn" title="Profile" onclick="navigate('/dashboard.html')"><i class="fas fa-user-circle"></i></button></div>
+  <div class="header-actions"><button class="header-btn"><i class="fas fa-bell"></i></button><button class="header-btn" onclick="navigate('/dashboard.html')"><i class="fas fa-user-circle"></i></button></div>
 </header>
 
 <div class="page-content">
   <div class="page-header">
-    <div><h1>Interviews</h1><p>Complete history of AI and Custom interviews</p></div>
+    <div><h1>Interviews</h1><p>AI and Custom interview history and management</p></div>
     <button class="btn btn-primary" onclick="openScheduleModal()"><i class="fas fa-plus"></i> Schedule Custom Interview</button>
   </div>
 
@@ -92,7 +70,7 @@
 <!-- Schedule Custom Interview Modal -->
 <div id="scheduleModal" class="modal-overlay" style="display:none">
   <div class="modal">
-    <div class="modal-header"><h3><i class="fas fa-calendar"></i> Schedule Custom Interview</h3><button class="modal-close" onclick="closeModal('scheduleModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-header"><h3 id="schedModalTitle"><i class="fas fa-calendar"></i> Schedule Custom Interview</h3><button class="modal-close" onclick="closeModal('scheduleModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body">
       <div class="form-group"><label>Candidate *</label><select id="sCandidate"></select></div>
       <div class="form-group"><label>Date & Time *</label><input type="datetime-local" id="sDate"></div>
@@ -102,6 +80,51 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('scheduleModal')">Cancel</button>
       <button class="btn btn-primary" onclick="scheduleCustom()">Schedule & Email</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI Interview Schedule Modal -->
+<div id="aiSchedModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3><i class="fas fa-robot"></i> Schedule AI Interview</h3><button class="modal-close" onclick="closeModal('aiSchedModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Date & Time *</label><input type="datetime-local" id="aiSchedDate"></div>
+      <div class="form-group"><label>Number of Questions</label><input type="number" id="aiSchedCount" value="5" min="1" max="20"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('aiSchedModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitAISched()"><i class="fas fa-paper-plane"></i> Schedule & Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reject Modal -->
+<div id="rejectModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header"><h3><i class="fas fa-times-circle"></i> Reject Application</h3><button class="modal-close" onclick="closeModal('rejectModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Reason *</label><textarea id="rejectReason" rows="4"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('rejectModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmReject()"><i class="fas fa-times-circle"></i> Reject & Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Email Modal -->
+<div id="customEmailModal" class="modal-overlay" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header"><h3><i class="fas fa-paper-plane"></i> Send Custom Email</h3><button class="modal-close" onclick="closeModal('customEmailModal')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>To</label><input type="email" id="ceTo" readonly style="background:#f3f4f6"></div>
+      <div class="form-group"><label>Subject *</label><input type="text" id="ceSubject"></div>
+      <div class="form-group"><label>Message *</label><textarea id="ceBody" rows="8"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('customEmailModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendCE()"><i class="fas fa-paper-plane"></i> Send</button>
     </div>
   </div>
 </div>
@@ -127,300 +150,302 @@ requireAuth(); renderSidebarUser(); setActiveNav();
 
 let interviews = [];
 let apps = [];
-
-// Tracks which interview's marksheet is currently open — needed by saveScore().
-const marksheetState = {
-    interviewId: null,
-};
+const marksheetState = { interviewId: null };
+let schedEditing = { applicationId: null, type: null };
+let rejectAppId = null;
 
 async function loadData() {
-    try {
-        [interviews, apps] = await Promise.all([API.get('/api/interviews'), API.get('/api/applications')]);
-        
-        const sel = document.getElementById('sCandidate');
-        sel.innerHTML = '<option value="">Select candidate...</option>' + apps.map(a => `<option value="${a.id}">${a.applicant_name} - ${a.job_title}</option>`).join('');
-        
-        renderAll();
-    } catch(e) { showToast('Error loading data: ' + e.message, 'error'); }
+  document.getElementById('interviewsList').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+  try {
+    const results = await Promise.all([API.get('/api/interviews'), API.get('/api/applications')]);
+    interviews = results[0];
+    apps = results[1];
+    const sel = document.getElementById('sCandidate');
+    sel.innerHTML = '<option value="">Select candidate...</option>' + apps.map(a => `<option value="${a.id}">${a.applicant_name} - ${a.job_title}</option>`).join('');
+    renderAll();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
+
+function findApp(applicationId) { return apps.find(a => a.id === applicationId); }
 
 function renderAll() {
-    if (!interviews.length) {
-        document.getElementById('interviewsList').innerHTML = '<div class="empty-state"><i class="fas fa-calendar"></i><h3>No interviews found</h3><p>Schedule a custom interview or launch an AI interview from the applications page.</p></div>';
-        return;
-    }
-    
-    document.getElementById('interviewsList').innerHTML = interviews.map(i => {
-        const isAi = i.type === 'ai';
-        const d = i.scheduled_date ? new Date(i.scheduled_date) : null;
-        
-        return `
-        <div class="card mb-4">
-            <div class="card-body flex justify-between items-center" style="flex-wrap:wrap;gap:12px">
-                <div>
-                    <div class="font-bold" style="font-size:16px">${escapeHtml(i.applicant_name)}</div>
-                    <div class="text-sm text-light">${escapeHtml(i.job_title)}</div>
-                    <div class="mt-2 flex gap-2" style="flex-wrap:wrap">
-                        <span class="badge ${isAi ? 'badge-interview' : 'badge-shortlisted'}">${isAi ? '🤖 AI Video' : '💼 Custom'}</span>
-                        <span class="badge ${i.status === 'completed' ? 'badge-active' : i.status === 'auto_submitted' ? 'badge-rejected' : 'badge-pending'}">${i.status.replace('_', ' ').toUpperCase()}</span>
-                        ${d ? `<span class="text-xs text-light"><i class="fas fa-clock"></i> ${d.toLocaleString()}</span>` : ''}
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    ${isAi && (i.status === 'completed' || i.status === 'auto_submitted') ? `
-                        <button class="btn btn-sm btn-primary" onclick="viewMarksheet(${i.id})"><i class="fas fa-list"></i> View Marksheet</button>
-                    ` : ''}
-                    <button class="btn btn-sm btn-danger" onclick="deleteInt(${i.id}, '${i.type}')"><i class="fas fa-trash"></i></button>
-                </div>
+  if (!interviews.length) {
+    document.getElementById('interviewsList').innerHTML = '<div class="empty-state"><i class="fas fa-calendar"></i><h3>No interviews found</h3></div>';
+    return;
+  }
+  document.getElementById('interviewsList').innerHTML = interviews.map(i => {
+    const isAi = i.type === 'ai';
+    const d = i.scheduled_date ? new Date(i.scheduled_date) : null;
+    const app = findApp(i.application_id);
+    const isFinalized = app && ['hired','rejected','offer_sent'].includes(app.status);
+    const offerEnabled = app && ['interview_passed','interview_completed','shortlisted'].includes(app.status);
+
+    return `
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="flex justify-between" style="flex-wrap:wrap;gap:12px">
+            <div>
+              <div class="font-bold" style="font-size:16px">${escapeHtml(i.applicant_name)}</div>
+              <div class="text-sm text-light">${escapeHtml(i.job_title)}</div>
+              <div class="mt-2 flex gap-2" style="flex-wrap:wrap">
+                <span class="badge ${isAi ? 'badge-interview' : 'badge-shortlisted'}">${isAi ? '🤖 AI Video' : '💼 Custom'}</span>
+                <span class="badge ${i.status === 'completed' ? 'badge-active' : i.status === 'auto_submitted' ? 'badge-rejected' : 'badge-pending'}">${i.status.replace('_',' ').toUpperCase()}</span>
+                ${d ? `<span class="text-xs text-light"><i class="fas fa-clock"></i> ${d.toLocaleString()}</span>` : ''}
+              </div>
             </div>
-        </div>`;
-    }).join('');
+            <div class="int-card-actions">
+              ${isAi && (i.status === 'completed' || i.status === 'auto_submitted') ? `
+                <button class="btn btn-sm btn-primary" onclick="viewMarksheet(${i.id})"><i class="fas fa-list"></i> Marksheet</button>
+              ` : ''}
+              ${!isFinalized ? `
+                <button class="btn btn-sm btn-warning" onclick="openRescheduleModal(${i.application_id}, '${i.type}')" title="Reschedule"><i class="fas fa-redo"></i> Reschedule</button>
+                <button class="btn btn-sm btn-success" onclick="moveToOffer(${i.application_id})" ${!offerEnabled ? 'disabled' : ''} title="Move to Generate Offer"><i class="fas fa-arrow-right"></i> Move to Offer</button>
+              ` : ''}
+              <button class="btn btn-sm btn-info" onclick="openCE('${(i.applicant_email||'').replace(/'/g,"\\'")}','${(i.applicant_name||'').replace(/'/g,"\\'")}')" title="Send Email"><i class="fas fa-envelope"></i></button>
+              ${!isFinalized ? `
+                <button class="btn btn-sm btn-danger" onclick="openRejectInt(${i.application_id})" title="Reject"><i class="fas fa-times"></i> Reject</button>
+              ` : ''}
+              <button class="btn btn-sm btn-secondary" onclick="deleteInt(${i.id}, '${i.type}')" title="Delete interview"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
-function openScheduleModal() {
+/* ============ Reschedule ============ */
+function openRescheduleModal(applicationId, type) {
+  schedEditing = { applicationId, type };
+  if (type === 'ai') {
+    const tomorrow = new Date(Date.now() + 86400000);
+    tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
+    document.getElementById('aiSchedDate').value = tomorrow.toISOString().slice(0,16);
+    openModal('aiSchedModal');
+  } else {
     const tomorrow = new Date(Date.now() + 86400000);
     tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
     document.getElementById('sDate').value = tomorrow.toISOString().slice(0,16);
+    document.getElementById('sCandidate').value = String(applicationId);
+    document.getElementById('sCandidate').disabled = true;
+    document.getElementById('schedModalTitle').innerHTML = '<i class="fas fa-redo"></i> Reschedule Interview';
     openModal('scheduleModal');
+  }
 }
 
-async function scheduleCustom() {
-    const appId = document.getElementById('sCandidate').value;
-    const date = document.getElementById('sDate').value;
-    if (!appId || !date) { showToast('Select candidate and date', 'warning'); return; }
-    
-    try {
-        await API.post('/api/interviews', {
-            application_id: parseInt(appId),
-            scheduled_date: date,
-            interview_type: document.getElementById('sType').value,
-            duration_minutes: parseInt(document.getElementById('sDuration').value) || 60
-        });
-        showToast('Custom interview scheduled!', 'success');
-        closeModal('scheduleModal');
-        loadData();
-    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+async function submitAISched() {
+  const date = document.getElementById('aiSchedDate').value;
+  const count = parseInt(document.getElementById('aiSchedCount').value) || 5;
+  if (!date) { showToast('Select a date', 'warning'); return; }
+  try {
+    const res = await API.post('/api/ai-interviews/create-link', {
+      application_id: schedEditing.applicationId,
+      scheduled_date: date,
+      questions_count: count,
+      reschedule: true,   // preserve existing transcript
+    });
+    copyToClipboardSafe(res.interview_link);
+    showToast('AI interview rescheduled! Link copied.', 'success', 5000);
+    closeModal('aiSchedModal');
+    loadData();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-/* =========================================================================
-   Marksheet — loaded when HR clicks "View Marksheet".
-   Introduction turn shows no score. Every other turn's score is editable
-   in-place via the pencil icon.
-   ========================================================================= */
+/* ============ Move to Offer ============ */
+async function moveToOffer(applicationId) {
+  try {
+    // Mark as interview_passed so Generate Offer becomes available in
+    // applications.html. Then redirect the HR user there with the
+    // application pre-opened.
+    await API.put(`/api/applications/${applicationId}/status`, { status: 'interview_passed' });
+    showToast('Moved to Offer stage — opening application…', 'success', 2500);
+    setTimeout(() => { window.location.href = `/applications.html?view=${applicationId}`; }, 800);
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+/* ============ Reject ============ */
+function openRejectInt(applicationId) {
+  rejectAppId = applicationId;
+  document.getElementById('rejectReason').value = '';
+  openModal('rejectModal');
+}
+async function confirmReject() {
+  const reason = document.getElementById('rejectReason').value;
+  if (!reason) { showToast('Reason required', 'warning'); return; }
+  try {
+    await API.put(`/api/applications/${rejectAppId}/status`, { status: 'rejected', rejection_reason: reason });
+    showToast('Rejected & email sent', 'success');
+    closeModal('rejectModal');
+    loadData();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+/* ============ Custom email ============ */
+function openCE(email, name) {
+  document.getElementById('ceTo').value = email;
+  document.getElementById('ceSubject').value = '';
+  document.getElementById('ceBody').value = `Dear ${name},\n\n`;
+  openModal('customEmailModal');
+  document.getElementById('customEmailModal').dataset.recipientName = name;
+}
+async function sendCE() {
+  const subject = document.getElementById('ceSubject').value;
+  const body = document.getElementById('ceBody').value;
+  const name = document.getElementById('customEmailModal').dataset.recipientName || 'Valued Recipient';
+  if (!subject || !body) { showToast('Subject and body required', 'warning'); return; }
+  try {
+    await API.post('/api/send-custom-email', {
+      to_email: document.getElementById('ceTo').value,
+      recipient_name: name, subject, body,
+    });
+    showToast('Email sent!', 'success');
+    closeModal('customEmailModal');
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+/* ============ Marksheet (with editable scores) ============ */
 async function viewMarksheet(id) {
-    marksheetState.interviewId = id;
-    openModal('marksheetModal');
-    document.getElementById('msSummary').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>';
-    document.getElementById('msTranscript').innerHTML = '';
-    document.getElementById('downloadPdfBtn').onclick = () => API.download(`/api/ai-interviews/${id}/pdf`, `interview_${id}.pdf`);
-
-    try {
-        const data = await API.get(`/api/ai-interviews/${id}/details`);
-        
-        document.getElementById('msTitle').innerHTML = `<i class="fas fa-file-invoice"></i> Marksheet: ${escapeHtml(data.candidate_name)}`;
-        
-        renderMarksheetSummary(data);
-        renderMarksheetTranscript(data);
-    } catch(e) {
-        document.getElementById('msSummary').innerHTML = `<div class="alert alert-error">Error loading marksheet: ${escapeHtml(e.message)}</div>`;
-    }
-}
-
-function renderMarksheetSummary(data) {
+  marksheetState.interviewId = id;
+  openModal('marksheetModal');
+  document.getElementById('msSummary').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>';
+  document.getElementById('msTranscript').innerHTML = '';
+  document.getElementById('downloadPdfBtn').onclick = () => API.download(`/api/ai-interviews/${id}/pdf`, `interview_${id}.pdf`);
+  try {
+    const data = await API.get(`/api/ai-interviews/${id}/details`);
+    document.getElementById('msTitle').innerHTML = `<i class="fas fa-file-invoice"></i> Marksheet: ${escapeHtml(data.candidate_name)}`;
     document.getElementById('msSummary').innerHTML = `
-        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-            <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Total Score</div>
-            <div id="ms-total-score" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.total_score} / ${data.total_possible}</div>
-        </div>
-        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-            <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Percentage</div>
-            <div id="ms-percentage" style="font-size:28px;font-weight:800;color:${data.percentage >= 50 ? 'var(--success)' : 'var(--danger)'};margin-top:8px">${data.percentage}%</div>
-        </div>
-        <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-            <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Grade</div>
-            <div id="ms-grade" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.grade}</div>
-        </div>
-    `;
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Total Score</div>
+        <div id="ms-total-score" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.total_score} / ${data.total_possible}</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Percentage</div>
+        <div id="ms-percentage" style="font-size:28px;font-weight:800;color:${data.percentage >= 50 ? 'var(--success)' : 'var(--danger)'};margin-top:8px">${data.percentage}%</div>
+      </div>
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+        <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Grade</div>
+        <div id="ms-grade" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.grade}</div>
+      </div>`;
+    renderMarksheetTranscript(data);
+  } catch (e) { document.getElementById('msSummary').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
 
 function renderMarksheetTranscript(data) {
-    if (!data.transcript || data.transcript.length === 0) {
-        document.getElementById('msTranscript').innerHTML = '<p class="text-light text-center">No answers recorded.</p>';
-        return;
+  if (!data.transcript || !data.transcript.length) {
+    document.getElementById('msTranscript').innerHTML = '<p class="text-light text-center">No answers recorded.</p>';
+    return;
+  }
+  let mainNum = 0;
+  document.getElementById('msTranscript').innerHTML = data.transcript.map((item, idx) => {
+    const isIntro = !!item.is_introduction;
+    const isFollowUp = !!item.is_follow_up;
+    let scoreHtml, qLabel;
+    if (isIntro) {
+      scoreHtml = '<div class="score-badge muted">— Not scored</div>';
+      qLabel = `<span style="color:#b45309;font-weight:700">Warm-up</span><span class="q-intro-badge">Introduction</span>`;
+    } else {
+      const raw = item.score || 0;
+      const disp = Number.isInteger(raw) ? raw : raw.toFixed(1);
+      scoreHtml = `<div class="score-badge" id="score-badge-${idx}" data-score="${raw}">${disp} / 10 <i class="fas fa-pencil-alt edit-icon" onclick="startEditScore(${idx},${raw})"></i></div>`;
+      if (isFollowUp) qLabel = `Q${mainNum}<span class="q-followup-badge">Follow-up</span>`;
+      else { mainNum++; qLabel = `Q${mainNum}`; }
     }
-
-    // Compute sequential main-question numbers so the "Q1", "Q2" labels
-    // skip the introduction and align with what the candidate saw.
-    let mainNum = 0;
-
-    document.getElementById('msTranscript').innerHTML = data.transcript.map((item, idx) => {
-        const isIntro = !!item.is_introduction;
-        const isFollowUp = !!item.is_follow_up;
-        const isPlagiarized = item.plagiarism_flag;
-
-        // ── Score badge ──
-        let scoreHtml;
-        if (isIntro) {
-            scoreHtml = '<div class="score-badge muted">— Not scored</div>';
-        } else {
-            const rawScore = item.score || 0;
-            const displayScore = Number.isInteger(rawScore) ? rawScore : rawScore.toFixed(1);
-            scoreHtml = `
-                <div class="score-badge" id="score-badge-${idx}" data-score="${rawScore}">
-                    ${displayScore} / 10
-                    <i class="fas fa-pencil-alt edit-icon"
-                       onclick="startEditScore(${idx}, ${rawScore})"
-                       title="Edit score"></i>
-                </div>`;
-        }
-
-        // ── Question label ──
-        let qLabel;
-        if (isIntro) {
-            qLabel = `<span style="color:#b45309;font-weight:700">Warm-up</span><span class="q-intro-badge">Introduction</span>`;
-        } else if (isFollowUp) {
-            qLabel = `Q${mainNum}<span class="q-followup-badge">Follow-up</span>`;
-        } else {
-            mainNum++;
-            qLabel = `Q${mainNum}`;
-        }
-
-        return `
-        <div class="qa-box">
-            ${scoreHtml}
-            <div class="q-text">${qLabel}: ${escapeHtml(item.question)}</div>
-            <div class="a-text">${escapeHtml(item.answer || 'No answer provided.')}</div>
-            ${isPlagiarized ? `
-                <div class="plagiarism-alert">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <div><b>Plagiarism Flag:</b> ${escapeHtml(item.plagiarism_flag)}</div>
-                </div>
-            ` : ''}
-        </div>`;
-    }).join('');
+    return `
+      <div class="qa-box">
+        ${scoreHtml}
+        <div class="q-text">${qLabel}: ${escapeHtml(item.question)}</div>
+        <div class="a-text">${escapeHtml(item.answer || 'No answer provided.')}</div>
+        ${item.plagiarism_flag ? `<div class="plagiarism-alert"><i class="fas fa-exclamation-triangle"></i><div><b>Plagiarism:</b> ${escapeHtml(item.plagiarism_flag)}</div></div>` : ''}
+      </div>`;
+  }).join('');
 }
 
-/* =========================================================================
-   Inline score editing
-   ========================================================================= */
 function startEditScore(idx, currentScore) {
-    const badge = document.getElementById('score-badge-' + idx);
-    if (!badge) return;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'score-edit';
-    wrapper.id = 'score-edit-' + idx;
-    wrapper.innerHTML = `
-        <input type="number" min="0" max="10" step="0.5"
-               value="${currentScore}"
-               id="score-input-${idx}"
-               onkeydown="onScoreKeydown(event, ${idx}, ${currentScore})">
-        <button class="save-btn" onclick="saveScore(${idx}, ${currentScore})">Save</button>
-        <button class="cancel-btn" onclick="cancelEditScore(${idx}, ${currentScore})">Cancel</button>
-    `;
-
-    badge.replaceWith(wrapper);
-    const input = document.getElementById('score-input-' + idx);
-    if (input) { input.focus(); input.select(); }
+  const badge = document.getElementById('score-badge-' + idx);
+  if (!badge) return;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'score-edit';
+  wrapper.id = 'score-edit-' + idx;
+  wrapper.innerHTML = `
+    <input type="number" min="0" max="10" step="0.5" value="${currentScore}" id="score-input-${idx}"
+           onkeydown="onScoreKeydown(event,${idx},${currentScore})">
+    <button class="save-btn" onclick="saveScore(${idx},${currentScore})">Save</button>
+    <button class="cancel-btn" onclick="cancelEditScore(${idx},${currentScore})">Cancel</button>`;
+  badge.replaceWith(wrapper);
+  const inp = document.getElementById('score-input-' + idx);
+  if (inp) { inp.focus(); inp.select(); }
 }
-
-function onScoreKeydown(e, idx, previousScore) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        saveScore(idx, previousScore);
-    } else if (e.key === 'Escape') {
-        e.preventDefault();
-        cancelEditScore(idx, previousScore);
-    }
+function onScoreKeydown(e, idx, prev) {
+  if (e.key === 'Enter') { e.preventDefault(); saveScore(idx, prev); }
+  else if (e.key === 'Escape') { e.preventDefault(); cancelEditScore(idx, prev); }
 }
-
-async function saveScore(idx, previousScore) {
-    const interviewId = marksheetState.interviewId;
-    if (!interviewId) return;
-
-    const input = document.getElementById('score-input-' + idx);
-    if (!input) return;
-
-    const newScore = parseFloat(input.value);
-    if (isNaN(newScore) || newScore < 0 || newScore > 10) {
-        showToast('Score must be between 0 and 10', 'warning');
-        input.focus();
-        return;
-    }
-
-    // Optimistically disable the buttons to prevent double-submit.
-    const wrapper = document.getElementById('score-edit-' + idx);
-    if (wrapper) {
-        wrapper.querySelectorAll('button').forEach(b => { b.disabled = true; });
-    }
-
-    try {
-        const res = await API.put(
-            `/api/ai-interviews/${interviewId}/turn/${idx}/score`,
-            { score: newScore }
-        );
-
-        // Update the three summary cards in-place.
-        const totalEl = document.getElementById('ms-total-score');
-        const pctEl = document.getElementById('ms-percentage');
-        const gradeEl = document.getElementById('ms-grade');
-        if (totalEl) totalEl.textContent = `${res.total_score} / ${res.total_possible}`;
-        if (pctEl) {
-            pctEl.textContent = `${res.percentage}%`;
-            pctEl.style.color = res.percentage >= 50 ? 'var(--success)' : 'var(--danger)';
-        }
-        if (gradeEl) gradeEl.textContent = res.grade;
-
-        // Restore the badge with the new score.
-        cancelEditScore(idx, res.new_score);
-
-        showToast(`Score updated to ${res.new_score}/10`, 'success');
-    } catch (e) {
-        showToast('Error saving score: ' + e.message, 'error');
-        // Restore the edit view so HR can retry.
-        if (wrapper) {
-            wrapper.querySelectorAll('button').forEach(b => { b.disabled = false; });
-        }
-    }
+async function saveScore(idx, prev) {
+  const iv = marksheetState.interviewId;
+  if (!iv) return;
+  const input = document.getElementById('score-input-' + idx);
+  if (!input) return;
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val < 0 || val > 10) { showToast('Score must be 0–10', 'warning'); input.focus(); return; }
+  try {
+    const res = await API.put(`/api/ai-interviews/${iv}/turn/${idx}/score`, { score: val });
+    const t = document.getElementById('ms-total-score'); if (t) t.textContent = `${res.total_score} / ${res.total_possible}`;
+    const p = document.getElementById('ms-percentage'); if (p) { p.textContent = `${res.percentage}%`; p.style.color = res.percentage >= 50 ? 'var(--success)' : 'var(--danger)'; }
+    const g = document.getElementById('ms-grade'); if (g) g.textContent = res.grade;
+    cancelEditScore(idx, res.new_score);
+    showToast(`Score → ${res.new_score}/10`, 'success');
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
-
 function cancelEditScore(idx, score) {
-    const wrapper = document.getElementById('score-edit-' + idx);
-    if (!wrapper) return;
-
-    const displayScore = Number.isInteger(score) ? score : Number(score).toFixed(1);
-
-    const badge = document.createElement('div');
-    badge.className = 'score-badge';
-    badge.id = 'score-badge-' + idx;
-    badge.dataset.score = score;
-    badge.innerHTML = `
-        ${displayScore} / 10
-        <i class="fas fa-pencil-alt edit-icon"
-           onclick="startEditScore(${idx}, ${score})"
-           title="Edit score"></i>
-    `;
-
-    wrapper.replaceWith(badge);
+  const w = document.getElementById('score-edit-' + idx);
+  if (!w) return;
+  const disp = Number.isInteger(score) ? score : Number(score).toFixed(1);
+  const badge = document.createElement('div');
+  badge.className = 'score-badge';
+  badge.id = 'score-badge-' + idx;
+  badge.dataset.score = score;
+  badge.innerHTML = `${disp} / 10 <i class="fas fa-pencil-alt edit-icon" onclick="startEditScore(${idx},${score})"></i>`;
+  w.replaceWith(badge);
 }
 
-/* =========================================================================
-   Other helpers (unchanged)
-   ========================================================================= */
+/* ============ Misc ============ */
 async function deleteInt(id, type) {
-    if (!confirm('Delete this interview record? This action cannot be undone.')) return;
-    try {
-        await API.delete(`/api/interviews/${id}?type=${type}`);
-        showToast('Interview deleted', 'success');
-        loadData();
-    } catch(e) { showToast('Error: ' + e.message, 'error'); }
+  if (!confirm('Delete this interview record?')) return;
+  try { await API.delete(`/api/interviews/${id}?type=${type}`); showToast('Deleted', 'success'); loadData(); }
+  catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-function escapeHtml(str) {
-  if (str == null) return '';
-  return String(str).replace(/[&<>"']/g, m =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+function openScheduleModal() {
+  schedEditing = { applicationId: null, type: 'custom' };
+  document.getElementById('sCandidate').disabled = false;
+  document.getElementById('schedModalTitle').innerHTML = '<i class="fas fa-calendar"></i> Schedule Custom Interview';
+  const tomorrow = new Date(Date.now() + 86400000);
+  tomorrow.setMinutes(tomorrow.getMinutes() - tomorrow.getTimezoneOffset());
+  document.getElementById('sDate').value = tomorrow.toISOString().slice(0,16);
+  openModal('scheduleModal');
 }
+
+async function scheduleCustom() {
+  const appId = document.getElementById('sCandidate').value;
+  const date = document.getElementById('sDate').value;
+  if (!appId || !date) { showToast('Candidate and date required', 'warning'); return; }
+  try {
+    await API.post('/api/interviews', {
+      application_id: parseInt(appId),
+      scheduled_date: date,
+      interview_type: document.getElementById('sType').value,
+      duration_minutes: parseInt(document.getElementById('sDuration').value) || 60,
+    });
+    showToast('Scheduled!', 'success');
+    closeModal('scheduleModal');
+    loadData();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function copyToClipboardSafe(text) {
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).catch(() => {});
+  else { const t = document.createElement('textarea'); t.value = text; t.style.opacity = '0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch(_){} document.body.removeChild(t); }
+}
+
+function escapeHtml(str) { return String(str ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
 loadData();
 </script>
