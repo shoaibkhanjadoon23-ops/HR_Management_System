@@ -30,176 +30,87 @@
   box-shadow: 0 8px 24px rgba(16,185,129,.35);
   animation: popIn .5s cubic-bezier(.34,1.56,.64,1);
 }
-@keyframes popIn {
-  0%   { transform: scale(0); }
-  100% { transform: scale(1); }
-}
-.success-hero h1 {
-  font-size: 26px; font-weight: 800; color: #065f46;
-  margin-bottom: 8px;
-}
-.success-hero p.lead {
-  font-size: 15px; color: #047857; line-height: 1.6;
-  max-width: 540px; margin: 0 auto;
-}
+@keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+.success-hero h1 { font-size: 26px; font-weight: 800; color: #065f46; margin-bottom: 8px; }
+.success-hero p.lead { font-size: 15px; color: #047857; line-height: 1.6; max-width: 540px; margin: 0 auto; }
 
-/* ── Application-code card ────────────────────────────── */
-.code-card {
-  background: #fff;
-  border: 3px dashed #6366f1;
-  border-radius: 16px;
-  padding: 28px 24px;
-  text-align: center;
-  margin-bottom: 20px;
-  position: relative;
-}
-.code-card::before {
-  content: "★";
-  position: absolute;
-  top: -14px; left: 50%;
-  transform: translateX(-50%);
-  background: #6366f1; color: white;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-}
-.code-card .label {
-  font-size: 12px; font-weight: 800;
-  color: #4f46e5; letter-spacing: 2px;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-.code-card .sub {
-  font-size: 12px; color: #6b7280; margin-bottom: 16px;
-}
-.code-display {
-  display: inline-block;
-  font-family: 'Courier New', monospace;
-  font-size: 42px; font-weight: 900;
-  letter-spacing: 8px;
-  color: #312e81;
-  background: #eef2ff;
-  padding: 16px 28px;
-  border-radius: 12px;
-  border: 2px solid #c7d2fe;
-  user-select: all;
-  margin-bottom: 18px;
-  line-height: 1.2;
-  word-break: break-all;
-}
-@media (max-width: 520px) {
-  .code-display { font-size: 28px; letter-spacing: 5px; padding: 14px 18px; }
-}
-.code-actions {
-  display: flex; gap: 10px; justify-content: center;
-  flex-wrap: wrap; margin-bottom: 18px;
-}
-.code-actions button {
-  padding: 11px 22px;
-  border-radius: 10px;
-  font-size: 14px; font-weight: 700;
-  cursor: pointer; transition: all .2s;
-  border: 2px solid #6366f1;
-  background: white; color: #4f46e5;
-  display: inline-flex; align-items: center; gap: 8px;
-}
-.code-actions button:hover {
-  background: #6366f1; color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(99,102,241,.35);
-}
-.code-actions button.primary {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: white; border: none;
-}
-.code-actions button.primary:hover {
-  box-shadow: 0 6px 20px rgba(99,102,241,.5);
-}
-.code-actions button.copied {
-  background: #10b981; color: white;
-  border-color: #10b981;
-}
+/* ── Code card ── */
+.code-card { background: #fff; border: 3px dashed #6366f1; border-radius: 16px; padding: 28px 24px; text-align: center; margin-bottom: 20px; position: relative; }
+.code-card::before { content: "★"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: #6366f1; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.code-card .label { font-size: 12px; font-weight: 800; color: #4f46e5; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+.code-card .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+.code-display { display: inline-block; font-family: 'Courier New', monospace; font-size: 42px; font-weight: 900; letter-spacing: 8px; color: #312e81; background: #eef2ff; padding: 16px 28px; border-radius: 12px; border: 2px solid #c7d2fe; user-select: all; margin-bottom: 18px; line-height: 1.2; word-break: break-all; }
+@media (max-width: 520px) { .code-display { font-size: 28px; letter-spacing: 5px; padding: 14px 18px; } }
+.code-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 18px; }
+.code-actions button { padding: 11px 22px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all .2s; border: 2px solid #6366f1; background: white; color: #4f46e5; display: inline-flex; align-items: center; gap: 8px; }
+.code-actions button:hover { background: #6366f1; color: white; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(99,102,241,.35); }
+.code-actions button.primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; }
+.code-actions button.primary:hover { box-shadow: 0 6px 20px rgba(99,102,241,.5); }
+.code-actions button.copied { background: #10b981; color: white; border-color: #10b981; }
 
-/* ── Warning / instructions card ──────────────────────── */
-.warning-card {
-  background: #fffbeb;
-  border: 2px solid #f59e0b;
-  border-radius: 16px;
-  padding: 22px 24px;
-  margin-bottom: 20px;
-}
-.warning-card .warn-head {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 14px;
-  color: #b45309;
-}
+/* ── Warning / instructions ── */
+.warning-card { background: #fffbeb; border: 2px solid #f59e0b; border-radius: 16px; padding: 22px 24px; margin-bottom: 20px; }
+.warning-card .warn-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; color: #b45309; }
 .warning-card .warn-head i { font-size: 24px; }
-.warning-card .warn-head h3 {
-  font-size: 16px; font-weight: 800;
-  text-transform: uppercase; letter-spacing: 0.5px;
-}
-.warning-card ul {
-  list-style: none; padding: 0; margin: 0;
-  display: flex; flex-direction: column; gap: 12px;
-}
-.warning-card ul li {
-  display: flex; gap: 12px;
-  font-size: 14px; line-height: 1.6;
-  color: #78350f;
-  padding-left: 4px;
-}
-.warning-card ul li .li-icon {
-  flex-shrink: 0;
-  width: 24px; height: 24px;
-  background: #fde68a;
-  border-radius: 6px;
-  display: flex; align-items: center; justify-content: center;
-  color: #92400e; font-size: 12px;
-  margin-top: 1px;
-}
+.warning-card .warn-head h3 { font-size: 16px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+.warning-card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.warning-card ul li { display: flex; gap: 12px; font-size: 14px; line-height: 1.6; color: #78350f; padding-left: 4px; }
+.warning-card ul li .li-icon { flex-shrink: 0; width: 24px; height: 24px; background: #fde68a; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #92400e; font-size: 12px; margin-top: 1px; }
 .warning-card ul li strong { color: #7c2d12; font-weight: 700; }
-
-/* ── Danger callout ──────────────────────────────────── */
-.danger-note {
-  margin-top: 16px;
-  background: #fef2f2;
-  border: 2px solid #ef4444;
-  border-radius: 12px;
-  padding: 14px 16px;
-  display: flex; align-items: flex-start; gap: 12px;
-  color: #991b1b;
-}
+.danger-note { margin-top: 16px; background: #fef2f2; border: 2px solid #ef4444; border-radius: 12px; padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px; color: #991b1b; }
 .danger-note i { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
 .danger-note .txt { font-size: 13px; line-height: 1.55; }
 .danger-note strong { color: #7f1d1d; }
 
-/* ── Application summary footer ───────────────────────── */
-.app-summary {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  font-size: 13px;
-}
-.app-summary .row {
-  display: flex; justify-content: space-between;
-  padding: 4px 0;
-  color: #4b5563;
-}
+/* ── Application summary footer ── */
+.app-summary { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; font-size: 13px; }
+.app-summary .row { display: flex; justify-content: space-between; padding: 4px 0; color: #4b5563; }
 .app-summary .row .k { font-weight: 600; color: #6b7280; }
 .app-summary .row .v { font-weight: 700; color: #111827; text-align: right; }
 
-/* ── Rating card ──────────────────────────────────────── */
-.rating-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 24px;
-  text-align: center;
-  margin-bottom: 20px;
+/* ── Rating card ── */
+.rating-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 20px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   NEW: field error styling + error box
+   ═══════════════════════════════════════════════════════════════ */
+input.invalid, textarea.invalid, select.invalid {
+  border-color: #dc2626 !important;
+  background: #fef2f2 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
 }
+.field-error {
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.field-error i { font-size: 11px; }
+#appError {
+  text-align: left;
+  margin-bottom: 16px;
+}
+#appError .err-title {
+  font-weight: 800;
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#appError ul {
+  margin: 6px 0 0 0;
+  padding-left: 20px;
+}
+#appError li {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #7f1d1d;
+}
+#appError li strong { color: #991b1b; }
 </style>
 </head>
 <body style="background:#f8fafc">
@@ -208,7 +119,6 @@
 </div>
 
 <script>
-// Get job ID from the URL query string (e.g., /apply.html?job=123)
 const jobId = parseInt(new URLSearchParams(window.location.search).get('job'), 10);
 const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
 let job = null;
@@ -238,10 +148,7 @@ function renderForm() {
     return;
   }
 
-  // ── FIX: honour an explicitly-empty form_fields as "use default"
-  // The old fallback (job.form_fields?.sections || default) rendered a blank
-  // form whenever the JD stored { sections: [] } after a broken AI generation.
-  // Now we only use the JD's sections if there's at least one non-empty one.
+  // Use the JD's sections only if there's at least one non-empty one.
   const sections =
     (job.form_fields &&
      Array.isArray(job.form_fields.sections) &&
@@ -270,7 +177,11 @@ function renderForm() {
       </div>
     </div>
 
-    <form id="applicationForm" enctype="multipart/form-data">
+    <!-- ═══════════════════════════════════════════════════════════
+         novalidate disables the browser's native HTML5 validation.
+         Our own submitApp() below shows clear, specific errors instead.
+         ═══════════════════════════════════════════════════════════ -->
+    <form id="applicationForm" enctype="multipart/form-data" novalidate>
       ${sections.map(section => `
         <div class="card" style="margin-bottom:16px">
           <div class="card-header"><h3><i class="fas fa-list"></i> ${escapeHtml(section.title)}</h3></div>
@@ -281,13 +192,12 @@ function renderForm() {
           </div>
         </div>`).join('')}
 
-      <!-- CV Upload -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><h3><i class="fas fa-file-alt"></i> CV/Resume Upload</h3></div>
         <div class="card-body">
           <div class="form-group form-group-full">
-            <label>Upload your CV/Resume *</label>
-            <input type="file" name="cv_file" id="cv_file" accept=".pdf,.docx" required>
+            <label for="cv_file">Upload your CV/Resume <span style="color:red">*</span></label>
+            <input type="file" name="cv_file" id="cv_file" accept=".pdf,.docx">
             <div class="text-xs text-light mt-1">Accepted formats: PDF, DOCX (Max 5MB)</div>
           </div>
         </div>
@@ -304,6 +214,12 @@ function renderForm() {
     </form>`;
 
   document.getElementById('applicationForm').addEventListener('submit', submitApp);
+
+  // Clear the "invalid" state as soon as the user types in a field
+  document.querySelectorAll('#applicationForm input, #applicationForm textarea, #applicationForm select').forEach(el => {
+    el.addEventListener('input', () => clearFieldError(el));
+    el.addEventListener('change', () => clearFieldError(el));
+  });
 }
 
 function getDefaultSections() {
@@ -331,58 +247,139 @@ function renderField(field) {
 
   let input = '';
   if (field.type === 'textarea') {
-    input = `<textarea name="${field.id}" id="field_${field.id}" rows="4" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'required':''}></textarea>`;
+    input = `<textarea name="${field.id}" id="field_${field.id}" rows="4" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'data-required="true"':''}></textarea>`;
   } else if (field.type === 'select' && field.options?.length) {
-    input = `<select name="${field.id}" id="field_${field.id}" ${field.required?'required':''}>
+    input = `<select name="${field.id}" id="field_${field.id}" ${field.required?'data-required="true"':''}>
       <option value="">Select...</option>
       ${field.options.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
     </select>`;
   } else if (field.type === 'radio' && field.options?.length) {
     input = `<div style="display:flex;flex-direction:column;gap:8px">${field.options.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="radio" name="${field.id}" value="${escapeHtml(o)}" ${field.required?'required':''}> ${escapeHtml(o)}
+        <input type="radio" name="${field.id}" value="${escapeHtml(o)}" ${field.required?'data-required="true"':''}> ${escapeHtml(o)}
       </label>`).join('')}</div>`;
   } else if (field.type === 'checkbox' && field.options?.length) {
     input = `<div class="checkbox-group">${field.options.map(o=>`
       <label class="checkbox-item"><input type="checkbox" name="${field.id}[]" value="${escapeHtml(o)}"> ${escapeHtml(o)}</label>`).join('')}</div>`;
   } else if (field.type === 'file') {
-    input = `<input type="file" name="${field.id}" id="field_${field.id}" accept=".pdf,.doc,.docx">`;
+    input = `<input type="file" name="${field.id}" id="field_${field.id}" accept=".pdf,.doc,.docx" ${field.required?'data-required="true"':''}>`;
   } else if (field.type === 'number') {
-    input = `<input type="number" name="${field.id}" id="field_${field.id}" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'required':''} step="0.1" min="0">`;
+    input = `<input type="number" name="${field.id}" id="field_${field.id}" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'data-required="true"':''} step="0.1" min="0">`;
   } else if (field.type === 'date') {
-    input = `<input type="date" name="${field.id}" id="field_${field.id}" ${field.required?'required':''}>`;
+    input = `<input type="date" name="${field.id}" id="field_${field.id}" ${field.required?'data-required="true"':''}>`;
   } else {
     const t = field.type === 'phone' ? 'tel' : field.type === 'email' ? 'email' : 'text';
-    input = `<input type="${t}" name="${field.id}" id="field_${field.id}" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'required':''}>`;
+    input = `<input type="${t}" name="${field.id}" id="field_${field.id}" placeholder="${escapeHtml(field.placeholder||'')}" ${field.required?'data-required="true"':''}>`;
   }
 
-  return `<div class="form-group ${isFullWidth ? 'form-group-full' : ''}">
+  return `<div class="form-group ${isFullWidth ? 'form-group-full' : ''}" id="wrap_${field.id}" data-label="${escapeAttr(field.label || field.id)}">
     <label for="field_${field.id}">${escapeHtml(field.label)} ${req}</label>
     ${input}
   </div>`;
 }
 
-async function submitApp(e) {
-  e.preventDefault();
+/* ═══════════════════════════════════════════════════════════════
+   Validation helpers
+   ═══════════════════════════════════════════════════════════════ */
 
-  const btn = document.getElementById('submitBtn');
-  const fileInput = document.getElementById('cv_file');
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+function escapeAttr(str) { return escapeHtml(str); }
 
-  if (!fileInput.files.length) {
-    alert('Please upload your CV/Resume');
-    return;
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+function getFieldLabel(input) {
+  if (!input) return 'This field';
+  // 1. Try the wrapper's data-label
+  const wrap = input.closest('.form-group');
+  if (wrap && wrap.dataset.label) return wrap.dataset.label;
+  // 2. Try the associated <label>
+  if (input.id) {
+    const lbl = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
+    if (lbl) return lbl.textContent.replace(/\*/g, '').trim();
+  }
+  // 3. Fallback to name/id
+  return input.name || input.id || 'This field';
+}
+
+function markFieldInvalid(input, message) {
+  if (!input) return;
+  input.classList.add('invalid');
+  const wrap = input.closest('.form-group');
+  if (!wrap) return;
+
+  // Remove any existing inline error for this field
+  const existing = wrap.querySelector('.field-error');
+  if (existing) existing.remove();
+
+  const err = document.createElement('div');
+  err.className = 'field-error';
+  err.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${escapeHtml(message)}`;
+  wrap.appendChild(err);
+}
+
+function clearFieldError(input) {
+  if (!input) return;
+  input.classList.remove('invalid');
+  const wrap = input.closest('.form-group');
+  if (wrap) {
+    const err = wrap.querySelector('.field-error');
+    if (err) err.remove();
+  }
+}
+
+function clearAllFieldErrors() {
+  document.querySelectorAll('#applicationForm .invalid').forEach(el => el.classList.remove('invalid'));
+  document.querySelectorAll('#applicationForm .field-error').forEach(el => el.remove());
+  const appErr = document.getElementById('appError');
+  if (appErr) { appErr.style.display = 'none'; appErr.innerHTML = ''; }
+}
+
+/**
+ * Find the email value the candidate entered, regardless of which field
+ * id the AI/custom form used. Priority:
+ *   1. form input with name="email"
+ *   2. any input with type="email" that has a value
+ *   3. any input whose name or id contains "email" that has a value
+ */
+function findEmailValue(form, data) {
+  let val = (data.email || '').toString().trim();
+  if (val) return { value: val, input: form.querySelector('input[name="email"]') };
+
+  const typedInputs = form.querySelectorAll('input[type="email"]');
+  for (const inp of typedInputs) {
+    const v = (inp.value || '').trim();
+    if (v) return { value: v, input: inp };
   }
 
-  btn.querySelector('.btn-text').style.display = 'none';
-  btn.querySelector('.btn-loader').style.display = 'inline';
-  btn.disabled = true;
+  const namedInputs = form.querySelectorAll('input[name*="email" i], input[id*="email" i]');
+  for (const inp of namedInputs) {
+    const v = (inp.value || '').trim();
+    if (v) return { value: v, input: inp };
+  }
 
-  document.getElementById('appError').style.display = 'none';
+  // Nothing filled — return the first email field for error display
+  const anyEmail = form.querySelector('input[type="email"]') || form.querySelector('input[name="email"]');
+  return { value: '', input: anyEmail };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Submit handler
+   ═══════════════════════════════════════════════════════════════ */
+
+async function submitApp(e) {
+  e.preventDefault();
+  clearAllFieldErrors();
 
   const form = document.getElementById('applicationForm');
-  const formData = new FormData(form);
+  const btn = document.getElementById('submitBtn');
+  const appErr = document.getElementById('appError');
 
-  // Collect every named input into a JSON payload (excluding the CV file).
+  // ── 1. Build data payload from FormData ──
+  const formData = new FormData(form);
   const data = {};
   for (const [key, val] of formData.entries()) {
     if (key === 'cv_file') continue;
@@ -394,15 +391,95 @@ async function submitApp(e) {
     }
   }
 
+  // ── 2. Find the email value ──
+  const emailResult = findEmailValue(form, data);
+  const emailValue = emailResult.value;
+
+  // ── 3. Collect validation errors ──
+  const errors = [];
+
+  // 3a. Required fields
+  form.querySelectorAll('input[data-required="true"], textarea[data-required="true"], select[data-required="true"]').forEach(el => {
+    // Skip radio/checkbox groups — handled separately
+    if (el.type === 'radio' || el.type === 'checkbox') return;
+    const v = (el.value || '').trim();
+    if (!v) errors.push({ input: el, label: getFieldLabel(el), message: 'This field is required' });
+  });
+
+  // 3b. Required radio groups
+  form.querySelectorAll('input[type="radio"][data-required="true"]').forEach(firstRadio => {
+    const groupName = firstRadio.name;
+    const group = form.querySelectorAll(`input[type="radio"][name="${CSS.escape(groupName)}"]`);
+    const anyChecked = Array.from(group).some(r => r.checked);
+    if (!anyChecked) errors.push({ input: firstRadio, label: getFieldLabel(firstRadio), message: 'Please select an option' });
+  });
+
+  // 3c. Email format (only if a value is present)
+  if (emailValue && !EMAIL_RE.test(emailValue)) {
+    errors.push({ input: emailResult.input, label: 'Email Address', message: 'Please enter a valid email (e.g. name@example.com)' });
+  }
+
+  // 3d. Email presence
+  if (!emailValue) {
+    // Don't duplicate the "This field is required" error if the email field was already caught by 3a
+    const alreadyFlagged = errors.some(err => err.input === emailResult.input);
+    if (!alreadyFlagged) {
+      errors.push({ input: emailResult.input, label: 'Email Address', message: 'Email address is required' });
+    }
+  }
+
+  // 3e. CV file
+  const fileInput = document.getElementById('cv_file');
+  if (!fileInput.files.length) {
+    errors.push({ input: fileInput, label: 'CV/Resume', message: 'Please upload your CV/Resume (PDF or DOCX)' });
+  }
+
+  // ── 4. If any errors, highlight them and show summary ──
+  if (errors.length > 0) {
+    // Highlight each failing field
+    const seen = new Set();
+    errors.forEach(err => {
+      if (err.input && !seen.has(err.input)) {
+        markFieldInvalid(err.input, err.message);
+        seen.add(err.input);
+      }
+    });
+
+    // Build the summary box
+    const listHtml = errors.map(err => `<li><strong>${escapeHtml(err.label)}</strong> — ${escapeHtml(err.message)}</li>`).join('');
+    appErr.innerHTML = `
+      <div class="err-title"><i class="fas fa-exclamation-triangle"></i> Please fix the following before submitting:</div>
+      <ul>${listHtml}</ul>`;
+    appErr.style.display = 'block';
+
+    // Scroll to the first error and focus it
+    const firstError = errors[0];
+    if (firstError.input) {
+      firstError.input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Delay focus until scroll settles
+      setTimeout(() => {
+        try { firstError.input.focus({ preventScroll: true }); } catch (_) {}
+      }, 350);
+    } else {
+      appErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return;
+  }
+
+  // ── 5. All valid — submit ──
+  btn.querySelector('.btn-text').style.display = 'none';
+  btn.querySelector('.btn-loader').style.display = 'inline';
+  btn.disabled = true;
+
   const payload = {
     ...data,
     full_name: data.full_name || data.name || '',
-    email: data.email || '',
+    email: emailValue,                                    // ← always the resolved email
     phone: data.phone || '',
     experience_years: parseFloat(data.experience_years) || 0,
     cgpa: parseFloat(data.cgpa) || 0,
     skills: data.skills
-      ? (Array.isArray(data.skills) ? data.skills : data.skills.split(',').map(s => s.trim()))
+      ? (Array.isArray(data.skills) ? data.skills : data.skills.split(',').map(s => s.trim()).filter(Boolean))
       : [],
     cover_letter: data.cover_letter || ''
   };
@@ -421,17 +498,17 @@ async function submitApp(e) {
     if (res.ok) {
       renderSuccessScreen(result, payload);
     } else {
-      const errorEl = document.getElementById('appError');
-      errorEl.textContent = result.detail || 'Submission failed';
-      errorEl.style.display = 'block';
+      appErr.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${escapeHtml(result.detail || 'Submission failed')}`;
+      appErr.style.display = 'block';
+      appErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
       btn.querySelector('.btn-text').style.display = 'inline';
       btn.querySelector('.btn-loader').style.display = 'none';
       btn.disabled = false;
     }
   } catch (err) {
-    const errorEl = document.getElementById('appError');
-    errorEl.textContent = 'Network error. Please try again.';
-    errorEl.style.display = 'block';
+    appErr.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Network error. Please check your connection and try again.';
+    appErr.style.display = 'block';
+    appErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
     btn.querySelector('.btn-text').style.display = 'inline';
     btn.querySelector('.btn-loader').style.display = 'none';
     btn.disabled = false;
@@ -457,9 +534,7 @@ function renderSuccessScreen(result, payload) {
     <div class="code-card">
       <div class="label">Your Unique Application Code</div>
       <div class="sub">Save this code — it's your key to the next step</div>
-
       <div class="code-display" id="appCode">${escapeHtml(code)}</div>
-
       <div class="code-actions">
         <button class="primary" id="copyCodeBtn" onclick="copyAppCode()">
           <i class="fas fa-copy"></i> Copy Code
@@ -471,7 +546,6 @@ function renderSuccessScreen(result, payload) {
           <i class="fas fa-print"></i> Print
         </button>
       </div>
-
       <p style="font-size:12px;color:#6b7280;margin:0">
         <i class="fas fa-envelope"></i>
         This code has also been emailed to <strong>${escapeHtml(email || 'your inbox')}</strong>
@@ -484,42 +558,15 @@ function renderSuccessScreen(result, payload) {
         <h3>Keep This Code Safe — Read Carefully</h3>
       </div>
       <ul>
-        <li>
-          <span class="li-icon"><i class="fas fa-shield-alt"></i></span>
-          <div>
-            <strong>Do not share this code with anyone.</strong>
-            Treat it like a password — anyone with it can take your assessment on your behalf.
-          </div>
-        </li>
-        <li>
-          <span class="li-icon"><i class="fas fa-key"></i></span>
-          <div>
-            <strong>This code is required to start the assessment</strong> if you are shortlisted.
-            You will need it every time you access the assessment link we email you.
-          </div>
-        </li>
-        <li>
-          <span class="li-icon"><i class="fas fa-lock"></i></span>
-          <div>
-            <strong>Each code can be used only once.</strong>
-            Once you begin the assessment, your code is permanently locked — you cannot restart or retake it.
-          </div>
-        </li>
-        <li>
-          <span class="li-icon"><i class="fas fa-bookmark"></i></span>
-          <div>
-            <strong>Keep a copy in multiple places</strong> — screenshot it, save the email, or print this page.
-            Store it somewhere safe until you hear back from us.
-          </div>
-        </li>
+        <li><span class="li-icon"><i class="fas fa-shield-alt"></i></span><div><strong>Do not share this code with anyone.</strong> Treat it like a password — anyone with it can take your assessment on your behalf.</div></li>
+        <li><span class="li-icon"><i class="fas fa-key"></i></span><div><strong>This code is required to start the assessment</strong> if you are shortlisted. You will need it every time you access the assessment link we email you.</div></li>
+        <li><span class="li-icon"><i class="fas fa-lock"></i></span><div><strong>Each code can be used only once.</strong> Once you begin the assessment, your code is permanently locked — you cannot restart or retake it.</div></li>
+        <li><span class="li-icon"><i class="fas fa-bookmark"></i></span><div><strong>Keep a copy in multiple places</strong> — screenshot it, save the email, or print this page.</div></li>
       </ul>
-
       <div class="danger-note">
         <i class="fas fa-ban"></i>
         <div class="txt">
-          <strong>If you lose this code, you will be disqualified</strong> from taking
-          the assessment — and therefore from being considered for this position.
-          We cannot issue a replacement code.
+          <strong>If you lose this code, you will be disqualified</strong> from taking the assessment — and therefore from being considered for this position. We cannot issue a replacement code.
         </div>
       </div>
     </div>
@@ -531,15 +578,9 @@ function renderSuccessScreen(result, payload) {
       </h2>
       <p style="color:#7f1d1d;line-height:1.7;margin-bottom:10px">
         Your application <strong>was saved</strong> (ID: <strong>#${result.application_id}</strong>).
-        The backend did not return an application code for it.
       </p>
       <p style="color:#7f1d1d;line-height:1.7;font-size:13px">
-        <strong>Please contact HR directly</strong> and quote your Application ID
-        <strong>#${result.application_id}</strong> so they can look up your record.
-        Do <strong>not</strong> submit a new application — you would be rejected for duplicate submission.
-      </p>
-      <p style="margin-top:12px;font-size:11px;color:#b91c1c;font-family:monospace;word-break:break-all">
-        Diagnostic — backend response: ${escapeHtml(JSON.stringify(result))}
+        <strong>Please contact HR directly</strong> and quote your Application ID <strong>#${result.application_id}</strong>.
       </p>
     </div>
     `}
@@ -553,24 +594,14 @@ function renderSuccessScreen(result, payload) {
     </div>
 
     <div class="rating-card">
-      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">
-        Rate Your Application Experience
-      </h3>
-      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">
-        Your feedback helps us improve the process for future candidates.
-      </p>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">Rate Your Application Experience</h3>
+      <p style="font-size:13px;color:#6b7280;margin-bottom:16px">Your feedback helps us improve the process for future candidates.</p>
       <div class="star-rating" style="justify-content:center;margin-bottom:16px" id="companyRating">
-        ${[1,2,3,4,5].map(i =>
-          `<span class="star" onclick="rateCompany(${result.application_id},${i})"
-                 style="font-size:36px;cursor:pointer">★</span>`
-        ).join('')}
+        ${[1,2,3,4,5].map(i => `<span class="star" onclick="rateCompany(${result.application_id},${i})" style="font-size:36px;cursor:pointer">★</span>`).join('')}
       </div>
-      <textarea id="ratingFeedback" rows="2" placeholder="Share your feedback (optional)..."
-        style="width:100%;max-width:460px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:14px;resize:vertical"></textarea>
+      <textarea id="ratingFeedback" rows="2" placeholder="Share your feedback (optional)..." style="width:100%;max-width:460px;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-family:inherit;font-size:14px;resize:vertical"></textarea>
       <br>
-      <button class="btn btn-primary" style="margin-top:12px" onclick="submitRating(${result.application_id})">
-        <i class="fas fa-star"></i> Submit Rating
-      </button>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="submitRating(${result.application_id})"><i class="fas fa-star"></i> Submit Rating</button>
     </div>
 
     <div style="text-align:center;padding:16px;color:#6b7280;font-size:13px;line-height:1.8">
@@ -585,27 +616,17 @@ function renderSuccessScreen(result, payload) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function escapeHtml(str) {
-  if (str == null) return '';
-  return String(str).replace(/[&<>"']/g, m =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
-
 /* ─── Code actions ────────────────────────────────────── */
 function copyAppCode() {
   const code = document.getElementById('appCode').textContent.trim();
   if (!code || code === '—') return;
-
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(code).then(() => markCopied());
   } else {
     const tmp = document.createElement('textarea');
-    tmp.value = code;
-    tmp.style.position = 'fixed';
-    tmp.style.opacity = '0';
-    document.body.appendChild(tmp);
-    tmp.select();
-    try { document.execCommand('copy'); markCopied(); } catch (e) { /* ignore */ }
+    tmp.value = code; tmp.style.position = 'fixed'; tmp.style.opacity = '0';
+    document.body.appendChild(tmp); tmp.select();
+    try { document.execCommand('copy'); markCopied(); } catch (e) {}
     document.body.removeChild(tmp);
   }
 }
@@ -616,10 +637,7 @@ function markCopied() {
   const original = btn.innerHTML;
   btn.classList.add('copied');
   btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-  setTimeout(() => {
-    btn.classList.remove('copied');
-    btn.innerHTML = original;
-  }, 2200);
+  setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = original; }, 2200);
 }
 
 function downloadCode() {
@@ -641,11 +659,8 @@ function downloadCode() {
     '  • You will need this code to take the assessment',
     '    if you are shortlisted.',
     '  • Each code can be used only ONCE.',
-    '  • If you lose this code, you will be DISQUALIFIED',
-    '    from the assessment and from being considered',
-    '    for this position.',
+    '  • If you lose this code, you will be DISQUALIFIED.',
     '',
-    '  Keep this file in a safe place.',
     '═══════════════════════════════════════════════════',
   ].join('\n');
 
@@ -675,21 +690,13 @@ async function submitRating(appId) {
     await fetch(`${BACKEND_URL}/api/applications/${appId}/rate-company`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        rating: selectedRating,
-        feedback: document.getElementById('ratingFeedback').value
-      })
+      body: JSON.stringify({ rating: selectedRating, feedback: document.getElementById('ratingFeedback').value })
     });
     alert('Thank you for your rating!');
     selectedRating = 0;
-    document.querySelectorAll('#companyRating .star').forEach(s => {
-      s.classList.remove('active');
-      s.style.color = '#d1d5db';
-    });
+    document.querySelectorAll('#companyRating .star').forEach(s => { s.classList.remove('active'); s.style.color = '#d1d5db'; });
     document.getElementById('ratingFeedback').value = '';
-  } catch (e) {
-    alert('Error submitting rating');
-  }
+  } catch (e) { alert('Error submitting rating'); }
 }
 
 loadJob();
