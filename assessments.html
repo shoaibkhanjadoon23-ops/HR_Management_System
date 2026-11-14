@@ -92,7 +92,6 @@
     </div>
     <div class="modal-body">
 
-      <!-- Mode Toggle -->
       <div style="display:flex;gap:0;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px">
         <button id="tabAI" onclick="switchMode('ai')" style="flex:1;padding:10px;border:none;background:var(--primary);color:#fff;font-weight:700;cursor:pointer;font-size:14px;transition:all .2s">
           <i class="fas fa-robot"></i> AI Generated
@@ -102,7 +101,6 @@
         </button>
       </div>
 
-      <!-- Shared fields -->
       <div class="grid-2">
         <div class="form-group"><label>Title</label><input type="text" id="aTitle" placeholder="Assessment title"></div>
         <div class="form-group"><label>Job *</label><select id="aJob" onchange="prefillFromJob()"><option value="">Select job...</option></select></div>
@@ -128,7 +126,6 @@
         Uncheck to allow anyone with the link to take the assessment.
       </div>
 
-      <!-- AI Panel -->
       <div id="aiPanel">
         <div style="height:1px;background:var(--border);margin:16px 0"></div>
         <div class="grid-2">
@@ -140,7 +137,6 @@
         <div class="alert alert-info">Marks: Easy=2, Moderate=5, Hard=8, Practical=10. AI generates and auto-grades all questions.</div>
       </div>
 
-      <!-- Custom Panel -->
       <div id="customPanel" style="display:none">
         <div style="height:1px;background:var(--border);margin:16px 0"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
@@ -234,7 +230,6 @@
 
 <script src="/static/app.js"></script>
 <script>
-// Must match the Hugging Face backend URL defined in app.js
 const ASSESS_BACKEND_URL = typeof BACKEND_URL !== 'undefined'
   ? BACKEND_URL
   : 'https://hrhiringpro-hrpro.hf.space';
@@ -265,7 +260,6 @@ async function loadData() {
   }
 }
 
-// Replace HF backend origin with Vercel frontend origin so links are clickable
 function fixAssessmentLink(link) {
   if (!link) return link;
   return link.replace(ASSESS_BACKEND_URL, window.location.origin)
@@ -313,8 +307,16 @@ function renderAssessments() {
             </div>
             <div class="flex gap-2 justify-between">
               <div>
-                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('${escapeAttr(fixedLink)}');event.stopPropagation()" title="Copy link"><i class="fas fa-link"></i></button>
-                <button class="btn btn-sm btn-info" onclick="viewResults(${a.id},${JSON.stringify(a.title)})"><i class="fas fa-chart-bar"></i> Results</button>
+                <button class="btn btn-sm btn-secondary"
+                        data-link="${escapeAttr(fixedLink)}"
+                        onclick="event.stopPropagation();copyToClipboard(this.dataset.link)"
+                        title="Copy link"><i class="fas fa-link"></i></button>
+                <button class="btn btn-sm btn-info"
+                        data-assessment-id="${a.id}"
+                        data-title="${escapeAttr(a.title)}"
+                        onclick="viewResults(this.dataset.assessmentId, this.dataset.title)">
+                  <i class="fas fa-chart-bar"></i> Results
+                </button>
               </div>
               <div style="display:flex;gap:6px">
                 <button class="btn btn-sm btn-secondary"
@@ -602,7 +604,10 @@ async function createAssessmentCustom() {
 }
 
 /* ================ Results & per-row actions ================ */
-async function viewResults(id, title) {
+async function viewResults(assessmentId, title) {
+  const id = parseInt(assessmentId, 10);
+  if (isNaN(id)) { showToast('Invalid assessment ID', 'error'); return; }
+
   document.getElementById('resultTitle').innerHTML =
     `<i class="fas fa-chart-bar"></i> Results: ${escapeHtml(title || '')}`;
   document.getElementById('resultsBody').innerHTML =
@@ -613,7 +618,7 @@ async function viewResults(id, title) {
     const results = await API.get(`/api/assessments/${id}/results`);
     if (!results.length) {
       document.getElementById('resultsBody').innerHTML =
-        '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No submissions yet</h3></div>';
+        '<div class="empty-state"><i class="fas fa-inbox"></i><h3>No submissions yet</h3><p>Share the assessment link to start collecting results.</p></div>';
       return;
     }
     document.getElementById('resultsBody').innerHTML = `
@@ -655,10 +660,9 @@ async function viewResults(id, title) {
                 <td>
                   <div class="table-actions" style="flex-wrap:wrap">
                     <button class="btn btn-sm btn-info"
-                            data-action="view-answers"
                             data-result-id="${r.id}"
                             data-name="${escapeAttr(r.applicant_name || '')}"
-                            onclick="viewDetailedAnswers(${r.id}, this.dataset.name)"
+                            onclick="viewDetailedAnswers(this.dataset.resultId, this.dataset.name)"
                             title="View Answers">
                       <i class="fas fa-list"></i>
                     </button>
@@ -669,30 +673,24 @@ async function viewResults(id, title) {
                     </button>
                     ${r.application_id ? `
                       <button class="btn btn-sm btn-success"
-                              data-action="schedule-ai"
                               data-application-id="${r.application_id}"
                               onclick="scheduleFromResult(this.dataset.applicationId, 'ai')"
                               title="Schedule AI Interview">
                         <i class="fas fa-robot"></i> AI
                       </button>
                       <button class="btn btn-sm btn-primary"
-                              data-action="schedule-custom"
                               data-application-id="${r.application_id}"
                               onclick="scheduleFromResult(this.dataset.applicationId, 'custom')"
                               title="Schedule Custom Interview">
                         <i class="fas fa-calendar"></i> Custom
                       </button>
                       <button class="btn btn-sm btn-info"
-                              data-action="send-email"
                               data-application-id="${r.application_id}"
-                              data-email="${escapeAttr(r.applicant_email || '')}"
-                              data-name="${escapeAttr(r.applicant_name || '')}"
-                              onclick="sendEmailForResult(this.dataset.applicationId, this.dataset.email, this.dataset.name)"
+                              onclick="sendEmailForResult(this.dataset.applicationId)"
                               title="Send Custom Email">
                         <i class="fas fa-envelope"></i>
                       </button>
                       <button class="btn btn-sm btn-danger"
-                              data-action="reject-application"
                               data-application-id="${r.application_id}"
                               data-name="${escapeAttr(r.applicant_name || '')}"
                               onclick="rejectFromResult(this.dataset.applicationId, this.dataset.name)"
@@ -708,6 +706,8 @@ async function viewResults(id, title) {
         </table>
       </div>`;
   } catch (e) {
+    document.getElementById('resultsBody').innerHTML =
+      `<div class="alert alert-error" style="margin:12px">Error loading results: ${escapeHtml(e.message)}</div>`;
     showToast('Error loading results: ' + e.message, 'error');
   }
 }
@@ -724,23 +724,12 @@ function renderSubmissionBadge(r) {
   return `<span class="badge badge-active"><i class="fas fa-check"></i> Submit Button</span>`;
 }
 
-/* ================ Row actions from results table ================
- * The Applications page already has fully-working modals for AI scheduling,
- * custom scheduling, emailing, and rejecting. Rather than duplicate them
- * here, we navigate the HR user to the Applications page with the target
- * application pre-opened (?view=ID), where all four actions live. The only
- * action we perform in-place is "reject" since it needs no modal.
- * ================================================================ */
-
+/* ================ Row actions from results table ================ */
 function scheduleFromResult(applicationId, mode) {
-  // Both AI and Custom scheduling happen inside the Applications modal.
-  // Passing &action=hint lets the Applications page preselect the mode if
-  // it ever adds that feature; today it just opens the modal.
   window.location.href = `/applications.html?view=${applicationId}`;
 }
 
-function sendEmailForResult(applicationId, email, name) {
-  // Same redirect strategy — the Applications page has the email composer.
+function sendEmailForResult(applicationId) {
   window.location.href = `/applications.html?view=${applicationId}`;
 }
 
@@ -749,7 +738,7 @@ async function rejectFromResult(applicationId, name) {
     `Rejection reason for ${name || 'this candidate'}:`,
     'Thank you for your time. We have decided to move forward with other candidates.'
   );
-  if (reason === null) return; // user cancelled
+  if (reason === null) return;
   if (!reason.trim()) { showToast('Rejection reason required', 'warning'); return; }
   try {
     await API.put(`/api/applications/${applicationId}/status`, {
@@ -767,16 +756,18 @@ let currentDetailedResult = null;
 let currentCandidateName = "";
 
 async function viewDetailedAnswers(resultId, candidateName) {
+  const rid = parseInt(resultId, 10);
+  if (isNaN(rid)) { showToast('Invalid result ID', 'error'); return; }
   try {
-    const response = await fetch(`${ASSESS_BACKEND_URL}/api/assessment-results/${resultId}/detailed`, {
+    const response = await fetch(`${ASSESS_BACKEND_URL}/api/assessment-results/${rid}/detailed`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
 
     currentDetailedResult = data;
-    currentCandidateName = candidateName;
-    renderAnswersModal(resultId);
+    currentCandidateName = candidateName || '';
+    renderAnswersModal(rid);
   } catch (e) {
     showToast('Error loading answers: ' + e.message, 'error');
   }
@@ -794,13 +785,18 @@ function renderAnswersModal(resultId) {
       const typeBg = { mcq: '#dbeafe', fill_blank: '#ede9fe', typing: '#d1fae5', practical: '#fef3c7' }[q.type] || '#f3f4f6';
       const typeColor = { mcq: '#2563eb', fill_blank: '#7c3aed', typing: '#059669', practical: '#d97706' }[q.type] || '#374151';
 
-      const editBtn = `<button class="btn btn-sm btn-primary" onclick="openEditMarks(${resultId}, '${escapeAttr(q.id)}', ${q.marks}, ${q.obtained_marks}, ${JSON.stringify(q.feedback || '')})">Grade / Edit</button>`;
+      // ── Edit button using data attributes (fixes the JSON.stringify bug) ──
+      const editBtn = `<button class="btn btn-sm btn-primary"
+                              data-qid="${escapeAttr(q.id)}"
+                              data-maxmarks="${q.marks}"
+                              data-obtained="${q.obtained_marks}"
+                              data-feedback="${escapeAttr(q.feedback || '')}"
+                              onclick="openEditMarks(${resultId}, this.dataset.qid, this.dataset.maxmarks, this.dataset.obtained, this.dataset.feedback)">Grade / Edit</button>`;
 
       const correct = q.is_correct
         ? '<span style="color:#059669;font-weight:700"><i class="fas fa-check-circle"></i> Correct</span>'
         : '<span style="color:#dc2626;font-weight:700"><i class="fas fa-times-circle"></i> Incorrect</span>';
 
-      // PLAGIARISM WARNING DISPLAY LOGIC
       const isPlagiarized = q.feedback && q.feedback.includes('PLAGIARISM DETECTED');
       const feedbackHtml = isPlagiarized
         ? `<div class="plagiarism-alert"><i class="fas fa-exclamation-triangle"></i><div>${escapeHtml(q.feedback)}</div></div>`
@@ -862,10 +858,13 @@ function renderAnswersModal(resultId) {
 }
 
 let currentEditResultId = null, currentEditQuestionId = null, currentMaxMarks = 0;
+
 function openEditMarks(resultId, questionId, maxMarks, currentMarks, currentFeedback) {
-  currentEditResultId = resultId; currentEditQuestionId = questionId; currentMaxMarks = maxMarks;
-  document.getElementById('editObtainedMarks').value = currentMarks;
-  document.getElementById('editFeedback').value = currentFeedback;
+  currentEditResultId = parseInt(resultId, 10);
+  currentEditQuestionId = questionId;
+  currentMaxMarks = parseFloat(maxMarks) || 0;
+  document.getElementById('editObtainedMarks').value = parseFloat(currentMarks) || 0;
+  document.getElementById('editFeedback').value = currentFeedback || '';
   openModal('editMarksModal');
 }
 
@@ -885,7 +884,6 @@ async function saveEditedMarks() {
     showToast('Question marks updated!', 'success');
     closeModal('editMarksModal');
 
-    // Update the local state immediately so other questions' marks aren't lost
     if (currentDetailedResult) {
         const q = currentDetailedResult.questions.find(x => String(x.id) === String(currentEditQuestionId));
         if (q) {
