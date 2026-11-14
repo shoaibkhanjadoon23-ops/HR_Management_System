@@ -160,7 +160,7 @@
 }
 .warning-card ul li strong { color: #7c2d12; font-weight: 700; }
 
-/* ── Danger callout (bottom of warning) ──────────────── */
+/* ── Danger callout ──────────────────────────────────── */
 .danger-note {
   margin-top: 16px;
   background: #fef2f2;
@@ -233,18 +233,28 @@ function renderForm() {
   const deadline = job.deadline ? new Date(job.deadline) : null;
   if (deadline && new Date() > deadline) {
     document.getElementById('applyPage').innerHTML = `
-      <div class="apply-header"><h1>${job.title}</h1><p>Application deadline has passed</p></div>
+      <div class="apply-header"><h1>${escapeHtml(job.title)}</h1><p>Application deadline has passed</p></div>
       <div class="alert alert-error">The application deadline for this position was ${deadline.toLocaleDateString()}.</div>`;
     return;
   }
 
-  const sections = job.form_fields?.sections || getDefaultSections();
+  // ── FIX: honour an explicitly-empty form_fields as "use default"
+  // The old fallback (job.form_fields?.sections || default) rendered a blank
+  // form whenever the JD stored { sections: [] } after a broken AI generation.
+  // Now we only use the JD's sections if there's at least one non-empty one.
+  const sections =
+    (job.form_fields &&
+     Array.isArray(job.form_fields.sections) &&
+     job.form_fields.sections.length > 0 &&
+     job.form_fields.sections.some(s => (s.fields || []).length > 0))
+      ? job.form_fields.sections
+      : getDefaultSections();
 
   document.getElementById('applyPage').innerHTML = `
     <div class="apply-header">
       <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-briefcase"></i> Job Application</div>
       <h1>${escapeHtml(job.title)}</h1>
-      <p>${escapeHtml(job.department || '')} | ${escapeHtml(job.location || 'Remote')} | ${escapeHtml(job.job_type?.replace('_',' ') || 'Full Time')}</p>
+      <p>${escapeHtml(job.department || '')} | ${escapeHtml(job.location || 'Remote')} | ${escapeHtml((job.job_type||'full_time').replace('_',' '))}</p>
       ${deadline ? `<p style="margin-top:8px;font-size:13px;opacity:0.8"><i class="fas fa-clock"></i> Apply by: ${deadline.toLocaleDateString()}</p>` : ''}
     </div>
 
@@ -252,7 +262,7 @@ function renderForm() {
       <div class="card-header"><h3><i class="fas fa-info-circle"></i> Job Overview</h3></div>
       <div class="card-body">
         <p class="text-sm" style="line-height:1.8">${job.description || ''}</p>
-        ${job.requirements ? `<div class="mt-4"><b>Requirements:</b><p class="text-sm mt-2" style="line-height:1.8">${job.requirements}</p></div>` : ''}
+        ${job.requirements ? `<div class="mt-4"><b>Requirements:</b><p class="text-sm mt-2" style="line-height:1.8">${escapeHtml(job.requirements)}</p></div>` : ''}
         ${job.skills_required?.length ? `<div class="mt-4"><b>Required Skills:</b><div class="tags-wrap mt-2">${job.skills_required.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')}</div></div>` : ''}
         <div class="grid-2 mt-4 text-sm" style="gap:8px">
           ${job.experience_years ? `<div><i class="fas fa-briefcase text-light"></i> Min Experience: <b>${job.experience_years} years</b></div>` : ''}
@@ -271,7 +281,7 @@ function renderForm() {
           </div>
         </div>`).join('')}
 
-      <!-- CV Upload Field -->
+      <!-- CV Upload -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><h3><i class="fas fa-file-alt"></i> CV/Resume Upload</h3></div>
         <div class="card-body">
@@ -372,16 +382,15 @@ async function submitApp(e) {
   const form = document.getElementById('applicationForm');
   const formData = new FormData(form);
 
-  // Collect regular fields into payload JSON
+  // Collect every named input into a JSON payload (excluding the CV file).
   const data = {};
   for (const [key, val] of formData.entries()) {
-    if (key !== 'cv_file') {
-      if (data[key]) {
-        if (Array.isArray(data[key])) data[key].push(val);
-        else data[key] = [data[key], val];
-      } else {
-        data[key] = val;
-      }
+    if (key === 'cv_file') continue;
+    if (data[key]) {
+      if (Array.isArray(data[key])) data[key].push(val);
+      else data[key] = [data[key], val];
+    } else {
+      data[key] = val;
     }
   }
 
@@ -429,19 +438,12 @@ async function submitApp(e) {
   }
 }
 
-/**
- * FIXED: Renders success content directly into #applyPage — the top-level wrapper.
- * The previous version tried to show #appSuccess, but #appSuccess was INSIDE
- * #applicationForm, so hiding the form also hid the success card. Replacing the
- * whole page content avoids that parent-hiding problem.
- */
 function renderSuccessScreen(result, payload) {
   const code    = result.application_code || '—';
   const hasCode = !!result.application_code;
   const email   = payload.email || '';
 
   document.getElementById('applyPage').innerHTML = `
-    <!-- 1. Congratulation hero -->
     <div class="success-hero">
       <div class="success-icon"><i class="fas fa-check"></i></div>
       <h1>Congratulations, ${escapeHtml(payload.full_name || 'Candidate')}!</h1>
@@ -452,7 +454,6 @@ function renderSuccessScreen(result, payload) {
     </div>
 
     ${hasCode ? `
-    <!-- 2. Application code card -->
     <div class="code-card">
       <div class="label">Your Unique Application Code</div>
       <div class="sub">Save this code — it's your key to the next step</div>
@@ -477,7 +478,6 @@ function renderSuccessScreen(result, payload) {
       </p>
     </div>
 
-    <!-- 3. Warning card -->
     <div class="warning-card">
       <div class="warn-head">
         <i class="fas fa-exclamation-triangle"></i>
@@ -524,7 +524,6 @@ function renderSuccessScreen(result, payload) {
       </div>
     </div>
     ` : `
-    <!-- Code was NOT returned by the backend — show a clear diagnostic -->
     <div style="background:#fef2f2;border:3px solid #ef4444;border-radius:14px;padding:24px;margin-bottom:20px">
       <h2 style="color:#991b1b;margin-bottom:10px">
         <i class="fas fa-exclamation-triangle"></i>
@@ -545,7 +544,6 @@ function renderSuccessScreen(result, payload) {
     </div>
     `}
 
-    <!-- 4. Application summary -->
     <div class="app-summary">
       <div class="row"><span class="k">Application ID</span><span class="v">#${result.application_id}</span></div>
       <div class="row"><span class="k">Position</span><span class="v">${escapeHtml(job.title)}</span></div>
@@ -554,7 +552,6 @@ function renderSuccessScreen(result, payload) {
       <div class="row"><span class="k">Status</span><span class="v" style="color:#d97706">Pending Review</span></div>
     </div>
 
-    <!-- 5. Company rating -->
     <div class="rating-card">
       <h3 style="font-size:16px;font-weight:700;margin-bottom:6px">
         Rate Your Application Experience
@@ -576,7 +573,6 @@ function renderSuccessScreen(result, payload) {
       </button>
     </div>
 
-    <!-- 6. What's next -->
     <div style="text-align:center;padding:16px;color:#6b7280;font-size:13px;line-height:1.8">
       <strong style="color:#374151">What happens next?</strong><br>
       1. Our team reviews your application<br>
