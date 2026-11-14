@@ -338,6 +338,28 @@ document.getElementById('iType').onchange = function() {
   document.getElementById('meetingInfo').style.display = this.value === 'online' ? 'block' : 'none';
 };
 
+/* ================ Helpers ================ */
+
+// Extracts a display name from form_responses if applicant_name is empty
+function getDisplayName(app) {
+  if (app.applicant_name && app.applicant_name.trim() !== '') return app.applicant_name;
+  
+  if (app.form_responses) {
+    // Look for a key that looks like full_name or name
+    const keys = Object.keys(app.form_responses);
+    for (const k of keys) {
+      const lowerK = k.toLowerCase();
+      if (lowerK.includes('name') || lowerK === 'full_name') {
+        const val = app.form_responses[k];
+        if (val && typeof val === 'string' && val.trim() !== '') {
+          return val;
+        }
+      }
+    }
+  }
+  return app.applicant_email || 'Unknown Candidate';
+}
+
 /* ================ Load applications ================ */
 async function loadApps() {
   const params = new URLSearchParams();
@@ -396,10 +418,11 @@ function renderApps() {
   }
 
   document.getElementById('appsBody').innerHTML = apps.map(a => {
+    const displayName = getDisplayName(a);
     return `<tr>
       <td><input type="checkbox" class="app-check" value="${a.id}" onchange="toggleSelect(${a.id})"></td>
       <td>
-        <div class="font-bold">${escapeHtml(a.applicant_name)}</div>
+        <div class="font-bold">${escapeHtml(displayName)}</div>
         <div class="text-xs text-light">${escapeHtml(a.applicant_email)}</div>
         <div class="text-xs text-light">${escapeHtml(a.applicant_phone || '')}</div>
       </td>
@@ -417,8 +440,8 @@ function renderApps() {
           <button class="btn btn-sm btn-secondary" onclick="viewApp(${a.id})" title="View"><i class="fas fa-eye"></i></button>
           <button class="btn btn-sm btn-success" onclick="quickStatus(${a.id},'shortlisted')" title="Shortlist"><i class="fas fa-check"></i></button>
           <button class="btn btn-sm btn-danger" onclick="openReject(${a.id})" title="Reject"><i class="fas fa-times"></i></button>
-          <button class="btn btn-sm btn-info" data-email="${escapeAttr(a.applicant_email)}" data-name="${escapeAttr(a.applicant_name)}" onclick="openCustomEmailModal(this.dataset.email, this.dataset.name)" title="Send Custom Email"><i class="fas fa-envelope"></i></button>
-          <button class="btn btn-sm btn-secondary" data-id="${a.id}" data-name="${escapeAttr(a.applicant_name)}" onclick="confirmDeleteAppPrompt(parseInt(this.dataset.id,10), this.dataset.name)" title="Delete Application"><i class="fas fa-trash"></i></button>
+          <button class="btn btn-sm btn-info" data-email="${escapeAttr(a.applicant_email)}" data-name="${escapeAttr(displayName)}" onclick="openCustomEmailModal(this.dataset.email, this.dataset.name)" title="Send Custom Email"><i class="fas fa-envelope"></i></button>
+          <button class="btn btn-sm btn-secondary" data-id="${a.id}" data-name="${escapeAttr(displayName)}" onclick="confirmDeleteAppPrompt(parseInt(this.dataset.id,10), this.dataset.name)" title="Delete Application"><i class="fas fa-trash"></i></button>
         </div>
       </td>
     </tr>`;
@@ -558,14 +581,14 @@ async function sendRejectionEmail() {
 async function viewApp(id) {
   try {
     const a = await API.get(`/api/applications/${id}`);
-    document.getElementById('appDetailTitle').innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(a.applicant_name)} — ${escapeHtml(a.job_title)}`;
+    const displayName = getDisplayName(a);
+    document.getElementById('appDetailTitle').innerHTML = `<i class="fas fa-user"></i> ${escapeHtml(displayName)} — ${escapeHtml(a.job_title)}`;
 
     const skillGap = a.skill_gap_analysis || {};
     const skills = a.skills || [];
     const aiCompleted = a.ai_interview && ['completed', 'auto_submitted'].includes(a.ai_interview.status);
     const formResponses = renderFormResponses(a.job_form_fields, a.form_responses);
 
-    // ── Assessment Results with retake button ──
     let assessmentHtml = '';
     if (a.assessment_results && a.assessment_results.length) {
       assessmentHtml = `
@@ -605,7 +628,7 @@ async function viewApp(id) {
             <div class="card-header"><h3><i class="fas fa-user"></i> Applicant Info</h3></div>
             <div class="card-body">
               <div class="grid-2 text-sm" style="gap:8px">
-                <div><b>Name:</b> ${escapeHtml(a.applicant_name)}</div>
+                <div><b>Name:</b> ${escapeHtml(displayName)}</div>
                 <div><b>Email:</b> ${escapeHtml(a.applicant_email)}</div>
                 <div><b>Phone:</b> ${escapeHtml(a.applicant_phone || '-')}</div>
                 <div><b>Experience:</b> ${a.experience_years} years</div>
@@ -676,7 +699,7 @@ async function viewApp(id) {
             <i class="fas fa-play"></i> Launch Interview
         </button>
       </div>
-      <button class="btn btn-info" data-email="${escapeAttr(a.applicant_email)}" data-name="${escapeAttr(a.applicant_name)}" onclick="openCustomEmailModal(this.dataset.email, this.dataset.name)"><i class="fas fa-envelope"></i> Send Email</button>
+      <button class="btn btn-info" data-email="${escapeAttr(a.applicant_email)}" data-name="${escapeAttr(displayName)}" onclick="openCustomEmailModal(this.dataset.email, this.dataset.name)"><i class="fas fa-envelope"></i> Send Email</button>
       <button class="btn btn-success" data-app-id="${a.id}" data-title="${escapeAttr(a.job_title)}" onclick="openOfferModal(parseInt(this.dataset.appId,10), this.dataset.title)" ${!offerEnabled ? 'disabled' : ''}><i class="fas fa-file-contract"></i> Generate Offer</button>
       <button class="btn btn-danger" data-app-id="${a.id}" onclick="openReject(parseInt(this.dataset.appId,10));closeModal('appDetailModal')" ${['hired','rejected'].includes(a.status) ? 'disabled' : ''}><i class="fas fa-times"></i> Reject</button>`;
 
@@ -685,11 +708,6 @@ async function viewApp(id) {
   } catch (e) { showToast('Error loading details: ' + e.message, 'error'); }
 }
 
-/**
- * Renders the custom-form-responses block inside the view modal.
- * Iterates the JD's form_fields.sections to find each field's label,
- * then looks up the applicant's answer in form_responses.
- */
 function renderFormResponses(jobFormFields, formResponses) {
   if (!formResponses || !jobFormFields) return '';
   const sections = (jobFormFields.sections) || [];
@@ -939,7 +957,6 @@ async function downloadCV(applicationId) {
   } catch (e) { showToast('Error downloading CV: ' + e.message, 'error'); }
 }
 
-/* ================ Helpers ================ */
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, m =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
