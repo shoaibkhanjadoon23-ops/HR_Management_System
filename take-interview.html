@@ -34,10 +34,12 @@
   input[type="text"]{width:100%;background:#0c1526;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font:inherit;font-size:20px;letter-spacing:4px;text-align:center;font-weight:700;text-transform:uppercase}
   input[type="text"]:focus{outline:2px solid rgba(79,140,255,.4);border-color:var(--accent)}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  .error-text{color:var(--danger);font-size:13px;margin-top:10px}
+  .error-text{color:var(--danger);font-size:13px;margin-top:10px;white-space:pre-line;line-height:1.5}
   .alert{padding:12px 16px;border-radius:10px;margin-bottom:16px;border:1px solid var(--border);background:var(--panel)}
   .alert.error{border-color:rgba(239,68,68,.5);color:#fecaca;background:rgba(239,68,68,.08)}
+  .alert.warn{border-color:rgba(245,158,11,.5);color:#fde68a;background:rgba(245,158,11,.08)}
   .alert.success{border-color:rgba(34,197,94,.5);color:#bbf7d0;background:rgba(34,197,94,.08)}
+  .alert.info{border-color:rgba(79,140,255,.5);color:#bcd3ff;background:rgba(79,140,255,.08)}
 
   /* HW check */
   .hw-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:14px}
@@ -81,6 +83,13 @@
   .transcript{background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.2);border-radius:10px;padding:12px 14px;margin-bottom:14px}
   .transcript h3{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent-2);margin-bottom:6px}
   .transcript p{margin:0 0 6px;white-space:pre-wrap}
+
+  /* NEW: submission reason block */
+  .submission-reason-block{background:#0c1526;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .submission-reason-block label{display:block;font-weight:600;font-size:13px;color:#cdd9ee;margin-bottom:6px}
+  .submission-reason-block textarea{width:100%;background:#0a1220;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font:inherit;font-size:14px;font-family:inherit;resize:vertical;min-height:56px}
+  .submission-reason-block textarea:focus{outline:2px solid rgba(79,140,255,.4);border-color:var(--accent)}
+  .submission-reason-block small{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.4}
 
   /* Toast */
   .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:12px 16px;border-radius:10px;background:#1b2942;border:1px solid var(--border);color:var(--text);max-width:min(560px,90vw);box-shadow:0 10px 24px rgba(0,0,0,.35);z-index:50;font-size:14px}
@@ -231,6 +240,14 @@
         </div>
       </div>
 
+      <!-- NEW: submission reason textarea -->
+      <div class="submission-reason-block">
+        <label for="submissionReasonInput">Submission Reason (optional)</label>
+        <textarea id="submissionReasonInput" rows="2"
+                  placeholder="e.g., Finished early, network issue, chose to end early…"></textarea>
+        <small>If you end early or the interview is auto-submitted, this reason will be shared with HR.</small>
+      </div>
+
       <div id="transcript-panel" class="transcript hidden">
         <h3>Your last answer (transcribed)</h3>
         <p id="transcript-text"></p>
@@ -335,13 +352,7 @@
     MAX_RECORD_SECONDS: 180,
   };
 
-  /* ═══════════ Audio engine (Web Audio API) ═══════════
-     HTMLAudioElement's autoplay policy blocks playback that happens
-     seconds after a user gesture (which is every TTS response from the
-     backend). Web Audio API's AudioContext, once resumed by ANY gesture,
-     stays unlocked for the rest of the page session — so all subsequent
-     question audio plays reliably.
-  */
+  /* ═══════════ Audio engine (Web Audio API) ═══════════ */
   let audioCtx = null;
   let currentSource = null;
   let audioUnlocked = false;
@@ -415,11 +426,6 @@
     }
   }
 
-  /**
-   * Browser speech synthesis fallback.
-   * Used when the backend returns empty audio (e.g. Groq TTS terms not
-   * accepted / 400 response). Guarantees the candidate hears the question.
-   */
   function speakFallback(text) {
     if (!text || !('speechSynthesis' in window)) return false;
     try {
@@ -496,8 +502,22 @@
         body: JSON.stringify({ application_id: applicationId, application_code: code }),
       });
       const data = await res.json();
+
       if (!res.ok) {
-        showGateError(data.detail || 'Verification failed. Please check your code.');
+        // ── NEW: friendly handling of time-window errors from the backend ──
+        const detail = (data && data.detail) || 'Verification failed. Please check your code.';
+        const lower = detail.toLowerCase();
+        if (lower.includes('not yet available')) {
+          showGateError('⏰ ' + detail + '\n\nPlease return at the scheduled time — this page will work then.');
+        } else if (lower.includes('window has closed')) {
+          showGateError('⌛ ' + detail);
+        } else if (lower.includes('already used')) {
+          showGateError('✓ ' + detail);
+        } else if (lower.includes('invalid application code')) {
+          showGateError('❌ ' + detail);
+        } else {
+          showGateError(detail);
+        }
         el.verifyBtn.disabled = false;
         el.verifyBtn.textContent = 'Continue';
         return;
@@ -659,7 +679,6 @@
       followUpCounter: 0,
     });
 
-    // Play first audio INSIDE the click handler before any await.
     if (state.pendingAudioB64) {
       state.lastAudioB64 = state.pendingAudioB64;
       state.usingFallbackAudio = false;
@@ -848,6 +867,12 @@
     state.submitted = true;
     state.proctoringActive = false;
 
+    // ── NEW: include the candidate's typed submission reason if any ──
+    const userReason = (document.getElementById('submissionReasonInput')?.value || '').trim();
+    const finalReason = userReason
+      ? `${reason} | Candidate note: ${userReason}`
+      : reason;
+
     if (state.isRecording && state.recorder) { try { state.recorder.stop(); } catch (_) {} }
     stopTimer();
     stopProctoring();
@@ -858,7 +883,7 @@
       await fetch(`${BACKEND_URL}/api/ai-interviews/${state.interviewId}/auto-submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: finalReason }),
       });
     } catch (e) { console.error('[proctor] auto-submit failed:', e); }
 
@@ -909,7 +934,6 @@
 
     el.questionText.textContent = text;
 
-    // Header label + badge
     if (isIntroduction) {
       el.qType.textContent = 'Introduction';
       el.qType.classList.add('intro');
@@ -937,7 +961,6 @@
         : 'Last main question';
     }
 
-    // Reset per-question UI
     el.transcriptPanel.classList.add('hidden');
     el.scoreLine.textContent = '';
     el.recordStatus.textContent = 'Tap the mic to record your answer.';
@@ -956,7 +979,7 @@
 
   function startRecording() {
     if (state.submitted) return;
-    stopAudio();  // don't record over the question audio
+    stopAudio();
 
     if (!hasLiveAudio()) { toast('Microphone is not live. Please redo the hardware check.', 'error'); return; }
 
@@ -1021,13 +1044,15 @@
     if (state.submitted) return;
     el.recordStatus.textContent = 'Uploading answer…';
 
-    // Remember whether THIS turn was the introduction — determines whether
-    // we show a score line for the transcribed answer.
     const wasIntroduction = state.isIntroduction;
 
     const ext = /mp4/.test(blob.type) ? 'mp4' : /ogg/.test(blob.type) ? 'ogg' : 'webm';
     const fd = new FormData();
     fd.append('file', blob, 'answer.' + ext);
+
+    // ── NEW: attach the candidate's typed submission reason ──
+    const userReason = (document.getElementById('submissionReasonInput')?.value || '').trim();
+    if (userReason) fd.append('submission_reason', userReason);
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/ai-interviews/${state.interviewId}/process`, {
@@ -1046,7 +1071,6 @@
         el.transcriptText.textContent = data.transcript;
         el.transcriptPanel.classList.remove('hidden');
         if (wasIntroduction) {
-          // Introduction isn't scored — show a neutral confirmation.
           el.scoreLine.textContent = 'Introduction noted — moving on to Question 1.';
         } else if (data.score != null) {
           let s = `Score: ${data.score}/10`;
