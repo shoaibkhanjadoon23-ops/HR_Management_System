@@ -134,6 +134,7 @@
   <div class="modal modal-xl">
     <div class="modal-header"><h3 id="msTitle"><i class="fas fa-file-invoice"></i> AI Interview Marksheet</h3><button class="modal-close" onclick="closeModal('marksheetModal')"><i class="fas fa-times"></i></button></div>
     <div class="modal-body" style="max-height:75vh;overflow-y:auto">
+      <div id="msReason"></div>
       <div id="msSummary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px"></div>
       <div id="msTranscript"></div>
     </div>
@@ -192,6 +193,7 @@ function renderAll() {
                 <span class="badge ${i.status === 'completed' ? 'badge-active' : i.status === 'auto_submitted' ? 'badge-rejected' : 'badge-pending'}">${i.status.replace('_',' ').toUpperCase()}</span>
                 ${d ? `<span class="text-xs text-light"><i class="fas fa-clock"></i> ${d.toLocaleString()}</span>` : ''}
               </div>
+              ${isAi && (i.status === 'completed' || i.status === 'auto_submitted') ? renderInterviewReason(i.status, i.submission_reason) : ''}
             </div>
             <div class="int-card-actions">
               ${isAi && (i.status === 'completed' || i.status === 'auto_submitted') ? `
@@ -211,6 +213,20 @@ function renderAll() {
         </div>
       </div>`;
   }).join('');
+}
+
+/* ============ Submission reason ============ */
+function renderInterviewReason(status, reason) {
+  const auto = status === 'auto_submitted';
+  const text = reason || (auto ? 'Auto-submitted (no reason recorded)' : '');
+  if (!text) return '';
+  const color = auto ? '#dc2626' : '#6b7280';
+  const bg = auto ? '#fef2f2' : '#f9fafb';
+  const border = auto ? '#fecaca' : '#e5e7eb';
+  return `<div class="text-sm" style="margin-top:10px;padding:8px 12px;border-radius:8px;background:${bg};border:1px solid ${border};color:${color}">
+    <i class="fas ${auto ? 'fa-exclamation-triangle' : 'fa-info-circle'}"></i>
+    <b>${auto ? 'Auto-submitted' : 'Submission note'}:</b> ${escapeHtml(text)}
+  </div>`;
 }
 
 /* ============ Reschedule ============ */
@@ -307,6 +323,7 @@ async function viewMarksheet(id) {
   marksheetState.interviewId = id;
   openModal('marksheetModal');
   document.getElementById('msSummary').innerHTML = '<div class="spinner"><i class="fas fa-spinner fa-spin"></i></div>';
+  document.getElementById('msReason').innerHTML = '';
   document.getElementById('msTranscript').innerHTML = '';
   document.getElementById('downloadPdfBtn').onclick = () => API.download(`/api/ai-interviews/${id}/pdf`, `interview_${id}.pdf`);
   try {
@@ -325,6 +342,8 @@ async function viewMarksheet(id) {
         <div style="font-size:12px;color:var(--text-light);text-transform:uppercase;font-weight:700">Grade</div>
         <div id="ms-grade" style="font-size:28px;font-weight:800;color:var(--primary);margin-top:8px">${data.grade}</div>
       </div>`;
+    document.getElementById('msReason').innerHTML =
+      renderInterviewReason(data.status, data.submission_reason).replace('margin-top:10px', 'margin-bottom:16px');
     renderMarksheetTranscript(data);
   } catch (e) { document.getElementById('msSummary').innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
 }
