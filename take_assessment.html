@@ -3,712 +3,890 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Take Assessment</title>
+<title>Assessment - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 <style>
-  :root{
-    --bg:#f5f6fa; --card:#ffffff; --text:#1e293b; --muted:#64748b;
-    --primary:#6366f1; --primary-d:#4f46e5; --danger:#ef4444; --success:#10b981;
-    --warning:#f59e0b; --border:#e2e8f0;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-       background:var(--bg);color:var(--text);min-height:100vh}
-  .hidden{display:none !important}
-  .overlay{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-  .card{background:var(--card);border-radius:12px;padding:32px;max-width:720px;width:100%;
-        box-shadow:0 4px 24px rgba(0,0,0,.06);border:1px solid var(--border)}
-  h1,h2,h3{margin-top:0}
-  .btn{background:var(--primary);color:white;border:none;padding:12px 24px;border-radius:8px;
-       font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
-  .btn:hover:not(:disabled){background:var(--primary-d)}
-  .btn:disabled{opacity:.5;cursor:not-allowed}
-  .btn.secondary{background:#e2e8f0;color:var(--text)}
-  .btn.secondary:hover:not(:disabled){background:#cbd5e1}
-  .btn.danger{background:var(--danger)}
-  .btn.danger:hover:not(:disabled){background:#dc2626}
-  input[type=text],input[type=email],textarea{
-    width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;
-    font-size:15px;font-family:inherit;margin-top:6px
-  }
-  input:focus,textarea:focus{outline:none;border-color:var(--primary)}
-  label{display:block;font-weight:600;margin-top:16px;font-size:14px}
-  .banner{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:14px;line-height:1.5}
-  .banner.warn{background:#fef3c7;color:#92400e;border:1px solid #fde68a}
-  .banner.danger{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
-  .banner.success{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
-  .banner.info{background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe}
-  .meta{display:flex;gap:24px;flex-wrap:wrap;margin:16px 0;color:var(--muted);font-size:14px}
-  .meta b{color:var(--text)}
-  .rules{background:#f8fafc;padding:16px;border-radius:8px;font-size:14px;margin:16px 0;
-         border-left:4px solid var(--primary)}
-  .rules ul{margin:8px 0 0;padding-left:20px}
-  .rules li{margin:4px 0}
-  #testScreen{max-width:1100px;margin:0 auto;padding:20px}
-  header.top{display:flex;justify-content:space-between;align-items:center;
-             background:var(--card);padding:16px 24px;border-radius:12px;
-             box-shadow:0 2px 12px rgba(0,0,0,.04);margin-bottom:20px}
-  .timer{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--primary)}
-  .timer.danger{color:var(--danger);animation:pulse 1s infinite}
-  @keyframes pulse{50%{opacity:.5}}
-  .progress{color:var(--muted);font-size:15px}
-  main.split{display:grid;grid-template-columns:220px 1fr;gap:20px}
-  aside.sidebar{background:var(--card);padding:16px;border-radius:12px;
-                box-shadow:0 2px 12px rgba(0,0,0,.04);height:fit-content}
-  .sidebar h3{margin:0 0 12px;font-size:14px;color:var(--muted);text-transform:uppercase}
-  .qnav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-  .qnav button{aspect-ratio:1;border:1px solid var(--border);background:white;
-               border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;
-               color:var(--muted);padding:0}
-  .qnav button.answered{background:#e0e7ff;color:var(--primary-d);border-color:var(--primary)}
-  .qnav button.current{background:var(--primary);color:white;border-color:var(--primary)}
-  section.main-q{background:var(--card);padding:28px;border-radius:12px;
-                 box-shadow:0 2px 12px rgba(0,0,0,.04);min-height:400px;
-                 display:flex;flex-direction:column}
-  .q-header{color:var(--muted);font-size:13px;margin-bottom:8px}
-  .q-title{font-size:19px;font-weight:600;margin-bottom:24px;line-height:1.5}
-  .options{display:flex;flex-direction:column;gap:12px}
-  .option{padding:14px 16px;border:2px solid var(--border);border-radius:8px;
-          cursor:pointer;font-size:15px;transition:all .15s;display:flex;align-items:center;gap:12px}
-  .option:hover{border-color:var(--primary)}
-  .option.selected{border-color:var(--primary);background:#eef2ff}
-  .option input{accent-color:var(--primary);margin:0}
-  .nav-buttons{display:flex;justify-content:space-between;gap:12px;margin-top:auto;padding-top:24px}
-  .nav-buttons .right{display:flex;gap:12px}
-  #submitModal .card{max-width:520px}
-  #resultContent h2{color:var(--success)}
-  #resultContent.failed h2{color:var(--danger)}
-  .score-display{font-size:56px;font-weight:800;color:var(--primary);
-                 text-align:center;margin:20px 0;line-height:1}
-  .score-label{text-align:center;color:var(--muted);font-size:14px}
-  .feedback{margin-top:24px;padding:16px;background:#f8fafc;border-radius:8px;
-            white-space:pre-wrap;font-size:14px;line-height:1.6}
-  .spinner{display:inline-block;width:16px;height:16px;border:2px solid #cbd5e1;
-           border-top-color:var(--primary);border-radius:50%;
-           animation:spin .8s linear infinite;vertical-align:middle}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  @media(max-width:768px){
-    main.split{grid-template-columns:1fr}
-    aside.sidebar{order:2}
-  }
+.proctor-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: #1e1b4b; color: #fff; padding: 10px 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 16px; flex-wrap: wrap;
+}
+.warn-counter { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.warn-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; background: rgba(255,255,255,.1);
+  border-radius: 8px; font-size: 13px;
+  transition: background .25s, transform .25s;
+  white-space: nowrap;
+}
+.warn-item i { font-size: 12px; opacity: .8; }
+.warn-item.warned { background: #dc2626; }
+.warn-item.flash { animation: flash-pop .5s ease; }
+@keyframes flash-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.15); background: #ef4444; }
+  100% { transform: scale(1); }
+}
+.camera-preview {
+  position: fixed; bottom: 20px; right: 20px;
+  width: 240px; height: 180px; border-radius: 12px;
+  border: 3px solid #6366f1; overflow: hidden; z-index: 1000;
+  background: #000; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.camera-preview canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+.debug-info {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.85); color: #10b981;
+  font-family: monospace; font-size: 11px; padding: 5px;
+  text-align: center; z-index: 2; line-height: 1.4;
+}
+@media (max-width: 640px) {
+  .camera-preview { width: 160px; height: 120px; bottom: 12px; right: 12px; }
+}
+.warning-toast {
+  position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+  background: #dc2626; color: #fff; padding: 16px 28px; border-radius: 12px;
+  font-weight: 700; font-size: 15px; z-index: 2000;
+  animation: slideDown .3s ease; box-shadow: 0 10px 30px rgba(220,38,38,.5);
+  max-width: 90vw; text-align: center; line-height: 1.4;
+}
+.warning-toast.voice { background: #ea580c; }
+.warning-toast.tab   { background: #7c3aed; }
+@keyframes slideDown { from { top:-60px; opacity:0 } to { top:80px; opacity:1 } }
+.perm-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px; background: #f8fafc;
+  border: 1.5px solid var(--border); border-radius: 12px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
+.perm-row.granted { background: #ecfdf5; border-color: #10b981; }
+.perm-icon {
+  width: 48px; height: 48px; flex-shrink: 0;
+  border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: 22px; background: #e0e7ff; color: #4f46e5;
+}
+.perm-row.granted .perm-icon { background: #10b981; color: white; }
+.perm-text { flex: 1; min-width: 180px; }
+.perm-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.perm-text p  { font-size: 13px; color: #6b7280; }
+.perm-btn-wrap { flex-shrink: 0; }
+.perm-btn-wrap .btn.granted { background: #10b981; color: white; border-color: #10b981; }
+#startAssessmentBtn:disabled { opacity: .5; cursor: not-allowed; }
+#startAssessmentBtn:not(:disabled) {
+  background: linear-gradient(135deg, #10b981, #059669);
+  animation: pulse-start 1.6s infinite;
+}
+@keyframes pulse-start {
+  0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,.6); }
+  50%     { box-shadow: 0 0 0 12px rgba(16,185,129,0); }
+}
+.mic-level-wrap {
+  height: 8px; background: #e5e7eb; border-radius: 4px;
+  overflow: hidden; margin-top: 8px;
+}
+.mic-level-bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+  transition: width .06s linear;
+}
+.guidelines-card {
+  background: #fffbeb; border: 1.5px solid #f59e0b;
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.guidelines-card h3 {
+  color: #b45309; font-size: 16px; font-weight: 800;
+  margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+}
+.guidelines-card ul {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.guidelines-card li {
+  display: flex; gap: 10px; font-size: 13.5px;
+  color: #78350f; line-height: 1.5;
+}
+.guidelines-card li i {
+  color: #d97706; margin-top: 2px; flex-shrink: 0;
+}
+/* NEW: submission reason styling */
+.submission-reason-wrap {
+  max-width: 600px; margin: 24px auto 0;
+}
+.submission-reason-wrap label {
+  display: block; font-weight: 600; margin-bottom: 8px;
+  font-size: 14px; color: var(--text);
+}
+.submission-reason-wrap textarea {
+  width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit; font-size: 14px;
+  resize: vertical; background: #fff;
+}
+.submission-reason-wrap small {
+  display: block; margin-top: 6px; color: #6b7280; font-size: 12px;
+}
 </style>
 </head>
 <body>
 
-<!-- Loading -->
-<div id="loader" class="overlay">
-  <div class="card" style="text-align:center">
-    <div class="spinner" style="width:28px;height:28px;margin-bottom:16px"></div>
-    Loading assessment…
+<div id="proctorBar" class="proctor-bar" style="display:none">
+  <div class="warn-counter">
+    <div class="warn-item" id="camWarnItem"><i class="fas fa-video"></i> Camera <b><span id="camWarnCount">0</span>/3</b></div>
+    <div class="warn-item" id="voiceWarnItem"><i class="fas fa-microphone"></i> Voice <b><span id="voiceWarnCount">0</span>/3</b></div>
+  </div>
+  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <div style="font-size:14px"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
+    <div id="submitStatus" style="font-size:12px;color:#a5b4fc"></div>
   </div>
 </div>
 
-<!-- Fatal error -->
-<div id="errorScreen" class="overlay hidden">
-  <div class="card" style="text-align:center">
-    <h2 style="color:var(--danger)">Assessment Unavailable</h2>
-    <p id="errorText" style="color:var(--muted)"></p>
+<div id="startGate" class="apply-page">
+  <div class="apply-header">
+    <div class="ai-badge" style="margin-bottom:12px"><i class="fas fa-shield-alt"></i> Secure Assessment</div>
+    <h1 id="jobTitle">Loading…</h1>
+    <p id="gateSubtitle">Complete the setup below to begin</p>
+    <span id="gateBadge" class="gate-badge" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#4338ca;color:#fff">
+      <i class="fas fa-lock"></i> Code Required
+    </span>
   </div>
-</div>
 
-<!-- Application code gate -->
-<div id="codeGate" class="overlay hidden">
-  <div class="card">
-    <h1>Enter Your Application Code</h1>
-    <p style="color:var(--muted)">This assessment is gated. Please enter the application code you received by email.</p>
-    <input type="text" id="codeInput" placeholder="e.g. A3K9X7PQ" maxlength="20"
-           style="text-transform:uppercase;font-size:18px;letter-spacing:2px;text-align:center">
-    <p id="codeError" style="color:var(--danger);margin-top:12px;font-size:14px"></p>
-    <button id="verifyBtn" class="btn" style="width:100%;margin-top:16px">Verify & Continue</button>
+  <!-- NEW: deadline banner -->
+  <div id="deadlineBanner" class="alert alert-warning" style="display:none; margin-bottom:16px; font-size:14px; line-height:1.5;"></div>
+
+  <!-- Guidelines Card (Updated with Plagiarism Warning) -->
+  <div class="guidelines-card">
+    <h3><i class="fas fa-exclamation-triangle"></i> Rules & Guidelines — Read Carefully</h3>
+    <ul>
+      <li><i class="fas fa-check-circle"></i> <div><b>One Attempt Only:</b> You cannot pause or restart this assessment once you click Start.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>No Tab Switching:</b> Do not switch tabs, minimize the window, or open other apps. Doing so will instantly auto-submit your assessment.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>Stay in Frame:</b> Ensure your face is clearly visible in the camera. Looking away for too long or having multiple people in the frame will result in warnings.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>No Talking:</b> The microphone will monitor for loud voices or background help. 3 warnings in any category will auto-submit your test.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>Zero Tolerance for Plagiarism:</b> All written answers are automatically scanned. Copy-pasting the question text or using predictable AI-generated language will result in <b>immediate mark deductions</b>.</div></li>
+      <li><i class="fas fa-check-circle"></i> <div><b>Stable Connection:</b> Ensure you have a stable internet connection before starting.</div></li>
+    </ul>
   </div>
-</div>
 
-<!-- Start / info screen -->
-<div id="startScreen" class="overlay hidden">
-  <div class="card">
-    <h1 id="startTitle">Assessment</h1>
-    <p id="startDesc" style="color:var(--muted)"></p>
-    <div class="meta" id="startMeta"></div>
-
-    <div id="startDeadline" class="banner warn hidden"></div>
-    <div id="startExpired" class="banner danger hidden"></div>
-
-    <div id="openAccessForm" class="hidden">
-      <label for="candName">Your Name</label>
-      <input type="text" id="candName" placeholder="Full name">
-      <label for="candEmail">Your Email</label>
-      <input type="email" id="candEmail" placeholder="you@example.com">
-    </div>
-
-    <div class="rules">
-      <strong>Important rules</strong>
-      <ul>
-        <li>The timer starts as soon as you click <b>Start</b>.</li>
-        <li>Do not close this tab or switch away — doing so may auto-submit your attempt.</li>
-        <li>Copy / paste / right-click are disabled during the assessment.</li>
-        <li>Your answers are graded automatically. Copy-pasted answers may be flagged.</li>
-      </ul>
-    </div>
-
-    <button id="startBtn" class="btn" style="width:100%">Start Assessment</button>
-  </div>
-</div>
-
-<!-- Test screen -->
-<div id="testScreen" class="hidden">
-  <header class="top">
-    <div>
-      <div class="timer" id="timer">30:00</div>
-      <div class="progress" id="progress">Question 1 of 10</div>
-    </div>
-    <button id="finishBtn" class="btn secondary">Finish</button>
-  </header>
-  <main class="split">
-    <aside class="sidebar">
-      <h3>Questions</h3>
-      <div class="qnav" id="qNav"></div>
-    </aside>
-    <section class="main-q">
-      <div class="q-header" id="qHeader">Question 1 · 2 marks</div>
-      <div class="q-title" id="qTitle"></div>
-      <div id="qBody"></div>
-      <div class="nav-buttons">
-        <button id="prevBtn" class="btn secondary">← Previous</button>
-        <div class="right">
-          <button id="nextBtn" class="btn">Next →</button>
-          <button id="submitBtn" class="btn danger">Submit</button>
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-header"><h3><i class="fas fa-user-check"></i> Identity Verification</h3></div>
+    <div class="card-body">
+      <div id="codeGateFields">
+        <div class="form-group">
+          <label>Application Code *</label>
+          <input type="text" id="appCodeInput" maxlength="12" placeholder="e.g. A3B5K9XZ"
+                 style="font-size:20px;text-transform:uppercase;letter-spacing:4px;text-align:center;font-weight:700">
         </div>
       </div>
-    </section>
-  </main>
+      <div id="identityGateFields" style="display:none">
+        <div class="alert alert-warning" style="margin-bottom:16px">
+          <i class="fas fa-exclamation-triangle"></i> This assessment is open-access. Please enter your name to continue.
+        </div>
+        <div class="form-group">
+          <label>Your Full Name *</label>
+          <input type="text" id="applicantNameInput" placeholder="e.g. Jane Doe">
+        </div>
+        <div class="form-group">
+          <label>Your Email (optional)</label>
+          <input type="email" id="applicantEmailInput" placeholder="you@example.com">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px" id="hardwareCard">
+    <div class="card-header"><h3><i class="fas fa-shield-alt"></i> Proctoring Setup</h3></div>
+    <div class="card-body">
+      <div class="alert alert-info" style="margin-bottom:16px">
+        This assessment is proctored. You must enable your camera and microphone before starting. 
+      </div>
+      <div class="perm-row" id="camPermRow">
+        <div class="perm-icon"><i class="fas fa-video"></i></div>
+        <div class="perm-text"><h3>Camera</h3><p>Verify you are visible and alone</p></div>
+        <div class="perm-btn-wrap">
+          <button class="btn btn-primary" id="camBtn" onclick="enableCamera()"><i class="fas fa-video"></i> Enable Camera</button>
+        </div>
+      </div>
+      <div class="perm-row" id="micPermRow">
+        <div class="perm-icon"><i class="fas fa-microphone"></i></div>
+        <div class="perm-text">
+          <h3>Microphone</h3><p>Ensure no one is helping you</p>
+          <div class="mic-level-wrap" id="micLevelWrap" style="display:none"><div class="mic-level-bar" id="micLevelBar"></div></div>
+        </div>
+        <div class="perm-btn-wrap">
+          <button class="btn btn-primary" id="micBtn" onclick="enableMic()"><i class="fas fa-microphone"></i> Enable Microphone</button>
+        </div>
+      </div>
+      <div id="permError" class="alert alert-error" style="display:none;margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div id="codeError" class="alert alert-error" style="display:none; font-weight:bold; font-size:15px; margin-bottom:16px;"></div>
+
+  <button class="btn btn-primary btn-full" id="startAssessmentBtn" style="font-size:16px;padding:14px" onclick="startAssessment()">
+    <i class="fas fa-play-circle"></i> Start Assessment
+  </button>
 </div>
 
-<!-- Submit modal -->
-<div id="submitModal" class="overlay hidden">
-  <div class="card">
-    <h2>Submit Assessment?</h2>
-    <p id="submitSummary" style="color:var(--muted)"></p>
-    <label for="submitReason">Submission Reason (optional)</label>
-    <textarea id="submitReason" rows="3"
-              placeholder="e.g., Finished early, ran out of time, technical issue…"></textarea>
-    <div style="display:flex;gap:12px;margin-top:20px">
-      <button id="cancelSubmitBtn" class="btn secondary" style="flex:1">Cancel</button>
-      <button id="confirmSubmitBtn" class="btn danger" style="flex:1">Submit Now</button>
+<div id="assessmentArea" style="display:none">
+  <div class="apply-page">
+    <div id="warningsBanner" class="alert alert-warning" style="display:none">
+      <b><i class="fas fa-exclamation-triangle"></i> Total warnings: <span id="totalWarnings">0</span>/6</b>
+    </div>
+    <div class="card mb-4">
+      <div class="card-body">
+        <div id="assessmentTitle"></div>
+        <div id="assessmentMeta" class="text-sm text-light mt-2"></div>
+        <div class="progress-bar mt-4"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div id="questionsContainer"></div>
+
+    <!-- NEW: submission reason textarea -->
+    <div class="submission-reason-wrap">
+      <label for="submissionReasonInput">Submission Reason (optional)</label>
+      <textarea id="submissionReasonInput" rows="2"
+                placeholder="e.g., Finished early, ran out of time, technical issue…"></textarea>
+      <small>This note will be shared with HR along with your submission.</small>
+    </div>
+
+    <div style="text-align:center;margin:16px 0 80px">
+      <button class="btn btn-primary" id="submitBtn" onclick="submitAssessment('manual')" style="font-size:16px;padding:14px 50px">
+        <i class="fas fa-paper-plane"></i> Submit Assessment
+      </button>
     </div>
   </div>
 </div>
 
-<!-- Result screen -->
-<div id="resultScreen" class="overlay hidden">
-  <div class="card">
-    <div id="resultContent"></div>
-  </div>
+<div class="camera-preview" id="cameraPreview" style="display:none">
+  <video id="camera" autoplay muted playsinline></video>
+  <canvas id="overlay"></canvas>
+  <div class="debug-info" id="debugInfo">Initializing...</div>
 </div>
 
 <script>
-/* ────────────────────────────────────────────────────────────────
-   CONFIG
-   ──────────────────────────────────────────────────────────────── */
-const API_BASE = (location.hostname.includes('vercel.app'))
-  ? 'https://hrhiringpro-hrpro.hf.space'
-  : location.origin;
+console.log("✅ HRPro Proctoring Script V10.0 Loaded");
 
-const AUTOSUBMIT_GRACE_SECONDS = 15; // auto-submit slightly before deadline to beat clock skew
+const BACKEND_URL = 'https://hrhiringpro-hrpro.hf.space';
+const pathSegments = window.location.pathname.split('/').filter(Boolean);
+const assessmentId = parseInt(pathSegments[pathSegments.length - 1], 10);
+const prefilledCode = new URLSearchParams(window.location.search).get('code') || '';
 
-/* ────────────────────────────────────────────────────────────────
-   STATE
-   ──────────────────────────────────────────────────────────────── */
+let assessment = null;
+let verifiedApplication = null;
+let answers = {};
+let totalQuestions = 0;
+
 const state = {
-  assessment: null,
-  applicationId: null,
-  candidateName: '',
-  candidateEmail: '',
-  answers: {},
-  currentIdx: 0,
-  startTime: null,
-  endTime: null,
-  deadlineMs: null,
-  timerHandle: null,
-  submitted: false,
-  tabViolations: 0,
-  antiCheat: false,
-  autoSubmitTriggered: false,
+  submitted: false, camWarnings: 0, voiceWarnings: 0,
+  lookAwayStart: null, noFaceStart: null, voiceStart: null,
+  lastCamWarn: 0, lastVoiceWarn: 0, lastVoiceLoudTime: 0, lastFaceOffset: '0.00',
+  cameraStream: null, micStream: null, audioContext: null,
+  faceDetectTimer: null, voiceDetectTimer: null, micLevelAnimFrame: null,
+  timerInterval: null, startTime: null, timeLeftSeconds: 0,
+  deadlineMs: null  // NEW
 };
 
-/* ────────────────────────────────────────────────────────────────
-   HELPERS
-   ──────────────────────────────────────────────────────────────── */
-const $ = (id) => document.getElementById(id);
-const show = (id) => $(id).classList.remove('hidden');
-const hide = (id) => $(id).classList.add('hidden');
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({
-  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-}[c]));
+const CFG = {
+  MAX_WARNINGS: 3, 
+  HEAD_OFFSET_THRESHOLD: 0.35, 
+  HEAD_SUSTAIN_MS: 1500, 
+  NO_FACE_SUSTAIN_MS: 1500,
+  VOICE_SUSTAIN_MS: 1000,
+  VOICE_ENERGY_MIN: 25,
+  VOICE_RMS_MIN: 0.015,
+  CAM_COOLDOWN_MS: 5000, 
+  VOICE_COOLDOWN_MS: 5000
+};
 
-function getAssessmentIdFromUrl() {
-  const p = new URLSearchParams(location.search);
-  const fromQuery = p.get('id') || p.get('assessment_id') || p.get('assessment');
-  if (fromQuery) return fromQuery;
-  // Handles /take-assessment/123 and /take-assessment/123.html
-  const m = location.pathname.match(/\/(\d+)(?:\.html)?\/?$/);
-  return m ? m[1] : null;
+if (prefilledCode) {
+  const codeInput = document.getElementById('appCodeInput');
+  if (codeInput) codeInput.value = prefilledCode.toUpperCase();
 }
 
-function fmtTime(ms) {
-  if (ms < 0) ms = 0;
-  const total = Math.ceil(ms / 1000);
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
-
-function fatalError(msg) {
-  ['loader','codeGate','startScreen','testScreen','submitModal','resultScreen'].forEach(hide);
-  $('errorText').textContent = msg || 'Something went wrong.';
-  show('errorScreen');
-}
-
-async function apiJson(path, opts = {}) {
-  const res = await fetch(API_BASE + path, opts);
-  let data = null;
-  try { data = await res.json(); } catch {}
-  return { ok: res.ok, status: res.status, data };
-}
-
-/* ────────────────────────────────────────────────────────────────
-   BOOT
-   ──────────────────────────────────────────────────────────────── */
-(async function boot() {
-  const id = getAssessmentIdFromUrl();
-  if (!id) return fatalError('No assessment ID in URL. Use the link from your invitation email.');
-
+async function loadAssessment() {
   try {
-    const { ok, data } = await apiJson(`/api/assessments/${id}`);
-    if (!ok || !data) return fatalError('Assessment not found or is no longer active.');
+    const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}`);
+    if (!res.ok) throw new Error('Assessment not found');
+    assessment = await res.json();
+    document.getElementById('jobTitle').textContent = assessment.title;
+    state.timeLeftSeconds = assessment.duration_minutes * 60;
 
-    state.assessment = data;
-    state.antiCheat = !!data.anti_cheat;
-
-    // Compute deadline early so we can reject the start if it's already past.
-    if (data.submission_date) {
-      state.deadlineMs = new Date(data.submission_date).getTime();
+    // ── NEW: submission deadline handling ──
+    if (assessment.submission_date) {
+      const dl = new Date(assessment.submission_date);
+      state.deadlineMs = dl.getTime();
+      const banner = document.getElementById('deadlineBanner');
       if (state.deadlineMs <= Date.now()) {
-        return fatalError(
-          `The submission deadline passed on ${new Date(data.submission_date).toLocaleString()}. ` +
-          `Contact HR if you need an extension.`
-        );
-      }
-    }
-
-    hide('loader');
-
-    // Auto-verify if code is in the URL, else show gate.
-    const codeFromUrl = new URLSearchParams(location.search).get('code');
-    if (data.require_application_code) {
-      if (codeFromUrl) {
-        $('codeInput').value = codeFromUrl;
-        await verifyCode();
+        banner.className = 'alert alert-error';
+        banner.innerHTML = `<b><i class="fas fa-clock"></i> Deadline passed.</b> This assessment stopped accepting submissions on <b>${dl.toLocaleString()}</b>.`;
+        banner.style.display = 'block';
+        const startBtn = document.getElementById('startAssessmentBtn');
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<i class="fas fa-lock"></i> Deadline Passed';
       } else {
-        show('codeGate');
-        $('codeInput').focus();
+        const minsLeft = Math.max(0, Math.floor((state.deadlineMs - Date.now()) / 60000));
+        banner.className = 'alert alert-warning';
+        banner.innerHTML = `<b><i class="fas fa-clock"></i> Deadline:</b> You must submit before <b>${dl.toLocaleString()}</b> (${minsLeft} minute${minsLeft === 1 ? '' : 's'} remaining).`;
+        banner.style.display = 'block';
       }
-    } else {
-      showStartScreen();
     }
+
+    if (!assessment.anti_cheat) {
+      document.getElementById('hardwareCard').style.display = 'none';
+    }
+
+    applyGateMode();
   } catch (e) {
-    console.error(e);
-    fatalError('Unable to load the assessment. Check your internet connection.');
+    document.getElementById('startGate').innerHTML = '<div class="alert alert-error">Assessment not found or inactive.</div>';
   }
-})();
+}
 
-/* ────────────────────────────────────────────────────────────────
-   CODE VERIFICATION
-   ──────────────────────────────────────────────────────────────── */
-$('verifyBtn').addEventListener('click', verifyCode);
-$('codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') verifyCode(); });
+function applyGateMode() {
+  const requireCode = assessment.require_application_code !== false;
+  if (!requireCode) {
+    document.getElementById('codeGateFields').style.display = 'none';
+    document.getElementById('identityGateFields').style.display = '';
+    document.getElementById('gateSubtitle').textContent = 'Enter your name to begin (no code needed)';
+    const badge = document.getElementById('gateBadge');
+    badge.style.background = '#d97706';
+    badge.innerHTML = '<i class="fas fa-lock-open"></i> Open Access';
+  }
+}
 
-async function verifyCode() {
-  const code = ($('codeInput').value || '').trim().toUpperCase();
-  if (!code) { $('codeError').textContent = 'Please enter your code.'; return; }
+function showCodeError(msg) {
+  const el = document.getElementById('codeError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
 
-  $('codeError').textContent = '';
-  $('verifyBtn').disabled = true;
-  $('verifyBtn').innerHTML = '<span class="spinner"></span> Verifying…';
+async function enableCamera() {
+  const btn = document.getElementById('camBtn');
+  if (!btn || btn.classList.contains('granted')) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
 
   try {
-    const { ok, data } = await apiJson(
-      `/api/assessments/${state.assessment.id}/verify-application`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ application_code: code }),
-      }
-    );
-    if (!ok) {
-      $('codeError').textContent = (data && data.detail) || 'Invalid code.';
-      return;
-    }
-    state.applicationId = data.application_id || null;
-    state.candidateName = data.applicant_name || '';
-    state.candidateEmail = data.applicant_email || '';
-
-    // Backend may echo back a deadline we didn't see before
-    if (data.submission_date && !state.deadlineMs) {
-      state.deadlineMs = new Date(data.submission_date).getTime();
-    }
-
-    hide('codeGate');
-    showStartScreen();
-  } catch {
-    $('codeError').textContent = 'Network error. Please try again.';
-  } finally {
-    $('verifyBtn').disabled = false;
-    $('verifyBtn').textContent = 'Verify & Continue';
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' },
+      audio: false,
+    });
+    state.cameraStream = stream;
+    const video = document.getElementById('camera');
+    video.srcObject = stream;
+    document.getElementById('cameraPreview').style.display = 'block';
+    
+    await new Promise(resolve => {
+      if (video.readyState >= 2) resolve();
+      else video.onloadeddata = resolve;
+    });
+    
+    btn.classList.add('granted');
+    btn.innerHTML = '<i class="fas fa-check"></i> Camera Ready';
+    document.getElementById('camPermRow').classList.add('granted');
+    document.getElementById('permError').style.display = 'none';
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-video"></i> Enable Camera';
+    const err = document.getElementById('permError');
+    err.textContent = 'Camera access failed: ' + (e.message || 'permission denied');
+    err.style.display = 'block';
   }
 }
 
-/* ────────────────────────────────────────────────────────────────
-   START SCREEN
-   ──────────────────────────────────────────────────────────────── */
-function showStartScreen() {
-  const a = state.assessment;
-  $('startTitle').textContent = a.title || 'Assessment';
-  $('startDesc').textContent = a.description || '';
+async function enableMic() {
+  const btn = document.getElementById('micBtn');
+  if (!btn || btn.classList.contains('granted')) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Requesting…';
 
-  const qCount = (a.questions || []).length;
-  $('startMeta').innerHTML = `
-    <div><b>${qCount}</b> questions</div>
-    <div><b>${a.total_marks}</b> marks</div>
-    <div><b>${a.duration_minutes}</b> minutes</div>
-  `;
-
-  // Deadline banner
-  if (state.deadlineMs) {
-    const dl = new Date(state.deadlineMs);
-    $('startDeadline').innerHTML =
-      `⏰ <b>Deadline:</b> You must submit before <b>${dl.toLocaleString()}</b>.`;
-    $('startDeadline').classList.remove('hidden');
-
-    // Warn if less than 5 minutes remain
-    const remainingMin = Math.floor((state.deadlineMs - Date.now()) / 60000);
-    if (remainingMin <= 5) {
-      $('startExpired').innerHTML =
-        `⚠️ Only <b>${remainingMin} minute${remainingMin === 1 ? '' : 's'}</b> remain before the deadline.`;
-      $('startExpired').classList.remove('hidden');
-      // Disable start if essentially no time left
-      if (remainingMin <= 0) {
-        $('startBtn').disabled = true;
-        $('startBtn').textContent = 'Deadline passed';
-      }
-    }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    state.micStream = stream;
+    
+    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    await state.audioContext.resume();
+    
+    document.getElementById('micLevelWrap').style.display = 'block';
+    startMicLevelMeter();
+    
+    btn.classList.add('granted');
+    btn.innerHTML = '<i class="fas fa-check"></i> Microphone Ready';
+    document.getElementById('micPermRow').classList.add('granted');
+    document.getElementById('permError').style.display = 'none';
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-microphone"></i> Enable Microphone';
+    const err = document.getElementById('permError');
+    err.textContent = 'Microphone access failed: ' + (e.message || 'permission denied');
+    err.style.display = 'block';
   }
-
-  // Open-access form
-  if (!a.require_application_code) {
-    $('openAccessForm').classList.remove('hidden');
-  } else {
-    $('openAccessForm').classList.add('hidden');
-  }
-
-  show('startScreen');
 }
 
-$('startBtn').addEventListener('click', () => {
-  const a = state.assessment;
+function startMicLevelMeter() {
+  try {
+    const src = state.audioContext.createMediaStreamSource(state.micStream);
+    const analyser = state.audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const bar = document.getElementById('micLevelBar');
+    function tick() {
+      analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      bar.style.width = Math.min(100, (sum / data.length) * 2) + '%';
+      state.micLevelAnimFrame = requestAnimationFrame(tick);
+    }
+    tick();
+  } catch (e) {}
+}
 
-  // Hard re-check deadline right at click
+async function startAssessment() {
+  if (!assessment) return;
+  const btn = document.getElementById('startAssessmentBtn');
+
+  // NEW: block start after deadline
   if (state.deadlineMs && state.deadlineMs <= Date.now()) {
-    alert('The submission deadline has passed. You cannot start this assessment.');
+    showCodeError('This assessment deadline has already passed. Please contact HR.');
     return;
   }
 
-  if (!a.require_application_code) {
-    const name = ($('candName').value || '').trim();
-    const email = ($('candEmail').value || '').trim();
-    if (!name) { alert('Please enter your name.'); return; }
-    if (!email || !email.includes('@')) { alert('Please enter a valid email address.'); return; }
-    state.candidateName = name;
-    state.candidateEmail = email;
+  if (assessment.require_application_code !== false) {
+    const code = document.getElementById('appCodeInput').value.trim().toUpperCase();
+    if (!code) return showCodeError('Please enter your application code');
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying Code...';
+    btn.disabled = true;
+    document.getElementById('codeError').style.display = 'none';
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/verify-application`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_code: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showCodeError(data.detail || 'Invalid application code');
+        btn.innerHTML = '<i class="fas fa-play-circle"></i> Start Assessment';
+        btn.disabled = false;
+        return;
+      }
+      verifiedApplication = data;
+    } catch (e) {
+      showCodeError('Network error. Please try again.');
+      btn.innerHTML = '<i class="fas fa-play-circle"></i> Start Assessment';
+      btn.disabled = false;
+      return;
+    }
+  } else {
+    const name = (document.getElementById('applicantNameInput').value || '').trim();
+    const email = (document.getElementById('applicantEmailInput').value || '').trim();
+    if (!name) return showCodeError('Please enter your Full Name');
+    verifiedApplication = { application_id: null, applicant_name: name, applicant_email: email };
   }
-  startTest();
-});
 
-/* ────────────────────────────────────────────────────────────────
-   TEST SCREEN
-   ──────────────────────────────────────────────────────────────── */
-function startTest() {
-  hide('startScreen');
-  show('testScreen');
+  if (assessment.anti_cheat) {
+    if (!state.cameraStream || !state.micStream) {
+      showCodeError('⚠️ Please enable BOTH Camera and Microphone before starting.');
+      btn.innerHTML = '<i class="fas fa-play-circle"></i> Start Assessment';
+      btn.disabled = false;
+      return;
+    }
+  }
 
-  state.startTime = Date.now();
-  let endMs = state.startTime + state.assessment.duration_minutes * 60 * 1000;
-  if (state.deadlineMs && state.deadlineMs < endMs) endMs = state.deadlineMs;
-  state.endTime = endMs;
+  document.getElementById('codeError').style.display = 'none';
+  document.getElementById('startGate').style.display = 'none';
+  document.getElementById('assessmentArea').style.display = 'block';
+  
+  if (assessment.anti_cheat) {
+    document.getElementById('proctorBar').style.display = 'flex';
+  } else {
+    document.getElementById('proctorBar').style.display = 'flex';
+    document.getElementById('camWarnItem').style.display = 'none';
+    document.getElementById('voiceWarnItem').style.display = 'none';
+  }
 
-  renderQNav();
-  renderQuestion();
+  renderQuestions();
   startTimer();
-  setupAntiCheat();
+  state.startTime = Date.now();
+
+  if (assessment.anti_cheat) {
+    await startProctoring();
+  }
+}
+
+function renderQuestions() {
+  const qs = assessment.questions || [];
+  totalQuestions = qs.length;
+  document.getElementById('assessmentTitle').innerHTML = `<h2 style="font-size:20px">${escapeHtml(assessment.title)}</h2>`;
+  document.getElementById('assessmentMeta').innerHTML = `<i class="fas fa-list"></i> ${totalQuestions} questions &nbsp;|&nbsp; <i class="fas fa-clock"></i> ${assessment.duration_minutes} mins`;
+
+  document.getElementById('questionsContainer').innerHTML = qs.map((q, idx) => {
+    let answerHtml = '';
+    if (q.type === 'mcq') {
+      answerHtml = (q.options || []).map((opt, i) => `
+        <label class="option-item" id="opt_${q.id}_${i}">
+          <input type="radio" name="q_${q.id}" value="${i}" onchange="selectOption(${q.id}, ${i})">
+          <span>${escapeHtml(opt)}</span>
+        </label>`).join('');
+    } else if (q.type === 'fill_blank') {
+      answerHtml = `<input type="text" placeholder="Your answer…" oninput="saveAnswer(${q.id}, this.value)" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px">`;
+    } else {
+      answerHtml = `<textarea rows="6" placeholder="Write your answer…" oninput="saveAnswer(${q.id}, this.value)" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:8px"></textarea>`;
+    }
+    return `
+      <div class="question-card" id="qcard_${q.id}">
+        <div class="question-num">Question ${idx + 1} of ${totalQuestions} <span class="level-${q.level}">${q.level}</span></div>
+        <div class="question-text">${escapeHtml(q.question)}</div>
+        <div>${answerHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+function selectOption(qid, optIdx) {
+  document.querySelectorAll(`[id^="opt_${qid}_"]`).forEach(el => el.classList.remove('selected'));
+  document.getElementById(`opt_${qid}_${optIdx}`).classList.add('selected');
+  saveAnswer(qid, optIdx);
+}
+
+function saveAnswer(qid, value) {
+  answers[qid] = value;
+  document.getElementById(`qcard_${qid}`).classList.add('answered');
 }
 
 function startTimer() {
-  const tick = () => {
-    const remaining = state.endTime - Date.now();
-    const el = $('timer');
-    el.textContent = fmtTime(remaining);
-
-    // Turn red in last minute
-    if (remaining < 60 * 1000) el.classList.add('danger');
-
-    // Pre-emptive auto-submit slightly before deadline / duration to survive
-    // network round-trip + clock skew.
-    if (remaining <= AUTOSUBMIT_GRACE_SECONDS * 1000 && !state.autoSubmitTriggered) {
-      state.autoSubmitTriggered = true;
-      autoSubmit('Time is nearly up');
+  // ── NEW: cap the timer at the submission deadline ──
+  if (state.deadlineMs) {
+    const secsToDeadline = Math.floor((state.deadlineMs - Date.now()) / 1000);
+    if (secsToDeadline <= 0) {
+      state.timeLeftSeconds = 0;
+      submitAssessment('auto', 'Submission deadline reached');
       return;
     }
-
-    if (remaining <= 0) {
-      clearInterval(state.timerHandle);
+    if (secsToDeadline < state.timeLeftSeconds) {
+      state.timeLeftSeconds = secsToDeadline;
     }
-  };
-  tick();
-  state.timerHandle = setInterval(tick, 1000);
-}
-
-function renderQNav() {
-  const nav = $('qNav');
-  nav.innerHTML = '';
-  (state.assessment.questions || []).forEach((q, i) => {
-    const btn = document.createElement('button');
-    btn.textContent = i + 1;
-    if (isAnswered(q)) btn.classList.add('answered');
-    if (i === state.currentIdx) btn.classList.add('current');
-    btn.addEventListener('click', () => {
-      state.currentIdx = i;
-      renderQuestion();
-      renderQNav();
-    });
-    nav.appendChild(btn);
-  });
-}
-
-function isAnswered(q) {
-  const val = state.answers[String(q.id)];
-  if (q.type === 'mcq') return val !== undefined && val !== null && val !== '';
-  return typeof val === 'string' && val.trim().length > 0;
-}
-
-function renderQuestion() {
-  const q = state.assessment.questions[state.currentIdx];
-  if (!q) return;
-
-  $('qHeader').textContent =
-    `Question ${state.currentIdx + 1} · ${q.marks} mark${q.marks === 1 ? '' : 's'}`;
-  $('qTitle').textContent = q.question;
-
-  const body = $('qBody');
-  body.innerHTML = '';
-
-  if (q.type === 'mcq') {
-    const wrap = document.createElement('div');
-    wrap.className = 'options';
-    (q.options || []).forEach((opt, i) => {
-      const div = document.createElement('label');
-      div.className = 'option' + (state.answers[String(q.id)] === i ? ' selected' : '');
-      const input = document.createElement('input');
-      input.type = 'radio';
-      input.name = 'q_' + q.id;
-      input.value = i;
-      input.checked = state.answers[String(q.id)] === i;
-      input.addEventListener('change', () => {
-        state.answers[String(q.id)] = i;
-        body.querySelectorAll('.option').forEach(el => el.classList.remove('selected'));
-        div.classList.add('selected');
-        renderQNav();
-      });
-      div.appendChild(input);
-      div.appendChild(document.createTextNode(opt));
-      wrap.appendChild(div);
-    });
-    body.appendChild(wrap);
-  } else {
-    const ta = document.createElement('textarea');
-    ta.rows = q.type === 'fill_blank' ? 2 : 6;
-    ta.placeholder = q.type === 'fill_blank'
-      ? 'Your answer…'
-      : 'Write your detailed answer…';
-    ta.value = state.answers[String(q.id)] || '';
-    ta.addEventListener('input', () => {
-      state.answers[String(q.id)] = ta.value;
-      renderQNav();
-    });
-    body.appendChild(ta);
   }
 
-  $('prevBtn').disabled = state.currentIdx === 0;
-  $('nextBtn').disabled = state.currentIdx >= state.assessment.questions.length - 1;
-  $('progress').textContent =
-    `Question ${state.currentIdx + 1} of ${state.assessment.questions.length}`;
+  state.timerInterval = setInterval(() => {
+    if (state.submitted) return;
+    state.timeLeftSeconds--;
+    const m = Math.max(0, Math.floor(state.timeLeftSeconds / 60));
+    const s = Math.max(0, state.timeLeftSeconds % 60);
+    document.getElementById('timer').textContent = `${m}:${String(s).padStart(2, '0')}`;
+    if (state.timeLeftSeconds <= 0) submitAssessment('auto', 'Time expired');
+  }, 1000);
 }
 
-$('prevBtn').addEventListener('click', () => {
-  if (state.currentIdx > 0) {
-    state.currentIdx--;
-    renderQuestion();
-    renderQNav();
-  }
-});
-
-$('nextBtn').addEventListener('click', () => {
-  if (state.currentIdx < state.assessment.questions.length - 1) {
-    state.currentIdx++;
-    renderQuestion();
-    renderQNav();
-  }
-});
-
-/* ────────────────────────────────────────────────────────────────
-   ANTI-CHEAT
-   ──────────────────────────────────────────────────────────────── */
-function setupAntiCheat() {
-  if (!state.antiCheat) return;
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && !state.submitted) handleViolation('Tab switch detected');
-  });
-  document.addEventListener('copy', e => {
-    if (!state.submitted) {
-      e.preventDefault();
-      alert('Copy is disabled during this assessment.');
-    }
-  });
-  document.addEventListener('paste', e => {
-    if (!state.submitted) {
-      e.preventDefault();
-      alert('Paste is disabled during this assessment.');
-    }
-  });
-  document.addEventListener('contextmenu', e => {
-    if (!state.submitted) e.preventDefault();
-  });
-}
-
-function handleViolation(reason) {
-  if (state.submitted) return;
-  state.tabViolations++;
-  if (state.tabViolations === 1) {
-    alert(
-      '⚠️ Warning: Switching away from the assessment is not allowed.\n' +
-      'Doing it again will auto-submit your attempt.'
-    );
-  } else {
-    autoSubmit('Anti-cheat violation: ' + reason);
+async function startProctoring() {
+  try {
+    const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelPath),
+    ]);
+    
+    document.getElementById('debugInfo').textContent = "Monitoring Active...";
+    
+    state.faceDetectTimer = setInterval(checkFace, 500);
+    await startVoiceDetection();
+    
+    document.addEventListener('visibilitychange', onVisibilityChange);
+  } catch (e) { 
+    console.error("Proctoring init failed", e); 
+    document.getElementById('debugInfo').textContent = "Init Failed";
   }
 }
 
-/* ────────────────────────────────────────────────────────────────
-   SUBMISSION
-   ──────────────────────────────────────────────────────────────── */
-$('finishBtn').addEventListener('click', () => promptSubmit());
-$('submitBtn').addEventListener('click', () => promptSubmit());
-$('cancelSubmitBtn').addEventListener('click', () => hide('submitModal'));
-$('confirmSubmitBtn').addEventListener('click', () => doSubmit(false));
-
-function promptSubmit() {
+async function checkFace() {
   if (state.submitted) return;
-  const answered = (state.assessment.questions || []).filter(isAnswered).length;
-  const total = state.assessment.questions.length;
-  $('submitSummary').textContent =
-    `You have answered ${answered} of ${total} questions.`;
-  show('submitModal');
-}
-
-function autoSubmit(reason) {
-  if (state.submitted) return;
-  $('submitReason').value = reason;
-  hide('submitModal');
-  doSubmit(true, reason);
-}
-
-async function doSubmit(auto, reasonOverride) {
-  if (state.submitted) return;
-  state.submitted = true;
-  if (state.timerHandle) clearInterval(state.timerHandle);
-
-  hide('submitModal');
-  hide('testScreen');
-  show('loader');
-  $('loader').querySelector('.card').innerHTML =
-    '<div class="spinner" style="width:28px;height:28px;margin-bottom:16px"></div>Submitting your assessment…';
-
-  const reason = (reasonOverride || ($('submitReason').value || '')).trim();
+  const video = document.getElementById('camera');
+  const debugEl = document.getElementById('debugInfo');
+  if (!video || video.readyState < 2) return;
 
   try {
-    const res = await fetch(API_BASE + `/api/assessments/${state.assessment.id}/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        application_id: state.applicationId,
-        applicant_name: state.candidateName,
-        applicant_email: state.candidateEmail,
-        answers: state.answers,
-        time_taken_minutes: Math.round((Date.now() - state.startTime) / 60000),
-        submission_type: auto ? 'auto' : 'manual',
-        submission_reason: reason || null,
-      }),
-    });
-    const data = await res.json();
-    hide('loader');
+    const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks(true);
+    const now = Date.now();
+    
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (!res.ok) {
-      const detail = (data && data.detail) || 'Submission failed.';
-      fatalError(detail);
+    if (detections.length === 0) {
+      debugEl.innerHTML = `Faces: 0 | No Face<br>Mic E: -- | R: --`;
+      debugEl.style.color = '#ef4444';
+      if (state.noFaceStart === null) state.noFaceStart = now;
+      if (now - state.noFaceStart > CFG.NO_FACE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning('Face not detected in camera');
+        state.noFaceStart = null;
+      }
       return;
     }
-    showResult(data);
+    state.noFaceStart = null;
+
+    const box = detections[0].detection.box;
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+    if (detections.length > 1) {
+      debugEl.innerHTML = `Faces: ${detections.length} | Multiple!<br>Mic E: -- | R: --`;
+      debugEl.style.color = '#ef4444';
+      if (state.multiFaceStart === null) state.multiFaceStart = now;
+      if (now - state.multiFaceStart > CFG.MULTI_FACE_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning('Multiple people detected');
+        state.multiFaceStart = null;
+      }
+      return;
+    }
+    state.multiFaceStart = null;
+
+    const p = detections[0].landmarks.positions;
+    const noseTip = p[30];
+    const centerX = (p[16].x + p[0].x) / 2;
+    const halfW = Math.abs(p[16].x - p[0].x) / 2;
+    const offset = halfW > 5 ? (noseTip.x - centerX) / halfW : 0;
+    state.lastFaceOffset = offset.toFixed(2);
+
+    if (Math.abs(offset) > CFG.HEAD_OFFSET_THRESHOLD) {
+      debugEl.innerHTML = `Faces: 1 | Offset: ${state.lastFaceOffset} (Looking Away!)<br>Mic E: -- | R: --`;
+      debugEl.style.color = '#f59e0b';
+      
+      if (state.lookAwayStart === null) state.lookAwayStart = now;
+      if (now - state.lookAwayStart > CFG.HEAD_SUSTAIN_MS && now - state.lastCamWarn > CFG.CAM_COOLDOWN_MS) {
+        issueCamWarning('Head turned away from screen');
+        state.lookAwayStart = null;
+      }
+    } else {
+      debugEl.innerHTML = `Faces: 1 | Offset: ${state.lastFaceOffset}<br>Mic E: -- | R: --`;
+      debugEl.style.color = '#10b981';
+      state.lookAwayStart = null;
+    }
+  } catch (e) {}
+}
+
+async function startVoiceDetection() {
+  if (!state.micStream || !state.audioContext) return;
+  try {
+    const src = state.audioContext.createMediaStreamSource(state.micStream);
+    const analyser = state.audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+
+    const freqData = new Uint8Array(analyser.frequencyBinCount);
+    const timeData = new Uint8Array(analyser.fftSize);
+    const binHz = state.audioContext.sampleRate / analyser.fftSize;
+    const voiceBinLo = Math.floor(300 / binHz);
+    const voiceBinHi = Math.ceil(3400 / binHz);
+
+    state.voiceDetectTimer = setInterval(() => {
+      if (state.submitted) return;
+      analyser.getByteFrequencyData(freqData);
+      analyser.getByteTimeDomainData(timeData);
+
+      let energy = 0;
+      for (let i = voiceBinLo; i < voiceBinHi; i++) energy += freqData[i];
+      energy /= (voiceBinHi - voiceBinLo);
+
+      let rms = 0;
+      for (let i = 0; i < timeData.length; i++) { const v = (timeData[i] - 128) / 128; rms += v * v; }
+      rms = Math.sqrt(rms / timeData.length);
+
+      const debugEl = document.getElementById('debugInfo');
+      if (debugEl && document.getElementById('startGate').style.display === 'none') {
+        const faceText = state.lastFaceOffset !== null && state.lastFaceOffset !== '0.00'
+                         ? `Offset: ${state.lastFaceOffset}` : `Cam: Active`;
+        debugEl.innerHTML = `${faceText}<br>Mic E: ${energy.toFixed(0)} | R: ${rms.toFixed(3)}`;
+        if (energy > CFG.VOICE_ENERGY_MIN || rms > CFG.VOICE_RMS_MIN) {
+          debugEl.style.color = '#f59e0b';
+        }
+      }
+
+      const now = Date.now();
+      if (energy > CFG.VOICE_ENERGY_MIN && rms > CFG.VOICE_RMS_MIN) {
+        if (state.voiceStart === null) state.voiceStart = now;
+        state.lastVoiceLoudTime = now;
+        
+        if (now - state.voiceStart > CFG.VOICE_SUSTAIN_MS && now - state.lastVoiceWarn > CFG.VOICE_COOLDOWN_MS) {
+          issueVoiceWarning('Loud voice heard near you');
+          state.voiceStart = null;
+        }
+      } else {
+        if (state.voiceStart !== null && (now - state.lastVoiceLoudTime > 500)) {
+          state.voiceStart = null;
+        }
+      }
+    }, 250);
+  } catch (e) { console.error("Voice error", e); }
+}
+
+function onVisibilityChange() {
+  if (state.submitted) return;
+  if (document.hidden) {
+    submitAssessment('auto', 'Tab switch detected. Assessment automatically submitted.');
+  }
+}
+
+function issueCamWarning(reason) {
+  state.camWarnings++; 
+  state.lastCamWarn = Date.now();
+  updateWarnUI(); flashCounter('camWarnItem'); playWarningBeep();
+  showWarningToast(`⚠️ Camera Warning ${state.camWarnings}/3: ${reason}`, 'cam');
+  if (state.camWarnings >= 3) submitAssessment('auto', `3 camera warnings`);
+}
+
+function issueVoiceWarning(reason) {
+  state.voiceWarnings++; 
+  state.lastVoiceWarn = Date.now();
+  updateWarnUI(); flashCounter('voiceWarnItem'); playWarningBeep();
+  showWarningToast(`⚠️ Voice Warning ${state.voiceWarnings}/3: ${reason}`, 'voice');
+  if (state.voiceWarnings >= 3) submitAssessment('auto', `3 voice warnings`);
+}
+
+function updateWarnUI() {
+  document.getElementById('camWarnCount').textContent = state.camWarnings;
+  document.getElementById('voiceWarnCount').textContent = state.voiceWarnings;
+  document.getElementById('totalWarnings').textContent = state.camWarnings + state.voiceWarnings;
+  document.getElementById('warningsBanner').style.display = 'block';
+  if (state.camWarnings > 0) document.getElementById('camWarnItem').classList.add('warned');
+  if (state.voiceWarnings > 0) document.getElementById('voiceWarnItem').classList.add('warned');
+}
+
+function flashCounter(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
+function showWarningToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'warning-toast' + (type === 'voice' ? ' voice' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+
+function playWarningBeep() {
+  if (!state.audioContext) return;
+  try {
+    const osc = state.audioContext.createOscillator();
+    const gain = state.audioContext.createGain();
+    osc.connect(gain);
+    gain.connect(state.audioContext.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    const t = state.audioContext.currentTime;
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    osc.start(t);
+    osc.stop(t + 0.35);
+  } catch (e) {}
+}
+
+async function submitAssessment(type = 'manual', reason = null) {
+  if (state.submitted) return;
+  state.submitted = true;
+
+  // ── NEW: capture submission reason from the textarea ──
+  const userReason = (document.getElementById('submissionReasonInput')?.value || '').trim();
+  if (type === 'manual') {
+    if (userReason) reason = userReason;
+  } else if (userReason && reason) {
+    // Auto-submit already has a violation reason — merge both so HR sees both.
+    reason = `${reason} | Candidate note: ${userReason}`;
+  } else if (userReason) {
+    reason = userReason;
+  }
+
+  clearInterval(state.timerInterval);
+  clearInterval(state.faceDetectTimer);
+  clearInterval(state.voiceDetectTimer);
+  if (state.micLevelAnimFrame) cancelAnimationFrame(state.micLevelAnimFrame);
+  if (state.cameraStream) state.cameraStream.getTracks().forEach(t => t.stop());
+  if (state.micStream)    state.micStream.getTracks().forEach(t => t.stop());
+  if (state.audioContext) state.audioContext.close().catch(() => {});
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+  
+  document.getElementById('cameraPreview').style.display = 'none';
+
+  const btn = document.getElementById('submitBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting…'; }
+  document.getElementById('submitStatus').textContent = 'Submitting…';
+
+  const minutes = state.startTime ? (Date.now() - state.startTime) / 60000 : 0;
+
+  const payload = {
+    applicant_name:     verifiedApplication?.applicant_name  || '',
+    applicant_email:    verifiedApplication?.applicant_email || '',
+    application_id:     verifiedApplication?.application_id  || null,
+    answers,
+    time_taken_minutes: minutes,
+    submission_type:    type,
+    submission_reason:  reason,
+  };
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/assessments/${assessmentId}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      // If the backend rejected due to deadline, show it clearly
+      const detail = data.detail || 'Submission failed';
+      const isDeadline = detail.toLowerCase().includes('deadline');
+      throw new Error(detail);
+    }
+
+    document.getElementById('assessmentArea').innerHTML = `
+      <div class="apply-page">
+        <div class="card" style="text-align:center;padding:48px">
+          <div style="font-size:64px;margin-bottom:16px">🎉</div>
+          <h2 style="font-size:24px;margin-bottom:8px">Assessment Submitted</h2>
+          <p class="text-light">${type === 'auto'
+            ? `<b style="color:#dc2626">Auto-submitted:</b> ${escapeHtml(reason || '')}`
+            : 'Thank you for completing the assessment.'}</p>
+          <div style="margin-top:24px;padding:20px;background:#f8fafc;border-radius:12px;display:inline-block">
+            <div style="font-size:36px;font-weight:800;color:var(--primary)">${data.percentage}%</div>
+            <div class="text-light">Grade ${data.grade} — ${data.score}/${data.total}</div>
+          </div>
+        </div>
+      </div>`;
   } catch (e) {
-    console.error(e);
-    hide('loader');
-    fatalError(
-      'Network error during submission. Please screenshot this page and contact HR.'
-    );
+    document.getElementById('submitStatus').textContent = 'Submit failed';
+    const errMsg = e.message || 'Unknown error';
+    const isDeadline = errMsg.toLowerCase().includes('deadline');
+    if (isDeadline) {
+      document.getElementById('assessmentArea').innerHTML = `
+        <div class="apply-page">
+          <div class="card" style="text-align:center;padding:48px">
+            <div style="font-size:64px;margin-bottom:16px">⌛</div>
+            <h2 style="font-size:24px;margin-bottom:8px;color:#dc2626">Submission Deadline Passed</h2>
+            <p class="text-light">${escapeHtml(errMsg)}</p>
+          </div>
+        </div>`;
+    } else {
+      showWarningToast('Submission failed: ' + errMsg, 'cam');
+    }
   }
 }
 
-/* ────────────────────────────────────────────────────────────────
-   RESULT
-   ──────────────────────────────────────────────────────────────── */
-function showResult(r) {
-  const passed = !!r.passed;
-  const container = $('resultContent');
-  container.className = passed ? '' : 'failed';
-  container.innerHTML = `
-    <h2>${passed ? '✅ Assessment Submitted' : '📋 Assessment Submitted'}</h2>
-    <p style="color:var(--muted)">
-      ${passed ? 'Great job — you passed!' : 'Thanks for completing the assessment.'}
-    </p>
-    <div class="score-display">${r.percentage}%</div>
-    <div class="score-label">
-      Grade: <b>${r.grade}</b> · ${r.score} / ${r.total} marks
-      ${r.attempt_number ? ` · Attempt #${r.attempt_number}` : ''}
-    </div>
-    <div class="feedback">${esc(r.feedback || '')}</div>
-    <p style="text-align:center;color:var(--muted);margin-top:24px;font-size:14px">
-      A confirmation email with your detailed marksheet has been sent.
-    </p>
-  `;
-  show('resultScreen');
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/[&<>"']/g, m =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 }
 
-/* ────────────────────────────────────────────────────────────────
-   FINAL SAFETY — prevent accidental tab close mid-assessment
-   ──────────────────────────────────────────────────────────────── */
-window.addEventListener('beforeunload', e => {
-  if (!state.submitted && state.startTime && state.assessment) {
-    e.preventDefault();
-    e.returnValue = '';
-  }
-});
+loadAssessment();
 </script>
 </body>
 </html>
