@@ -105,6 +105,11 @@
         <div class="form-group"><label>Title</label><input type="text" id="aTitle" placeholder="Assessment title"></div>
         <div class="form-group"><label>Job *</label><select id="aJob" onchange="prefillFromJob()"><option value="">Select job...</option></select></div>
         <div class="form-group"><label>Duration (minutes) *</label><input type="number" id="aDuration" value="30" min="5" max="180"></div>
+        <div class="form-group">
+          <label>Submission Deadline *</label>
+          <input type="datetime-local" id="aDeadline">
+          <div class="text-xs text-light" style="margin-top:4px"><i class="fas fa-info-circle"></i> The assessment closes automatically after this date &amp; time (your local time).</div>
+        </div>
         <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding-bottom:6px">
           <label class="toggle-row">
             <input type="checkbox" id="aAntiCheat" checked style="width:auto">
@@ -207,6 +212,29 @@
   </div>
 </div>
 
+<!-- Edit Deadline Modal -->
+<div id="deadlineModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <h3><i class="fas fa-hourglass-half"></i> Assessment Deadline</h3>
+      <button class="modal-close" onclick="closeModal('deadlineModal')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm" style="margin-bottom:12px"><strong id="deadlineAssessmentName"></strong></p>
+      <div class="form-group">
+        <label>Submission Deadline</label>
+        <input type="datetime-local" id="editDeadlineInput">
+        <div class="text-xs text-light" style="margin-top:4px">Pick a future time to re-open a closed assessment. Your local time.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('deadlineModal')">Cancel</button>
+      <button class="btn btn-warning" onclick="saveDeadline(true)" title="Remove the deadline">Remove deadline</button>
+      <button class="btn btn-primary" onclick="saveDeadline(false)">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Delete Assessment Confirmation Modal -->
 <div id="deleteAssessmentModal" class="modal-overlay" style="display:none">
   <div class="modal" style="max-width:440px">
@@ -287,7 +315,9 @@ function renderAssessments() {
           <div class="card-body">
             <div class="flex justify-between items-center mb-4">
               <h3 style="font-size:15px;font-weight:700">${escapeHtml(a.title)}</h3>
-              <span class="badge ${a.is_active ? 'badge-active' : 'badge-rejected'}">${a.is_active ? 'Active' : 'Inactive'}</span>
+              ${isClosed(a)
+                ? '<span class="badge badge-rejected"><i class="fas fa-lock"></i> Closed</span>'
+                : `<span class="badge ${a.is_active ? 'badge-active' : 'badge-rejected'}">${a.is_active ? 'Active' : 'Inactive'}</span>`}
             </div>
             <div class="text-sm text-light mb-4"><i class="fas fa-briefcase"></i> ${escapeHtml(a.job_title)}</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px;text-align:center">
@@ -301,6 +331,9 @@ function renderAssessments() {
               <span><i class="fas fa-star"></i> ${a.total_marks} marks</span>
               <span><i class="fas fa-users"></i> ${a.result_count} attempts</span>
               ${a.anti_cheat ? '<span><i class="fas fa-shield-alt" style="color:var(--success)"></i> Anti-cheat</span>' : ''}
+              ${a.submission_date
+                ? `<span style="color:${isClosed(a) ? 'var(--danger)' : 'var(--warning)'}"><i class="fas fa-hourglass-half"></i> ${isClosed(a) ? 'Closed' : 'Closes'}: ${fmtDateTime(a.submission_date)}</span>`
+                : '<span><i class="fas fa-infinity"></i> No deadline</span>'}
               ${requireCode
                 ? '<span class="mode-badge locked"><i class="fas fa-lock"></i> Code Required</span>'
                 : '<span class="mode-badge open"><i class="fas fa-lock-open"></i> Open Access</span>'}
@@ -319,6 +352,9 @@ function renderAssessments() {
                 </button>
               </div>
               <div style="display:flex;gap:6px">
+                <button class="btn btn-sm btn-secondary"
+                        onclick="openDeadlineModal(${a.id})"
+                        title="Change submission deadline"><i class="fas fa-calendar-alt"></i></button>
                 <button class="btn btn-sm btn-secondary"
                         onclick="toggleActive(${a.id},${!a.is_active})"
                         title="${a.is_active ? 'Deactivate' : 'Activate'}">
@@ -339,6 +375,50 @@ function renderAssessments() {
         </div>`;
       }).join('')}
     </div>`;
+}
+
+/* ================ Deadline helpers ================ */
+// <input type="datetime-local"> value (local time) from a Date
+function toLocalInput(d) {
+  const x = new Date(d);
+  x.setMinutes(x.getMinutes() - x.getTimezoneOffset());
+  return x.toISOString().slice(0, 16);
+}
+// Read a datetime-local input, validate it is in the future, return UTC ISO string
+function readDeadline(inputId) {
+  const v = document.getElementById(inputId).value;
+  if (!v) { showToast('Please set a submission deadline', 'warning'); return null; }
+  const d = new Date(v);
+  if (isNaN(d.getTime())) { showToast('Invalid deadline', 'warning'); return null; }
+  if (d.getTime() <= Date.now()) { showToast('Deadline must be in the future', 'warning'); return null; }
+  return d.toISOString();
+}
+function isClosed(a) {
+  return !!(a.submission_date && new Date(a.submission_date).getTime() <= Date.now());
+}
+
+let deadlineEditId = null;
+function openDeadlineModal(id) {
+  const a = assessments.find(x => x.id === id);
+  if (!a) return;
+  deadlineEditId = id;
+  document.getElementById('deadlineAssessmentName').textContent = a.title;
+  document.getElementById('editDeadlineInput').value = a.submission_date ? toLocalInput(a.submission_date) : '';
+  openModal('deadlineModal');
+}
+async function saveDeadline(remove) {
+  if (deadlineEditId == null) return;
+  let value = '';
+  if (!remove) {
+    value = readDeadline('editDeadlineInput');
+    if (!value) return;
+  }
+  try {
+    await API.put(`/api/assessments/${deadlineEditId}`, { submission_date: value });
+    showToast(remove ? 'Deadline removed' : 'Deadline updated', 'success');
+    closeModal('deadlineModal');
+    loadData();
+  } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 /* ================ Mode switching ================ */
@@ -367,6 +447,8 @@ function openCreateModal() {
   document.getElementById('aDesc').value = '';
   document.getElementById('aAntiCheat').checked = true;
   document.getElementById('aRequireCode').checked = true;
+  // default deadline: 7 days from now (local time)
+  document.getElementById('aDeadline').value = toLocalInput(new Date(Date.now() + 7 * 86400000));
   openModal('createModal');
 }
 
@@ -503,6 +585,8 @@ async function submitCreateAssessment() {
 async function createAssessmentAI() {
   const jobId = document.getElementById('aJob').value;
   if (!jobId) { showToast('Please select a job', 'warning'); return; }
+  const deadlineIso = readDeadline('aDeadline');
+  if (!deadlineIso) return;
 
   const btn = document.getElementById('createBtn');
   btn.disabled = true;
@@ -520,6 +604,7 @@ async function createAssessmentAI() {
       duration_minutes: parseInt(document.getElementById('aDuration').value) || 30,
       anti_cheat: document.getElementById('aAntiCheat').checked,
       require_application_code: document.getElementById('aRequireCode').checked,
+      submission_date: deadlineIso,
     });
     showToast(`Assessment created! ${res.question_count} questions. Link copied!`, 'success', 5000);
     copyToClipboard(res.link);
@@ -537,6 +622,8 @@ async function createAssessmentCustom() {
   const jobId = document.getElementById('aJob').value;
   if (!jobId) { showToast('Please select a job', 'warning'); return; }
   if (!customQuestions.length) { showToast('Add at least one question', 'warning'); return; }
+  const deadlineIso = readDeadline('aDeadline');
+  if (!deadlineIso) return;
 
   for (let i = 0; i < customQuestions.length; i++) {
     const q = customQuestions[i];
@@ -590,6 +677,7 @@ async function createAssessmentCustom() {
       duration_minutes: parseInt(document.getElementById('aDuration').value) || 30,
       anti_cheat: document.getElementById('aAntiCheat').checked,
       require_application_code: document.getElementById('aRequireCode').checked,
+      submission_date: deadlineIso,
     });
     showToast(`Custom assessment saved! ${questions.length} questions. Link copied!`, 'success', 5000);
     copyToClipboard(res.link);
@@ -601,6 +689,19 @@ async function createAssessmentCustom() {
     btn.disabled = false;
     btn.innerHTML = '<i class="fas fa-save"></i> <span id="createBtnLabel">Save Assessment</span>';
   }
+}
+
+/* ================ Submission reason ================ */
+function renderSubmissionReason(r) {
+  const type = r.submission_type || 'manual';
+  const auto = type !== 'manual';
+  const badge = auto
+    ? '<span class="badge badge-rejected"><i class="fas fa-bolt"></i> Auto-submitted</span>'
+    : '<span class="badge badge-passed"><i class="fas fa-hand-pointer"></i> Manual</span>';
+  const reason = r.submission_reason
+    ? `<div class="text-xs" style="margin-top:4px;max-width:220px;color:${auto ? 'var(--danger)' : 'var(--text-light)'}">${escapeHtml(r.submission_reason)}</div>`
+    : '';
+  return badge + reason;
 }
 
 /* ================ Results with App Status column ================ */
@@ -636,6 +737,7 @@ async function viewResults(assessmentId, title) {
               <th>Assessment</th>
               <th>App Status</th>
               <th>Submitted</th>
+              <th>Submission / Reason</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -664,7 +766,8 @@ async function viewResults(assessmentId, title) {
                 <td>
                   ${renderAppStatus(r)}
                 </td>
-                <td class="text-xs text-light">${fmtDate(r.submitted_at)}</td>
+                <td class="text-xs text-light">${fmtDateTime(r.submitted_at)}</td>
+                <td>${renderSubmissionReason(r)}</td>
                 <td>
                   <div class="table-actions" style="flex-wrap:wrap">
                     <button class="btn btn-sm btn-info"
