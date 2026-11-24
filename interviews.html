@@ -161,10 +161,26 @@ async function loadData() {
     const results = await Promise.all([API.get('/api/interviews'), API.get('/api/applications')]);
     interviews = results[0];
     apps = results[1];
+    await backfillReasons();
     const sel = document.getElementById('sCandidate');
     sel.innerHTML = '<option value="">Select candidate...</option>' + apps.map(a => `<option value="${a.id}">${a.applicant_name} - ${a.job_title}</option>`).join('');
     renderAll();
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// If the interviews list doesn't include submission_reason (older server build),
+// read it straight from each finished AI interview's details instead.
+async function backfillReasons() {
+  const missing = interviews.filter(i =>
+    i.type === 'ai' &&
+    (i.status === 'completed' || i.status === 'auto_submitted') &&
+    !('submission_reason' in i));
+  await Promise.all(missing.map(async i => {
+    try {
+      const d = await API.get(`/api/ai-interviews/${i.id}/details`);
+      i.submission_reason = d.submission_reason || null;
+    } catch (_) { i.submission_reason = null; }
+  }));
 }
 
 function findApp(applicationId) { return apps.find(a => a.id === applicationId); }
@@ -218,7 +234,7 @@ function renderAll() {
 /* ============ Submission reason ============ */
 function renderInterviewReason(status, reason) {
   const auto = status === 'auto_submitted';
-  const text = reason || (auto ? 'Auto-submitted (no reason recorded)' : '');
+  const text = reason || (auto ? 'No reason was saved for this auto-submission (it may have happened before reasons were tracked).' : '');
   if (!text) return '';
   const color = auto ? '#dc2626' : '#6b7280';
   const bg = auto ? '#fef2f2' : '#f9fafb';
