@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Sign In - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="auth-body">
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-icon"><i class="fas fa-id-badge"></i></div>
+      <h1>HR<span>Pro</span></h1>
+      <p>Employee Portal</p>
+    </div>
+    <form id="loginForm" class="auth-form">
+      <h2>Employee sign in</h2>
+      <p class="form-subtitle">First time? Use your work email and your employee ID (e.g. EMP-1A2B3C4D) as the password. You'll choose a new password right after.</p>
+
+      <div class="form-group">
+        <label><i class="fas fa-envelope"></i> Work email</label>
+        <input type="email" id="email" placeholder="you@company.com" autocomplete="username" required>
+      </div>
+
+      <div class="form-group">
+        <label><i class="fas fa-lock"></i> Password</label>
+        <div class="password-wrap">
+          <input type="password" id="password" placeholder="Password or employee ID" autocomplete="current-password" required>
+          <button type="button" class="pwd-toggle" onclick="togglePwd('password')" aria-label="Show or hide password"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+
+      <div id="loginError" class="alert alert-error" style="display:none" role="alert"></div>
+
+      <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+        <span class="btn-text">Sign in</span>
+        <span class="btn-loader" style="display:none"><i class="fas fa-spinner fa-spin"></i></span>
+      </button>
+
+      <div class="auth-links">
+        <span>HR or admin?</span>
+        <a href="/login.html">HR sign in</a>
+      </div>
+    </form>
+  </div>
+  <div class="auth-visual">
+    <div class="visual-content">
+      <h2>Your workday, in one place</h2>
+      <ul class="features-list">
+        <li><i class="fas fa-check-circle"></i> Your duty timing and attendance</li>
+        <li><i class="fas fa-check-circle"></i> Tasks and requests from HR</li>
+        <li><i class="fas fa-check-circle"></i> Leave requests and pay status</li>
+        <li><i class="fas fa-check-circle"></i> Company announcements</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const BACKEND_URL = "https://hrhiringpro-hrpro.hf.space";
+
+// Employee sessions use their own keys so they never mix with an HR session.
+localStorage.removeItem('emp_token');
+localStorage.removeItem('emp_user');
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  btn.querySelector('.btn-text').style.display = 'none';
+  btn.querySelector('.btn-loader').style.display = 'inline';
+  btn.disabled = true;
+  document.getElementById('loginError').style.display = 'none';
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/employee/login`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      localStorage.setItem('emp_token', data.access_token);
+      localStorage.setItem('emp_user', JSON.stringify(data.employee));
+      window.location.href = '/employee_dashboard.html';
+    } else {
+      showError(data.detail || 'Sign in failed');
+    }
+  } catch (err) {
+    showError('Could not reach the server. Check your connection and try again.');
+  } finally {
+    btn.querySelector('.btn-text').style.display = 'inline';
+    btn.querySelector('.btn-loader').style.display = 'none';
+    btn.disabled = false;
+  }
+});
+
+function showError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function togglePwd(id) {
+  const input = document.getElementById(id);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+</script>
+</body>
+</html>
