@@ -127,7 +127,8 @@ function statusBadge(s) {
     paid: 'badge-paid', unpaid: 'badge-pending', scheduled: 'badge-interview',
     completed: 'badge-passed', passed: 'badge-passed', failed: 'badge-failed',
     sent: 'badge-sent', accepted: 'badge-active',
-    present: 'badge-active', absent: 'badge-rejected', half_day: 'badge-interview', leave: 'badge-pending'
+    present: 'badge-active', absent: 'badge-rejected', half_day: 'badge-interview', leave: 'badge-pending',
+    short_hours: 'badge-pending', in_progress: 'badge-online'
   };
   const labels = {
     pending: 'Pending', under_review: 'Under Review', shortlisted: 'Shortlisted',
