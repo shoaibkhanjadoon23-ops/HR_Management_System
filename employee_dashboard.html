@@ -10,13 +10,29 @@
   .emp-shell { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
   .emp-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; flex-wrap:wrap; }
   .emp-top h1 { font-size:1.4rem; color: var(--dark); }
-  .kv { display:grid; grid-template-columns: 150px 1fr; gap:10px 12px; font-size:.95rem; }
+  .kv { display:grid; grid-template-columns: 130px 1fr; gap:10px 12px; font-size:.95rem; }
   .kv dt { color: var(--text-light); }
-  .kv dd { color: var(--text); font-weight:500; }
-  .shift-time { font-size:2rem; font-weight:700; color: var(--dark); letter-spacing:.02em; }
-  .shift-sub { color: var(--text-light); margin-top:4px; }
+  .kv dd { color: var(--text); font-weight:500; word-break: break-word; }
   .pw-card { max-width: 460px; margin: 40px auto; }
   .hidden { display:none !important; }
+  .stack { display:grid; gap:16px; }
+
+  /* shift timer */
+  .timer-card .card-body { text-align:center; padding:28px 20px; }
+  .timer-clock { font-size:3.2rem; font-weight:700; letter-spacing:.03em; color:var(--dark); font-variant-numeric: tabular-nums; line-height:1.1; }
+  .timer-sub { color:var(--text-light); margin-top:6px; }
+  .timer-bar { max-width:520px; margin:18px auto 6px; }
+  .timer-bar .progress-bar { height:12px; }
+  .timer-meta { display:flex; justify-content:space-between; font-size:.85rem; color:var(--text-light); max-width:520px; margin:0 auto; }
+  .timer-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:22px; }
+  .timer-actions .btn { min-width:170px; }
+  .state-chip { display:inline-block; padding:4px 12px; border-radius:999px; font-size:.8rem; font-weight:600; margin-bottom:12px; }
+  .chip-idle { background:#f3f4f6; color:var(--text-light); }
+  .chip-working { background:#d1fae5; color:#065f46; }
+  .chip-break { background:#fef3c7; color:#92400e; }
+  .chip-done { background:var(--primary-light); color:var(--primary-dark); }
+  .result-line { margin-top:16px; font-weight:600; color:var(--dark); }
+  .tight th, .tight td { white-space:nowrap; }
 </style>
 </head>
 <body style="background:var(--bg)">
@@ -48,29 +64,58 @@
       <button class="btn btn-secondary" onclick="signOut()"><i class="fas fa-sign-out-alt"></i> Sign out</button>
     </div>
 
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-header"><h3><i class="fas fa-clock"></i> My duty timing</h3></div>
+    <div class="stack">
+
+      <!-- Shift timer -->
+      <div class="card timer-card">
         <div class="card-body">
-          <div class="shift-time" id="shiftRange">--</div>
-          <div class="shift-sub" id="shiftSub"></div>
+          <div id="chip" class="state-chip chip-idle">Not started</div>
+          <div class="timer-clock" id="clock">00:00:00</div>
+          <div class="timer-sub" id="timerSub"></div>
+          <div class="timer-bar"><div class="progress-bar"><div class="progress-fill" id="barFill" style="width:0%"></div></div></div>
+          <div class="timer-meta"><span id="metaWorked">0h 0m worked</span><span id="metaLeft"></span></div>
+          <div id="timerNote" class="alert alert-warning hidden" style="margin:16px auto 0;max-width:520px;text-align:left"></div>
+          <div class="timer-actions" id="actions"></div>
+          <div class="result-line hidden" id="resultLine"></div>
         </div>
       </div>
-      <div class="card">
-        <div class="card-header"><h3><i class="fas fa-id-badge"></i> My details</h3></div>
-        <div class="card-body">
-          <dl class="kv">
-            <dt>Employee ID</dt><dd id="dId"></dd>
-            <dt>Email</dt><dd id="dEmail"></dd>
-            <dt>Department</dt><dd id="dDept"></dd>
-            <dt>Position</dt><dd id="dPos"></dd>
-            <dt>Joined</dt><dd id="dJoin"></dd>
-          </dl>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header"><h3><i class="fas fa-clock"></i> My duty timing</h3></div>
+          <div class="card-body">
+            <div style="font-size:1.6rem;font-weight:700;color:var(--dark)" id="shiftRange">--</div>
+            <div class="text-sm text-light" id="shiftSub" style="margin-top:4px"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3><i class="fas fa-id-badge"></i> My details</h3></div>
+          <div class="card-body">
+            <dl class="kv">
+              <dt>Employee ID</dt><dd id="dId"></dd>
+              <dt>Email</dt><dd id="dEmail"></dd>
+              <dt>Department</dt><dd id="dDept"></dd>
+              <dt>Position</dt><dd id="dPos"></dd>
+              <dt>Joined</dt><dd id="dJoin"></dd>
+            </dl>
+          </div>
         </div>
       </div>
+
+      <!-- Monthly attendance -->
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-calendar-check"></i> My attendance by month</h3></div>
+        <div class="table-wrapper">
+          <table class="tight">
+            <thead><tr><th>Month</th><th>Present</th><th>Late</th><th>Leave</th><th>Absent</th><th>Hours (worked / required)</th><th>Attendance</th></tr></thead>
+            <tbody id="monthBody"><tr><td colspan="7" style="text-align:center;padding:24px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="card-body text-xs text-light">Short days count as present but are flagged for HR. If something looks wrong, contact HR.</div>
+      </div>
+
     </div>
   </div>
-
 </div>
 
 <script>
@@ -85,11 +130,17 @@ async function empReq(method, url, body) {
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) { signOut(); throw new Error('Session expired'); }
+  if (res.status === 403 && data.detail === 'password_change_required') {
+    const e = JSON.parse(localStorage.getItem('emp_user') || '{}');
+    render({ ...e, must_change_password: true });
+    throw new Error('password_change_required');
+  }
   if (!res.ok) throw new Error(data.detail || 'Request failed');
   return data;
 }
 
 function signOut() {
+  stopTimers();
   localStorage.removeItem('emp_token');
   localStorage.removeItem('emp_user');
   window.location.href = '/employee_login.html';
@@ -100,10 +151,17 @@ function fmt12(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
   return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
+const pad = n => String(Math.floor(n)).padStart(2, '0');
+const hms = s => { s = Math.max(0, Math.floor(s)); return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`; };
+const hm = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; };
+const STATUS_TEXT = { present: 'Present', short_hours: 'Short hours', half_day: 'Half day', absent: 'Absent', in_progress: 'In progress', leave: 'On leave' };
 
+// ───────────────────────── profile / password ─────────────────────────
+let profileLoaded = false;
 function render(emp) {
   localStorage.setItem('emp_user', JSON.stringify(emp));
   if (emp.must_change_password) {
+    stopTimers();
     $('dash').classList.add('hidden');
     $('pwGate').classList.remove('hidden');
     return;
@@ -119,6 +177,7 @@ function render(emp) {
   $('dDept').textContent = emp.department || '-';
   $('dPos').textContent = emp.position || '-';
   $('dJoin').textContent = emp.joining_date || '-';
+  if (!profileLoaded) { profileLoaded = true; startPortal(); }
 }
 
 async function changePassword() {
@@ -139,10 +198,142 @@ async function changePassword() {
   }
 }
 
+// ───────────────────────── shift timer ─────────────────────────
+let S = null;            // last state from the server
+let fetchedAt = 0;       // performance.now() when S arrived (so a wrong PC clock can't skew the timer)
+let tickTimer = null, beatTimer = null, busy = false;
+
+function liveWorked() {
+  if (!S) return 0;
+  return S.worked_seconds + (S.state === 'working' ? (performance.now() - fetchedAt) / 1000 : 0);
+}
+
+function applyState(state) {
+  S = state; fetchedAt = performance.now();
+  draw();
+}
+
+function draw() {
+  if (!S) return;
+  const worked = liveWorked(), req = S.required_seconds;
+  $('clock').textContent = hms(worked);
+  $('barFill').style.width = Math.min(100, req ? worked / req * 100 : 0) + '%';
+  $('metaWorked').textContent = `${hm(worked)} worked`;
+  const left = Math.max(0, req - worked);
+  $('metaLeft').textContent = left > 0 ? `${hm(left)} to go (of ${hm(req)})` : 'Duty hours complete';
+
+  const chip = $('chip');
+  const map = { not_started: ['chip-idle', 'Not started'], working: ['chip-working', 'Working'], on_break: ['chip-break', 'On break'], ended: ['chip-done', 'Shift ended'] };
+  const [cls, label] = map[S.state] || map.not_started;
+  chip.className = 'state-chip ' + cls; chip.textContent = label;
+
+  let sub = '';
+  if (S.state === 'not_started') sub = `Your shift is ${fmt12(S.shift.shift_start)} – ${fmt12(S.shift.shift_end)}. Press Start when you begin work.`;
+  else if (S.is_late) sub = `Started ${S.late_minutes} min after shift start.`;
+  if (S.break_seconds && S.state !== 'not_started') sub += (sub ? ' ' : '') + `Breaks: ${hm(S.break_seconds)}.`;
+  $('timerSub').textContent = sub;
+
+  const res = $('resultLine');
+  if (S.state === 'ended' && S.status) {
+    res.textContent = S.source === 'manual'
+      ? `HR recorded today as: ${STATUS_TEXT[S.status] || S.status}.`
+      : `Today's attendance: ${STATUS_TEXT[S.status] || S.status} (${hm(S.worked_seconds)} of ${hm(S.required_seconds)}).`;
+    res.classList.remove('hidden');
+  } else res.classList.add('hidden');
+
+  const note = $('timerNote');
+  if (S.note) { note.textContent = S.note; note.classList.remove('hidden'); } else note.classList.add('hidden');
+
+  drawActions();
+}
+
+function btn(label, icon, cls, fn) {
+  return `<button class="btn ${cls}" onclick="${fn}" ${busy ? 'disabled' : ''}><i class="fas ${icon}"></i> ${label}</button>`;
+}
+let actionsKey = '';
+const liveCan = () => !!S && (liveWorked() + 60 >= S.required_seconds);
+function drawActions() {
+  // Re-render the buttons only when something changed, so a click is never lost to the 1-second redraw.
+  const key = `${S.state}|${liveCan()}|${S.source}|${busy}`;
+  if (key === actionsKey) return;
+  actionsKey = key;
+  let h = '';
+  if (S.state === 'not_started') h = btn('Start shift', 'fa-play', 'btn-primary', "act('start')");
+  else if (S.state === 'working') {
+    h = btn('Take a break', 'fa-mug-hot', 'btn-secondary', "act('break')") +
+        (liveCan() ? btn('Complete shift', 'fa-check', 'btn-success', "endShift()")
+                        : btn('End shift early', 'fa-stop', 'btn-secondary', "endShift()"));
+  } else if (S.state === 'on_break') {
+    h = btn('Resume work', 'fa-play', 'btn-primary', "act('resume')") + btn('End shift', 'fa-stop', 'btn-secondary', "endShift()");
+  } else if (S.state === 'ended' && S.source !== 'manual' && !liveCan()) {
+    h = btn('Resume shift', 'fa-play', 'btn-primary', "act('start')");
+  }
+  $('actions').innerHTML = h;
+}
+
+async function act(kind) {
+  const url = { start: 'start', break: 'break', resume: 'resume' }[kind];
+  busy = true; drawActions();
+  try { applyState(await empReq('POST', `/api/employee/shift/${url}`)); if (kind !== 'break') loadMonths(); }
+  catch (e) { if (e.message !== 'password_change_required') { showMsg(e.message); await refresh(); } }
+  finally { busy = false; drawActions(); }
+}
+
+async function endShift() {
+  if (!liveCan()) {
+    const ok = confirm(`You have worked ${hm(liveWorked())} of ${hm(S.required_seconds)}.\n\nEnding now may be recorded as short hours, half day or absent. End your shift anyway?`);
+    if (!ok) return;
+  }
+  busy = true; drawActions();
+  try { applyState(await empReq('POST', '/api/employee/shift/end')); loadMonths(); }
+  catch (e) { if (e.message !== 'password_change_required') { showMsg(e.message); await refresh(); } }
+  finally { busy = false; drawActions(); }
+}
+
+function showMsg(text) { if (!S) { alert(text); return; } S = { ...S, note: text }; draw(); }
+
+async function refresh() {
+  try { applyState(await empReq('GET', '/api/employee/shift/today')); } catch (e) {}
+}
+async function beat() {
+  if (!S || (S.state !== 'working' && S.state !== 'on_break')) return;
+  try {
+    const was = S.state;
+    applyState(await empReq('POST', '/api/employee/shift/heartbeat'));
+    if (was !== S.state) loadMonths();          // server closed the session (inactivity)
+  } catch (e) {}
+}
+function stopTimers() { clearInterval(tickTimer); clearInterval(beatTimer); tickTimer = beatTimer = null; }
+
+// ───────────────────────── monthly summary ─────────────────────────
+function monthLabel(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+async function loadMonths() {
+  try {
+    const rows = await empReq('GET', '/api/employee/attendance/monthly?months=6');
+    $('monthBody').innerHTML = rows.length ? rows.map(r => {
+      const p = r.attendance_pct;
+      const cls = p === null ? '' : p >= 90 ? 'badge-active' : p >= 75 ? 'badge-pending' : 'badge-rejected';
+      return `<tr><td class="font-bold">${monthLabel(r.month)}</td><td>${r.present_days}${(r.short_hours_days || r.half_days) ? `<div class="text-xs text-light">${r.short_hours_days ? r.short_hours_days + ' short' : ''}${r.short_hours_days && r.half_days ? ', ' : ''}${r.half_days ? r.half_days + ' half-day' : ''}</div>` : ''}</td><td>${r.late_days}</td><td>${r.leave_days}</td><td>${r.absent_days}</td><td>${r.worked_hours} / ${r.required_hours}</td><td>${p === null ? '-' : `<span class="badge ${cls}">${p}%</span>`}</td></tr>`;
+    }).join('') : '<tr><td colspan="7" style="text-align:center;padding:24px">No attendance yet. Start your first shift above.</td></tr>';
+  } catch (e) {}
+}
+
+function startPortal() {
+  refresh();
+  loadMonths();
+  stopTimers();
+  tickTimer = setInterval(draw, 1000);
+  beatTimer = setInterval(beat, 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+}
+
 (async function init() {
   if (!localStorage.getItem('emp_token')) { window.location.href = '/employee_login.html'; return; }
   try { render(await empReq('GET', '/api/employee/me')); }
-  catch (e) { if (e.message !== 'Session expired') signOut(); }
+  catch (e) { if (!['Session expired', 'password_change_required'].includes(e.message)) signOut(); }
 })();
 </script>
 </body>
