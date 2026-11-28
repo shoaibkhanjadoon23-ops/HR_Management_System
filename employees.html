@@ -173,8 +173,17 @@
         <div class="form-group"><label>Joining Date *</label><input type="date" id="eJoinDate"></div>
         <div class="form-group"><label>Status</label><select id="eStatus"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
       </div>
+      <h4 style="margin:16px 0 8px"><i class="fas fa-clock"></i> Duty Timing</h4>
+      <div class="grid-2" style="grid-template-columns:repeat(4,1fr)">
+        <div class="form-group"><label>Duty Start *</label><input type="time" id="eShiftStart" value="09:00" oninput="autoDutyHours('eShiftStart','eShiftEnd','eDuty')"></div>
+        <div class="form-group"><label>Duty End *</label><input type="time" id="eShiftEnd" value="17:00" oninput="autoDutyHours('eShiftStart','eShiftEnd','eDuty')"></div>
+        <div class="form-group"><label>Duty Hours / Day</label><input type="number" id="eDuty" value="8" min="0.5" max="16" step="0.5"></div>
+        <div class="form-group"><label>Late Grace (min)</label><input type="number" id="eGrace" value="15" min="0" max="120"></div>
+      </div>
+      <div id="loginInfoBox" class="text-xs text-light" style="margin-top:8px"><i class="fas fa-key"></i> Employee portal login: <b>email</b> + <b>employee ID</b> as the first password. They must set a new password on first sign-in.</div>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-secondary" id="resetLoginBtn" style="display:none;margin-right:auto" onclick="resetEmployeeLogin()"><i class="fas fa-undo"></i> Reset Login</button>
       <button class="btn btn-secondary" onclick="closeModal('addModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveEmployee()"><i class="fas fa-save"></i> Save</button>
     </div>
@@ -326,6 +335,11 @@ function openAddModal() {
   document.getElementById('addModalTitle').innerHTML = '<i class="fas fa-user-plus"></i> Add Employee';
   document.querySelectorAll('#addModal input,#addModal select').forEach(el => el.value = '');
   document.getElementById('eStatus').value = 'active';
+  document.getElementById('eShiftStart').value = '09:00';
+  document.getElementById('eShiftEnd').value = '17:00';
+  document.getElementById('eDuty').value = 8;
+  document.getElementById('eGrace').value = 15;
+  document.getElementById('resetLoginBtn').style.display = 'none';
   openModal('addModal');
 }
 
@@ -344,7 +358,30 @@ function editEmployee(id) {
   document.getElementById('eBankName').value = emp.bank_name || '';
   document.getElementById('eJoinDate').value = emp.joining_date || '';
   document.getElementById('eStatus').value = emp.status;
+  document.getElementById('eShiftStart').value = emp.shift_start || '09:00';
+  document.getElementById('eShiftEnd').value = emp.shift_end || '17:00';
+  document.getElementById('eDuty').value = emp.duty_hours || 8;
+  document.getElementById('eGrace').value = emp.grace_minutes ?? 15;
+  document.getElementById('resetLoginBtn').style.display = 'inline-flex';
   openModal('addModal');
+}
+
+function autoDutyHours(startId, endId, hoursId) {
+  const s = document.getElementById(startId).value, e = document.getElementById(endId).value;
+  if (!s || !e) return;
+  const [sh, sm] = s.split(':').map(Number), [eh, em] = e.split(':').map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins <= 0) mins += 24 * 60;
+  document.getElementById(hoursId).value = Math.round(mins / 60 * 100) / 100;
+}
+
+async function resetEmployeeLogin() {
+  if (!editingEmpId) return;
+  if (!confirm('Reset this employee\'s password? They will sign in again with their email + employee ID and choose a new password.')) return;
+  try {
+    const r = await API.post(`/api/employees/${editingEmpId}/reset-password`, {});
+    showToast(r.message, 'success', 6000);
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
 }
 
 async function saveEmployee() {
@@ -358,8 +395,13 @@ async function saveEmployee() {
     bank_account: document.getElementById('eBankAcc').value,
     bank_name: document.getElementById('eBankName').value,
     joining_date: document.getElementById('eJoinDate').value,
-    status: document.getElementById('eStatus').value
+    status: document.getElementById('eStatus').value,
+    shift_start: document.getElementById('eShiftStart').value,
+    shift_end: document.getElementById('eShiftEnd').value,
+    duty_hours: parseFloat(document.getElementById('eDuty').value) || null,
+    grace_minutes: parseInt(document.getElementById('eGrace').value, 10)
   };
+  if (!payload.shift_start || !payload.shift_end) { showToast('Please set the duty timing', 'warning'); return; }
   
   if (!payload.full_name || !payload.email || !payload.department || !payload.position) {
     showToast('Please fill required fields', 'warning'); return;
@@ -370,8 +412,8 @@ async function saveEmployee() {
       await API.put(`/api/employees/${editingEmpId}`, payload);
       showToast('Employee updated!', 'success');
     } else {
-      await API.post('/api/employees', payload);
-      showToast('Employee added!', 'success');
+      const created = await API.post('/api/employees', payload);
+      showToast(`Employee added! ${created.login_info || ''}`, 'success', 9000);
     }
     closeModal('addModal');
     loadEmployees();
