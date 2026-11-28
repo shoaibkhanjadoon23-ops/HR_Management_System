@@ -116,38 +116,78 @@
     </div>
   </div>
 
-  <!-- Tab 2: Attendance -->
+  <!-- Tab 2: Attendance (month-wise) -->
   <div id="attendanceTab" class="tab-content">
-    <div class="filters-bar">
-      <div class="filter-group">
-        <label>Date</label>
-        <input type="date" id="attDate" onchange="loadAttendance()">
-      </div>
-      <div class="filter-group">
-        <label>Employee</label>
-        <select id="attEmpFilter" onchange="loadAttendance()">
-          <option value="">All Employees</option>
-        </select>
-      </div>
-      <div style="display:flex;align-items:flex-end">
-        <button class="btn btn-primary btn-sm" onclick="openMarkAttendanceModal()"><i class="fas fa-check"></i> Mark Attendance</button>
+
+    <div id="liveStrip" class="card" style="margin-bottom:16px">
+      <div class="card-body" style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+        <div><b id="liveWorking">0</b> <span class="text-sm text-light">working now</span></div>
+        <div><b id="liveBreak">0</b> <span class="text-sm text-light">on break</span></div>
+        <div><b id="liveDone">0</b> <span class="text-sm text-light">completed today</span></div>
+        <div><b id="liveNot">0</b> <span class="text-sm text-light">not started</span></div>
+        <div id="liveNames" class="text-xs text-light" style="flex:1;min-width:200px"></div>
       </div>
     </div>
 
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Month</label>
+        <input type="month" id="attMonth" onchange="loadMonthly()">
+      </div>
+      <div class="filter-group">
+        <label>View by</label>
+        <select id="attGroupBy" onchange="loadMonthly()">
+          <option value="employee">Employee</option>
+          <option value="department">Department</option>
+          <option value="role">Role</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Department</label>
+        <select id="attDept" onchange="loadMonthly()"><option value="">All departments</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Role</label>
+        <select id="attRole" onchange="loadMonthly()"><option value="">All roles</option></select>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="exportMonthlyCsv()"><i class="fas fa-download"></i> Export</button>
+        <button class="btn btn-primary btn-sm" onclick="openMarkAttendanceModal()"><i class="fas fa-pen"></i> Correct attendance</button>
+      </div>
+    </div>
+
+    <div class="stats-grid" id="attStats"></div>
+
     <div class="card">
       <div class="card-header">
-        <h3><i class="fas fa-calendar-check"></i> Attendance Logs</h3>
+        <h3><i class="fas fa-calendar-check"></i> <span id="attTitle">Monthly attendance</span></h3>
       </div>
       <div class="table-wrapper">
         <table>
-          <thead>
-            <tr><th>Date</th><th>Employee</th><th>Status</th><th>Check In</th><th>Check Out</th><th>Notes</th></tr>
-          </thead>
+          <thead id="attHead"></thead>
           <tbody id="attendanceBody">
-            <tr><td colspan="6" style="text-align:center;padding:40px">Select a date to view logs</td></tr>
+            <tr><td colspan="9" style="text-align:center;padding:40px">Loading...</td></tr>
           </tbody>
         </table>
       </div>
+      <div class="card-body text-xs text-light" id="attFootnote"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-body" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="margin:0;min-width:240px">
+          <label>Company timezone</label>
+          <input type="text" id="tzInput" list="tzList" placeholder="e.g. Asia/Karachi">
+          <datalist id="tzList">
+            <option value="Asia/Karachi"><option value="Asia/Dubai"><option value="Asia/Riyadh"><option value="Asia/Kolkata">
+            <option value="Asia/Dhaka"><option value="Asia/Singapore"><option value="Europe/London"><option value="Europe/Berlin">
+            <option value="America/New_York"><option value="America/Chicago"><option value="America/Los_Angeles"><option value="Australia/Sydney">
+          </datalist>
+        </div>
+        <button class="btn btn-secondary" onclick="saveTimezone()">Save timezone</button>
+        <div class="text-xs text-light" style="flex:1;min-width:240px">Used to decide which day a shift belongs to and whether someone is late. Set it to where your employees work.</div>
+      </div>
+      <div id="tzWarn" class="alert alert-warning" style="display:none;margin:0 16px 16px"><i class="fas fa-exclamation-triangle"></i> Timezone is still UTC. Lateness and day boundaries will be wrong until you set your local timezone.</div>
     </div>
   </div>
 </div>
@@ -211,6 +251,7 @@
         <select id="attMarkStatus">
           <option value="present">Present</option>
           <option value="absent">Absent</option>
+          <option value="short_hours">Short Hours (present, flagged)</option>
           <option value="half_day">Half Day</option>
           <option value="leave">On Leave</option>
         </select>
@@ -272,7 +313,7 @@ let editingEmpId = null;
 let currentCustomEmail = { to: '', name: '' };
 
 // Set default date for attendance
-document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
+document.getElementById('attMonth').value = new Date().toISOString().slice(0, 7);
 document.getElementById('attMarkDate').value = new Date().toISOString().split('T')[0];
 
 async function loadEmployees() {
@@ -296,13 +337,11 @@ async function loadEmployees() {
       deptSel.innerHTML = '<option value="">All Departments</option>' + depts.map(d => `<option value="${d}" ${d===curVal?'selected':''}>${d}</option>`).join('');
     }
 
-    // Populate attendance selectors
-    const attFilter = document.getElementById('attEmpFilter');
+    // Populate the "correct attendance" employee picker
     const markSelect = document.getElementById('attEmployeeSelect');
-    if (attFilter && attFilter.options.length <= 1) {
+    if (markSelect && markSelect.options.length === 0) {
       const allEmps = await API.get('/api/employees');
-      if (attFilter) attFilter.innerHTML = '<option value="">All Employees</option>' + allEmps.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
-      if (markSelect) markSelect.innerHTML = allEmps.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
+      markSelect.innerHTML = allEmps.map(e => `<option value="${e.id}">${e.full_name}</option>`).join('');
     }
 
     document.getElementById('empCount').textContent = employees.length;
@@ -420,36 +459,115 @@ async function saveEmployee() {
   } catch(e) { showToast('Error: ' + e.message, 'error'); }
 }
 
-async function loadAttendance() {
-  const date = document.getElementById('attDate').value;
-  const empId = document.getElementById('attEmpFilter').value;
-  const params = new URLSearchParams();
-  if (date) params.append('date_str', date);
-  if (empId) params.append('employee_id', empId);
+let monthlyData = null;
+let attOptionsLoaded = false;
+
+function pctBadge(p) {
+  if (p === null || p === undefined) return '<span class="text-light">-</span>';
+  const cls = p >= 90 ? 'badge-active' : p >= 75 ? 'badge-pending' : 'badge-rejected';
+  return `<span class="badge ${cls}">${p}%</span>`;
+}
+function esc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadMonthly() {
+  const month = document.getElementById('attMonth').value;
+  const groupBy = document.getElementById('attGroupBy').value;
+  const dept = document.getElementById('attDept').value;
+  const role = document.getElementById('attRole').value;
+  const params = new URLSearchParams({ group_by: groupBy });
+  if (month) params.append('month', month);
+  if (dept) params.append('department', dept);
+  if (role) params.append('role', role);
 
   try {
-    attendanceData = await API.get('/api/attendance?' + params);
-    const tbody = document.getElementById('attendanceBody');
-    if (!attendanceData.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px">No records found for this date.</td></tr>';
-      return;
+    const d = monthlyData = await API.get('/api/attendance/monthly?' + params);
+
+    // filter dropdowns: fill once from the unfiltered view
+    if (!dept && !role) {
+      document.getElementById('attDept').innerHTML = '<option value="">All departments</option>' + d.departments.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
+      document.getElementById('attRole').innerHTML = '<option value="">All roles</option>' + d.roles.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join('');
     }
-    tbody.innerHTML = attendanceData.map(r => {
-      const emp = employees.find(e => e.id === r.employee_id);
-      return `<tr>
-        <td>${fmtDate(r.date)}</td>
-        <td class="font-bold">${emp ? emp.full_name : 'Unknown'}</td>
-        <td>${statusBadge(r.status)}</td>
-        <td>${r.check_in || '-'}</td>
-        <td>${r.check_out || '-'}</td>
-        <td class="text-xs text-light">${r.notes || ''}</td>
-      </tr>`;
-    }).join('');
+
+    const t = d.totals;
+    document.getElementById('attStats').innerHTML = [
+      ['fa-users', t.employees, 'Employees'],
+      ['fa-percentage', t.attendance_pct === null ? '-' : t.attendance_pct + '%', 'Attendance'],
+      ['fa-user-check', t.present_days, 'Days present'],
+      ['fa-user-clock', t.late_days, 'Late arrivals'],
+      ['fa-user-times', t.absent_days, 'Days absent'],
+      ['fa-hourglass-half', t.worked_hours, 'Hours worked']
+    ].map(([ic, v, l]) => `<div class="stat-card"><div class="stat-icon"><i class="fas ${ic}"></i></div><div><div class="stat-value">${v}</div><div class="stat-label">${l}</div></div></div>`).join('');
+
+    const first = groupBy === 'employee' ? 'Employee' : groupBy === 'department' ? 'Department' : 'Role';
+    document.getElementById('attTitle').textContent = `Monthly attendance by ${first.toLowerCase()} · ${d.month}`;
+    document.getElementById('attHead').innerHTML = `<tr><th>${first}</th>${groupBy !== 'employee' ? '<th>Employees</th>' : '<th>Department</th><th>Role</th>'}<th>Present</th><th>Late</th><th>Leave</th><th>Absent</th><th>Hours (worked / required)</th><th>Attendance</th></tr>`;
+
+    const body = document.getElementById('attendanceBody');
+    if (!d.rows.length) {
+      body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px">No employees match these filters.</td></tr>';
+    } else {
+      body.innerHTML = d.rows.map(r => {
+        const lead = groupBy === 'employee'
+          ? `<td><div class="font-bold">${esc(r.full_name)}</div><div class="text-xs text-light">${esc(r.employee_code || '')}</div></td><td class="text-sm">${esc(r.department)}</td><td class="text-sm">${esc(r.role)}</td>`
+          : `<td class="font-bold">${esc(r.group)}</td><td>${r.employees}</td>`;
+        const flags = (r.short_hours_days || r.half_days) ? `<div class="text-xs text-light">${r.short_hours_days ? r.short_hours_days + ' short' : ''}${r.short_hours_days && r.half_days ? ', ' : ''}${r.half_days ? r.half_days + ' half-day' : ''}</div>` : '';
+        return `<tr>${lead}<td>${r.present_days}${flags}</td><td>${r.late_days}</td><td>${r.leave_days}</td><td>${r.absent_days}</td><td>${r.worked_hours} / ${r.required_hours}</td><td>${pctBadge(r.attendance_pct)}</td></tr>`;
+      }).join('');
+    }
+    document.getElementById('attFootnote').textContent =
+      `Working days exclude weekends (${d.weekend_days.map(n => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][n]).join(', ')}). Days with no record count as absent. Approved leave is excluded from the attendance %. Timezone: ${d.timezone}.`;
   } catch (e) { showToast('Error loading attendance: ' + e.message, 'error'); }
+  loadLive();
 }
 
+async function loadLive() {
+  try {
+    const l = await API.get('/api/attendance/live');
+    document.getElementById('liveWorking').textContent = l.working.length;
+    document.getElementById('liveBreak').textContent = l.on_break.length;
+    document.getElementById('liveDone').textContent = l.completed_today;
+    document.getElementById('liveNot').textContent = l.not_started;
+    const names = [...l.working.map(w => w.full_name), ...l.on_break.map(w => w.full_name + ' (break)')];
+    document.getElementById('liveNames').textContent = names.length ? 'Now: ' + names.join(', ') : '';
+  } catch (e) { /* the live strip is optional */ }
+}
+
+async function loadTimezone() {
+  try {
+    const t = await API.get('/api/company/timezone');
+    document.getElementById('tzInput').value = t.timezone;
+    document.getElementById('tzWarn').style.display = t.timezone === 'UTC' ? 'block' : 'none';
+  } catch (e) {}
+}
+
+async function saveTimezone() {
+  try {
+    await API.put('/api/company/timezone', { timezone: document.getElementById('tzInput').value });
+    showToast('Timezone saved', 'success');
+    loadTimezone();
+    loadMonthly();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function exportMonthlyCsv() {
+  if (!monthlyData || !monthlyData.rows.length) { showToast('Nothing to export', 'warning'); return; }
+  const g = monthlyData.group_by;
+  const head = (g === 'employee' ? ['Employee', 'Employee ID', 'Department', 'Role'] : [g === 'department' ? 'Department' : 'Role', 'Employees'])
+    .concat(['Present days', 'Late', 'Leave', 'Absent', 'Hours worked', 'Hours required', 'Attendance %']);
+  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = monthlyData.rows.map(r => (g === 'employee' ? [r.full_name, r.employee_code, r.department, r.role] : [r.group, r.employees])
+    .concat([r.present_days, r.late_days, r.leave_days, r.absent_days, r.worked_hours, r.required_hours, r.attendance_pct ?? '']).map(q).join(','));
+  const blob = new Blob([[head.map(q).join(',')].concat(lines).join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `attendance_${g}_${monthlyData.month}.csv`;
+  a.click();
+}
+
+document.querySelector('[data-tab="attendanceTab"]').addEventListener('click', () => { loadMonthly(); loadTimezone(); });
+
 function openMarkAttendanceModal() {
-  document.getElementById('attMarkDate').value = document.getElementById('attDate').value || new Date().toISOString().split('T')[0];
+  document.getElementById('attMarkDate').value = new Date().toISOString().split('T')[0];
   openModal('markAttendanceModal');
 }
 
@@ -466,8 +584,8 @@ async function saveAttendance() {
     await API.post('/api/attendance', payload);
     showToast('Attendance saved!', 'success');
     closeModal('markAttendanceModal');
-    document.getElementById('attDate').value = payload.date;
-    loadAttendance();
+    document.getElementById('attMonth').value = payload.date.slice(0, 7);
+    loadMonthly();
   } catch (e) { showToast('Error: ' + e.message, 'error'); }
 }
 
