@@ -108,6 +108,11 @@
         <div class="form-group"><label>Application Deadline</label><input type="datetime-local" id="jDeadline"></div>
         <div class="form-group"><label>Status</label><select id="jStatus"><option value="active">Active</option><option value="draft">Draft</option><option value="closed">Closed</option></select></div>
       </div>
+      <div class="grid-2" style="grid-template-columns:repeat(3,1fr)">
+        <div class="form-group"><label><i class="fas fa-clock"></i> Duty Start *</label><input type="time" id="jShiftStart" value="09:00" oninput="autoDutyHours('jShiftStart','jShiftEnd','jDuty')"></div>
+        <div class="form-group"><label>Duty End *</label><input type="time" id="jShiftEnd" value="17:00" oninput="autoDutyHours('jShiftStart','jShiftEnd','jDuty')"></div>
+        <div class="form-group"><label>Duty Hours / Day</label><input type="number" id="jDuty" value="8" min="0.5" max="16" step="0.5"></div>
+      </div>
       <div class="form-group"><label><i class="fas fa-check"></i> Remote Work Allowed</label><input type="checkbox" id="jRemote" style="width:auto"></div>
       <div class="form-group"><label>Job Description *</label><textarea id="jDesc" rows="4" placeholder="Describe the role..."></textarea></div>
       <div class="form-group"><label>Requirements</label><textarea id="jReq" rows="3" placeholder="List requirements..."></textarea></div>
@@ -232,6 +237,9 @@ function openCreateJobModal() {
   document.getElementById('skillTags').innerHTML = '';
   document.getElementById('formPreview').style.display = 'none';
   window['setTags_skillsHidden']([]);
+  document.getElementById('jShiftStart').value = '09:00';
+  document.getElementById('jShiftEnd').value = '17:00';
+  document.getElementById('jDuty').value = 8;
   openModal('jobModal');
 }
 
@@ -254,6 +262,9 @@ function openEditJob(id) {
   document.getElementById('jReq').value = job.requirements || '';
   document.getElementById('jStatus').value = job.status;
   document.getElementById('jRemote').checked = job.is_remote;
+  document.getElementById('jShiftStart').value = job.shift_start || '09:00';
+  document.getElementById('jShiftEnd').value = job.shift_end || '17:00';
+  document.getElementById('jDuty').value = job.duty_hours || 8;
   if (job.deadline) document.getElementById('jDeadline').value = job.deadline.slice(0,16);
   window['setTags_skillsHidden'](job.skills_required || []);
   if (generatedFormFields && generatedFormFields.sections && generatedFormFields.sections.length) {
@@ -421,10 +432,21 @@ function saveCustomField() {
 }
 
 /* ================ Save Job ================ */
+// Fill "Duty Hours" from start/end times (handles overnight shifts). HR can still override it.
+function autoDutyHours(startId, endId, hoursId) {
+  const s = document.getElementById(startId).value, e = document.getElementById(endId).value;
+  if (!s || !e) return;
+  const [sh, sm] = s.split(':').map(Number), [eh, em] = e.split(':').map(Number);
+  let mins = (eh * 60 + em) - (sh * 60 + sm);
+  if (mins <= 0) mins += 24 * 60;
+  document.getElementById(hoursId).value = Math.round(mins / 60 * 100) / 100;
+}
+
 async function saveJob() {
   const title = document.getElementById('jTitle').value;
   const dept = document.getElementById('jDept').value;
   if (!title || !dept) { showToast('Title and department are required', 'warning'); return; }
+  if (!document.getElementById('jShiftStart').value || !document.getElementById('jShiftEnd').value) { showToast('Please set the duty timing', 'warning'); return; }
   
   // Sync the visible checkbox/required state into generatedFormFields before save.
   updateFormJson();
@@ -442,6 +464,9 @@ async function saveJob() {
     skills_required: window['getTags_skillsHidden'](),
     status: document.getElementById('jStatus').value,
     is_remote: document.getElementById('jRemote').checked,
+    shift_start: document.getElementById('jShiftStart').value,
+    shift_end: document.getElementById('jShiftEnd').value,
+    duty_hours: parseFloat(document.getElementById('jDuty').value) || null,
     form_fields: generatedFormFields,
     deadline: document.getElementById('jDeadline').value || null
   };
