@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Dashboard - HRPro</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  .emp-shell { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  .emp-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; flex-wrap:wrap; }
+  .emp-top h1 { font-size:1.4rem; color: var(--dark); }
+  .kv { display:grid; grid-template-columns: 150px 1fr; gap:10px 12px; font-size:.95rem; }
+  .kv dt { color: var(--text-light); }
+  .kv dd { color: var(--text); font-weight:500; }
+  .shift-time { font-size:2rem; font-weight:700; color: var(--dark); letter-spacing:.02em; }
+  .shift-sub { color: var(--text-light); margin-top:4px; }
+  .pw-card { max-width: 460px; margin: 40px auto; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body style="background:var(--bg)">
+<div class="emp-shell">
+
+  <!-- Forced password change (first login / after HR reset) -->
+  <div id="pwGate" class="hidden">
+    <div class="card pw-card">
+      <div class="card-header"><h3><i class="fas fa-key"></i> Set your password</h3></div>
+      <div class="card-body">
+        <p class="text-sm text-light" style="margin-bottom:16px">You signed in with your employee ID. Choose your own password to continue. Use at least 8 characters with letters and numbers.</p>
+        <div class="form-group"><label>Current password (your employee ID)</label><input type="password" id="curPw" autocomplete="current-password"></div>
+        <div class="form-group"><label>New password</label><input type="password" id="newPw" autocomplete="new-password"></div>
+        <div class="form-group"><label>Confirm new password</label><input type="password" id="newPw2" autocomplete="new-password"></div>
+        <div id="pwError" class="alert alert-error hidden" role="alert"></div>
+        <button class="btn btn-primary btn-full" onclick="changePassword()">Save password</button>
+        <button class="btn btn-secondary btn-full" style="margin-top:8px" onclick="signOut()">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dash" class="hidden">
+    <div class="emp-top">
+      <div>
+        <h1 id="hello">Welcome</h1>
+        <div class="text-sm text-light" id="subhello"></div>
+      </div>
+      <button class="btn btn-secondary" onclick="signOut()"><i class="fas fa-sign-out-alt"></i> Sign out</button>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-clock"></i> My duty timing</h3></div>
+        <div class="card-body">
+          <div class="shift-time" id="shiftRange">--</div>
+          <div class="shift-sub" id="shiftSub"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3><i class="fas fa-id-badge"></i> My details</h3></div>
+        <div class="card-body">
+          <dl class="kv">
+            <dt>Employee ID</dt><dd id="dId"></dd>
+            <dt>Email</dt><dd id="dEmail"></dd>
+            <dt>Department</dt><dd id="dDept"></dd>
+            <dt>Position</dt><dd id="dPos"></dd>
+            <dt>Joined</dt><dd id="dJoin"></dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const BACKEND_URL = "https://hrhiringpro-hrpro.hf.space";
+const $ = id => document.getElementById(id);
+
+async function empReq(method, url, body) {
+  const res = await fetch(`${BACKEND_URL}${url}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('emp_token')}` },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { signOut(); throw new Error('Session expired'); }
+  if (!res.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
+
+function signOut() {
+  localStorage.removeItem('emp_token');
+  localStorage.removeItem('emp_user');
+  window.location.href = '/employee_login.html';
+}
+
+function fmt12(hhmm) {
+  if (!hhmm) return '--';
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+function render(emp) {
+  localStorage.setItem('emp_user', JSON.stringify(emp));
+  if (emp.must_change_password) {
+    $('dash').classList.add('hidden');
+    $('pwGate').classList.remove('hidden');
+    return;
+  }
+  $('pwGate').classList.add('hidden');
+  $('dash').classList.remove('hidden');
+  $('hello').textContent = `Welcome, ${emp.full_name}`;
+  $('subhello').textContent = [emp.position, emp.department].filter(Boolean).join(' · ');
+  $('shiftRange').textContent = `${fmt12(emp.shift_start)} – ${fmt12(emp.shift_end)}`;
+  $('shiftSub').textContent = `${emp.duty_hours} hours per day · ${emp.grace_minutes} min late grace`;
+  $('dId').textContent = emp.employee_id || '-';
+  $('dEmail').textContent = emp.email || '-';
+  $('dDept').textContent = emp.department || '-';
+  $('dPos').textContent = emp.position || '-';
+  $('dJoin').textContent = emp.joining_date || '-';
+}
+
+async function changePassword() {
+  const err = $('pwError');
+  err.classList.add('hidden');
+  if ($('newPw').value !== $('newPw2').value) {
+    err.textContent = 'The new passwords do not match.'; err.classList.remove('hidden'); return;
+  }
+  try {
+    const r = await empReq('POST', '/api/employee/change-password', {
+      current_password: $('curPw').value,
+      new_password: $('newPw').value
+    });
+    localStorage.setItem('emp_token', r.access_token);
+    render(r.employee);
+  } catch (e) {
+    err.textContent = e.message; err.classList.remove('hidden');
+  }
+}
+
+(async function init() {
+  if (!localStorage.getItem('emp_token')) { window.location.href = '/employee_login.html'; return; }
+  try { render(await empReq('GET', '/api/employee/me')); }
+  catch (e) { if (e.message !== 'Session expired') signOut(); }
+})();
+</script>
+</body>
+</html>
